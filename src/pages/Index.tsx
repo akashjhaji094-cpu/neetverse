@@ -1,12 +1,23 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, signOut, loading } = useAuth();
+  const { user, signOut, loading, isGuest } = useAuth();
+  const [showSignupDialog, setShowSignupDialog] = useState(false);
 
   if (loading) {
     return (
@@ -16,10 +27,18 @@ const Index = () => {
     );
   }
 
-  if (!user) {
+  if (!user && !isGuest) {
     navigate('/auth');
     return null;
   }
+
+  const handleFeatureClick = (featureTitle: string, action: () => void) => {
+    if (isGuest && featureTitle !== 'Unlimited Practice') {
+      setShowSignupDialog(true);
+    } else {
+      action();
+    }
+  };
 
   const features = [
     {
@@ -97,7 +116,7 @@ const Index = () => {
                 <Card
                   key={index}
                   className="card-hover cursor-pointer relative overflow-hidden"
-                  onClick={feature.action}
+                  onClick={() => handleFeatureClick(feature.title, feature.action)}
                 >
                   <CardHeader>
                     <div className={`w-12 h-12 rounded-lg ${feature.color} flex items-center justify-center mb-4`}>
@@ -143,6 +162,22 @@ const Index = () => {
           </div>
         </div>
       </section>
+
+      <AlertDialog open={showSignupDialog} onOpenChange={setShowSignupDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign Up Required</AlertDialogTitle>
+            <AlertDialogDescription>
+              Please sign up to continue and access all features.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => navigate('/auth')}>
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

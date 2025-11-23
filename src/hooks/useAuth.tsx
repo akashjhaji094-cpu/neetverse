@@ -7,9 +7,12 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isGuest: boolean;
   signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  setGuestMode: () => void;
+  clearGuestMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,6 +21,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(() => {
+    return localStorage.getItem('guestMode') === 'true';
+  });
 
   useEffect(() => {
     // Set up auth state listener
@@ -82,12 +88,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) {
       toast.error(error.message);
     } else {
+      clearGuestMode();
       toast.success('Signed out successfully');
     }
   };
 
+  const setGuestMode = () => {
+    localStorage.setItem('guestMode', 'true');
+    setIsGuest(true);
+  };
+
+  const clearGuestMode = () => {
+    localStorage.removeItem('guestMode');
+    setIsGuest(false);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, isGuest, signUp, signIn, signOut, setGuestMode, clearGuestMode }}>
       {children}
     </AuthContext.Provider>
   );
