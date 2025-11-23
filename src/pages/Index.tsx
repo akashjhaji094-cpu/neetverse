@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { PremiumAccessDialog } from '@/components/mock/PremiumAccessDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,15 +21,39 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, loading, isGuest } = useAuth();
   const [showSignupDialog, setShowSignupDialog] = useState(false);
+  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Fetch available premium tests and planners
-  const { data: premiumContent } = useQuery({
-    queryKey: ['premium-content', user?.id],
+  // Fetch all premium tests and planners (visible to everyone)
+  const { data: allPremiumContent } = useQuery({
+    queryKey: ['all-premium-content'],
     queryFn: async () => {
-      if (!user) return { tests: [], planners: [], hasAccess: false };
+      // Fetch all premium tests
+      const { data: tests, error: testsError } = await supabase
+        .from('premium_tests')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      // Check if user has any active access key
+      // Fetch all planners
+      const { data: planners, error: plannersError } = await supabase
+        .from('premium_planners')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (testsError || plannersError) {
+        console.error('Error fetching premium content:', testsError || plannersError);
+      }
+
+      return { tests: tests || [], planners: planners || [] };
+    },
+  });
+
+  // Check if user has access
+  const { data: userAccess } = useQuery({
+    queryKey: ['user-premium-access', user?.id],
+    queryFn: async () => {
+      if (!user) return { hasAccess: false };
+
       const { data: accessKeys } = await supabase
         .from('premium_access_keys')
         .select('*')
@@ -36,25 +61,7 @@ const Index = () => {
         .eq('is_active', true)
         .limit(1);
 
-      const hasAccess = (accessKeys?.length || 0) > 0;
-
-      if (!hasAccess) {
-        return { tests: [], planners: [], hasAccess: false };
-      }
-
-      // Fetch premium tests (available to all OR specific to user's key)
-      const { data: tests } = await supabase
-        .from('premium_tests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Fetch all planners (public)
-      const { data: planners } = await supabase
-        .from('premium_planners')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      return { tests: tests || [], planners: planners || [], hasAccess };
+      return { hasAccess: (accessKeys?.length || 0) > 0 };
     },
     enabled: !!user,
   });
@@ -210,7 +217,7 @@ const Index = () => {
       </section>
 
       {/* Premium Content Section */}
-      {premiumContent?.hasAccess && (premiumContent.tests.length > 0 || premiumContent.planners.length > 0) && (
+      {allPremiumContent && (allPremiumContent.tests.length > 0 || allPremiumContent.planners.length > 0) && (
         <section className="section-padding bg-card/30 backdrop-blur-sm">
           <div className="container-custom">
             <div className="flex items-center gap-3 mb-8">
@@ -219,7 +226,7 @@ const Index = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {premiumContent.tests.map((test) => (
+              {allPremiumContent.tests.map((test) => (
                 <Card key={test.id} className="card-hover">
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -238,7 +245,13 @@ const Index = () => {
                   <CardContent>
                     <Button
                       className="w-full"
-                      onClick={() => window.open(test.file_url, '_blank')}
+                      onClick={() => {
+                        if (userAccess?.hasAccess) {
+                          window.open(test.file_url, '_blank');
+                        } else {
+                          setShowPremiumDialog(true);
+                        }
+                      }}
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Download Test
@@ -247,7 +260,7 @@ const Index = () => {
                 </Card>
               ))}
 
-              {premiumContent.planners.map((planner) => (
+              {allPremiumContent.planners.map((planner) => (
                 <Card key={planner.id} className="card-hover">
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -265,7 +278,13 @@ const Index = () => {
                     <Button
                       className="w-full"
                       variant="secondary"
-                      onClick={() => window.open(planner.file_url, '_blank')}
+                      onClick={() => {
+                        if (userAccess?.hasAccess) {
+                          window.open(planner.file_url, '_blank');
+                        } else {
+                          setShowPremiumDialog(true);
+                        }
+                      }}
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Download Planner
@@ -313,6 +332,15 @@ const Index = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <PremiumAccessDialog 
+        open={showPremiumDialog} 
+        onOpenChange={setShowPremiumDialog}
+        onAccessGranted={() => {
+          setShowPremiumDialog(false);
+          window.location.reload();
+        }}
+      />
     </div>
   );
 };
