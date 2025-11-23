@@ -10,7 +10,7 @@ import { GraduationCap } from 'lucide-react';
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { signUp, signIn, user } = useAuth();
+  const { signUp, signIn, user, setGuestMode } = useAuth();
   const [loading, setLoading] = useState(false);
 
   // Redirect if already logged in
@@ -18,6 +18,11 @@ const Auth = () => {
     navigate('/');
     return null;
   }
+
+  const handleSkipSignup = () => {
+    setGuestMode();
+    navigate('/');
+  };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -139,6 +144,23 @@ const Auth = () => {
               </TabsContent>
             </Tabs>
           </CardContent>
+          <CardFooter className="flex flex-col gap-2">
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={handleSkipSignup}
+            >
+              Skip & Try Practice Mode
+            </Button>
+          </CardFooter>
         </Card>
       </div>
     </div>
