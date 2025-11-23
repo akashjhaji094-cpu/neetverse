@@ -455,17 +455,29 @@ const Test = () => {
                 Premium Test Series
                 <span className="px-2 py-1 text-xs bg-yellow-500 text-white rounded-full">Exclusive</span>
               </CardTitle>
-              <CardDescription>
-                Access exclusive test series with detailed planners (Requires access key)
+              <CardDescription className="space-y-3">
+                <p className="font-semibold text-foreground">
+                  🎯 Based on <span className="text-yellow-600 dark:text-yellow-400 font-bold">Past 20 Years PYQs</span> + PW, Allen, Akash Test Questions
+                </p>
+                <p className="text-base font-bold text-primary">
+                  ✨ Use this and you will <span className="underline decoration-yellow-500 decoration-2">definitely be in a GMC next year!</span>
+                </p>
+                <div className="pt-2 border-t border-border">
+                  <p className="text-sm">Access exclusive test series with detailed planners</p>
+                  <p className="text-sm mt-2">
+                    💰 <span className="font-semibold text-green-600 dark:text-green-400">Only ₹399</span> | 
+                    Contact: <a href="https://t.me/akaxxh" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">@akaxxh</a> on Telegram
+                  </p>
+                </div>
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button 
                 onClick={handleStartPremiumTest}
-                className="w-full bg-yellow-500 hover:bg-yellow-600"
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
               >
                 <Crown className="h-4 w-4 mr-2" />
-                Access Premium Tests
+                Enter Access Key
               </Button>
             </CardContent>
           </Card>

@@ -97,8 +97,16 @@ export const PremiumAccessDialog = ({
             <Key className="h-5 w-5 text-primary" />
             Premium Test Access
           </DialogTitle>
-          <DialogDescription>
-            Enter your premium access key to unlock exclusive test content.
+          <DialogDescription className="space-y-2">
+            <p>Enter your premium access key to unlock exclusive test content.</p>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm">
+              <p className="font-semibold text-yellow-800 dark:text-yellow-200">
+                💰 Get Premium Access for only ₹399!
+              </p>
+              <p className="text-yellow-700 dark:text-yellow-300 mt-1">
+                Contact on Telegram: <a href="https://t.me/akaxxh" target="_blank" rel="noopener noreferrer" className="underline font-medium">@akaxxh</a>
+              </p>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -127,12 +135,17 @@ export const PremiumAccessDialog = ({
               </p>
             </div>
 
-            {planners.length > 0 && (
+            {planners.length > 0 ? (
               <div className="space-y-2">
-                <Label>Available Test Planners</Label>
+                <Label>Your Test Planners</Label>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-2">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    📚 <span className="font-semibold">Based on 20 Years PYQs</span> + PW, Allen, Akash questions
+                  </p>
+                </div>
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
                   {planners.map((planner) => (
-                    <Card key={planner.id} className="p-3">
+                    <Card key={planner.id} className="p-3 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <h4 className="font-medium text-sm">{planner.title}</h4>
@@ -141,8 +154,9 @@ export const PremiumAccessDialog = ({
                           </p>
                         </div>
                         <Button
-                          variant="outline"
+                          variant="default"
                           size="sm"
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white"
                           onClick={() => window.open(planner.file_url, "_blank")}
                         >
                           <Download className="h-4 w-4 mr-1" />
@@ -152,6 +166,10 @@ export const PremiumAccessDialog = ({
                     </Card>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
+                No test planners available yet. Contact admin for more info.
               </div>
             )}
 

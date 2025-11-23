@@ -289,13 +289,16 @@ export const PremiumUpload = () => {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="planner-file">Upload File (PDF, Image, etc.)</Label>
+            <Label htmlFor="planner-file">Upload PDF Planner</Label>
             <Input
               id="planner-file"
               type="file"
               onChange={(e) => setPlannerFile(e.target.files?.[0] || null)}
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              accept=".pdf"
             />
+            <p className="text-xs text-muted-foreground">
+              Upload PDF test planners for premium users. This planner will be accessible to all users with this access key.
+            </p>
           </div>
           <Button onClick={handleUploadPlanner} disabled={loading}>
             <Upload className="h-4 w-4 mr-2" />
