@@ -4,7 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield } from 'lucide-react';
+import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,43 @@ const Index = () => {
   const { user, signOut, loading, isGuest } = useAuth();
   const [showSignupDialog, setShowSignupDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Fetch available premium tests and planners
+  const { data: premiumContent } = useQuery({
+    queryKey: ['premium-content', user?.id],
+    queryFn: async () => {
+      if (!user) return { tests: [], planners: [], hasAccess: false };
+
+      // Check if user has any active access key
+      const { data: accessKeys } = await supabase
+        .from('premium_access_keys')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1);
+
+      const hasAccess = (accessKeys?.length || 0) > 0;
+
+      if (!hasAccess) {
+        return { tests: [], planners: [], hasAccess: false };
+      }
+
+      // Fetch premium tests (available to all OR specific to user's key)
+      const { data: tests } = await supabase
+        .from('premium_tests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Fetch all planners (public)
+      const { data: planners } = await supabase
+        .from('premium_planners')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      return { tests: tests || [], planners: planners || [], hasAccess };
+    },
+    enabled: !!user,
+  });
 
   useEffect(() => {
     const checkAdminRole = async () => {
@@ -170,6 +208,75 @@ const Index = () => {
           </div>
         </div>
       </section>
+
+      {/* Premium Content Section */}
+      {premiumContent?.hasAccess && (premiumContent.tests.length > 0 || premiumContent.planners.length > 0) && (
+        <section className="section-padding bg-card/30 backdrop-blur-sm">
+          <div className="container-custom">
+            <div className="flex items-center gap-3 mb-8">
+              <Crown className="w-8 h-8 text-warning" />
+              <h2 className="text-3xl font-bold text-gradient">Premium Content</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {premiumContent.tests.map((test) => (
+                <Card key={test.id} className="card-hover">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="w-12 h-12 rounded-lg bg-warning flex items-center justify-center mb-4">
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="px-2 py-1 text-xs font-medium bg-warning text-warning-foreground rounded-full">
+                        Premium
+                      </span>
+                    </div>
+                    <CardTitle className="text-left">{test.title}</CardTitle>
+                    {test.description && (
+                      <CardDescription className="text-left">{test.description}</CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      className="w-full"
+                      onClick={() => window.open(test.file_url, '_blank')}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Test
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {premiumContent.planners.map((planner) => (
+                <Card key={planner.id} className="card-hover">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="w-12 h-12 rounded-lg bg-accent flex items-center justify-center mb-4">
+                        <BookOpen className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="px-2 py-1 text-xs font-medium bg-accent text-accent-foreground rounded-full">
+                        Planner
+                      </span>
+                    </div>
+                    <CardTitle className="text-left">{planner.title}</CardTitle>
+                    <CardDescription className="text-left">Study Planner</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      className="w-full"
+                      variant="secondary"
+                      onClick={() => window.open(planner.file_url, '_blank')}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download Planner
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Stats Section */}
       <section className="section-padding bg-card/30 backdrop-blur-sm">
