@@ -12,35 +12,51 @@ Deno.serve(async (req) => {
   try {
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
     
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
+    // Create client with anon key to validate user JWT
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: authHeader }
+        }
+      }
     );
 
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
     if (authError || !user) {
+      console.error("Auth error:", authError);
       throw new Error("Unauthorized");
     }
 
+    console.log("Authenticated user:", user.email);
+
+    // Create service role client for admin operations
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
     // Check if user is admin
-    const { data: roleData } = await supabase
+    const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
       .in("role", ["superadmin", "content_admin"])
       .single();
 
-    if (!roleData) {
+    if (roleError || !roleData) {
+      console.error("Role check error:", roleError);
       throw new Error("Only admins can import questions");
     }
+
+    console.log("User role verified:", roleData.role);
 
     const { questions } = await req.json();
 
