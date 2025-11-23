@@ -23,11 +23,15 @@ const Practice = () => {
     queryKey: ['question-counts'],
     queryFn: async () => {
       const { data: subjects } = await supabase.from('subjects').select('id, slug');
-      const { data: chapters } = await supabase.from('chapters').select('id, slug');
       
       const counts: Record<string, number> = {};
       
       for (const subject of subjects || []) {
+        const { data: chapters } = await supabase
+          .from('chapters')
+          .select('id, slug')
+          .eq('subject_id', subject.id);
+        
         for (const chapter of chapters || []) {
           const { count } = await supabase
             .from('questions')
