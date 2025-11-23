@@ -300,10 +300,6 @@ const Test = () => {
     setShowPremiumDialog(true);
   };
 
-  const handlePremiumAccessGranted = () => {
-    setTestType('premium');
-    setTestMode('custom-config');
-  };
 
   const handleCustomTestStart = (chapterIds: string[]) => {
     fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
@@ -506,7 +502,7 @@ const Test = () => {
       <PremiumAccessDialog
         open={showPremiumDialog}
         onOpenChange={setShowPremiumDialog}
-        onAccessGranted={handlePremiumAccessGranted}
+        onAccessGranted={() => {}}
       />
     </main>
   );

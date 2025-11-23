@@ -260,8 +260,33 @@ export type Database = {
       }
       premium_planners: {
         Row: {
+          created_at: string
+          file_url: string
+          id: string
+          title: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          file_url: string
+          id?: string
+          title: string
+          uploaded_by: string
+        }
+        Update: {
+          created_at?: string
+          file_url?: string
+          id?: string
+          title?: string
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
+      premium_tests: {
+        Row: {
           access_key: string
           created_at: string
+          description: string | null
           file_url: string
           id: string
           title: string
@@ -270,6 +295,7 @@ export type Database = {
         Insert: {
           access_key: string
           created_at?: string
+          description?: string | null
           file_url: string
           id?: string
           title: string
@@ -278,20 +304,13 @@ export type Database = {
         Update: {
           access_key?: string
           created_at?: string
+          description?: string | null
           file_url?: string
           id?: string
           title?: string
           uploaded_by?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "premium_planners_access_key_fkey"
-            columns: ["access_key"]
-            isOneToOne: false
-            referencedRelation: "premium_access_keys"
-            referencedColumns: ["access_key"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
