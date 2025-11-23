@@ -177,6 +177,21 @@ export const HtmlUpload = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    const MAX_FILES = 10;
+    if (files.length > MAX_FILES) {
+      toast.error(`Please upload at most ${MAX_FILES} files at a time`);
+      return;
+    }
+
+    let totalSizeMB = 0;
+    for (let i = 0; i < files.length; i++) {
+      totalSizeMB += files[i].size / (1024 * 1024);
+    }
+    if (totalSizeMB > 15) {
+      toast.error("Total file size too large. Please upload up to 15 MB at a time");
+      return;
+    }
+
     setParsing(true);
     const allQuestions: ParsedQuestion[] = [];
     const names: string[] = [];
@@ -225,7 +240,6 @@ export const HtmlUpload = () => {
       setParsing(false);
     }
   };
-
   const uploadImageToStorage = async (
     base64Data: string,
     questionNum: number,
