@@ -228,6 +228,71 @@ export type Database = {
           },
         ]
       }
+      premium_access_keys: {
+        Row: {
+          access_key: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          user_id: string
+        }
+        Insert: {
+          access_key: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          user_id: string
+        }
+        Update: {
+          access_key?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      premium_planners: {
+        Row: {
+          access_key: string
+          created_at: string
+          file_url: string
+          id: string
+          title: string
+          uploaded_by: string
+        }
+        Insert: {
+          access_key: string
+          created_at?: string
+          file_url: string
+          id?: string
+          title: string
+          uploaded_by: string
+        }
+        Update: {
+          access_key?: string
+          created_at?: string
+          file_url?: string
+          id?: string
+          title?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premium_planners_access_key_fkey"
+            columns: ["access_key"]
+            isOneToOne: false
+            referencedRelation: "premium_access_keys"
+            referencedColumns: ["access_key"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
