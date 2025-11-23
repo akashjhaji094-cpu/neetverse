@@ -177,9 +177,9 @@ export const HtmlUpload = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    const MAX_FILES = 10;
+    const MAX_FILES = 3;
     if (files.length > MAX_FILES) {
-      toast.error(`Please upload at most ${MAX_FILES} files at a time`);
+      toast.error(`Please upload at most ${MAX_FILES} HTML files at a time`);
       return;
     }
 
@@ -187,8 +187,9 @@ export const HtmlUpload = () => {
     for (let i = 0; i < files.length; i++) {
       totalSizeMB += files[i].size / (1024 * 1024);
     }
-    if (totalSizeMB > 15) {
-      toast.error("Total file size too large. Please upload up to 15 MB at a time");
+    const MAX_TOTAL_MB = 8;
+    if (totalSizeMB > MAX_TOTAL_MB) {
+      toast.error(`Total file size too large. Please upload up to ${MAX_TOTAL_MB} MB at a time`);
       return;
     }
 
@@ -458,7 +459,7 @@ export const HtmlUpload = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">HTML Files (Multiple)</label>
+              <label className="text-sm font-medium">HTML Files (up to 3 at once)</label>
               <Input
                 type="file"
                 accept=".html,.htm"
