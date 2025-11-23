@@ -284,7 +284,7 @@ export type Database = {
       }
       premium_tests: {
         Row: {
-          access_key: string
+          access_key: string | null
           created_at: string
           description: string | null
           file_url: string
@@ -293,7 +293,7 @@ export type Database = {
           uploaded_by: string
         }
         Insert: {
-          access_key: string
+          access_key?: string | null
           created_at?: string
           description?: string | null
           file_url: string
@@ -302,7 +302,7 @@ export type Database = {
           uploaded_by: string
         }
         Update: {
-          access_key?: string
+          access_key?: string | null
           created_at?: string
           description?: string | null
           file_url?: string
