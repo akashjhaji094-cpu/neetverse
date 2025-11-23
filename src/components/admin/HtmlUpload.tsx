@@ -163,6 +163,7 @@ export const HtmlUpload = () => {
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [parsing, setParsing] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     withAnswers: 0,
@@ -176,34 +177,53 @@ export const HtmlUpload = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    setParsing(true);
     const allQuestions: ParsedQuestion[] = [];
     const names: string[] = [];
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const text = await file.text();
-      const parsed = parseQuestionsFromHtml(text);
-      allQuestions.push(...parsed);
-      names.push(file.name);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          const text = await file.text();
+          const parsed = parseQuestionsFromHtml(text);
+          allQuestions.push(...parsed);
+          names.push(file.name);
+        } catch (error) {
+          console.error(`Error parsing ${file.name}:`, error);
+          toast.error(`Failed to parse ${file.name}`);
+        }
+      }
+
+      if (allQuestions.length === 0) {
+        toast.error("No questions could be parsed from the selected files");
+        setParsing(false);
+        return;
+      }
+
+      setFileNames(names);
+      setQuestions(allQuestions);
+
+      const withAnswers = allQuestions.filter((q) => q.answer).length;
+      const withImages = allQuestions.filter(
+        (q) => q.questionImages.length > 0 || q.optionImages.some((img) => img)
+      ).length;
+      const matchedAnswers = allQuestions.filter((q) => q.correctIndex !== null).length;
+
+      setStats({
+        total: allQuestions.length,
+        withAnswers,
+        withImages,
+        matchedAnswers,
+      });
+
+      toast.success(`Parsed ${allQuestions.length} questions from ${files.length} file(s)`);
+    } catch (error) {
+      console.error("File processing error:", error);
+      toast.error("An error occurred while processing files");
+    } finally {
+      setParsing(false);
     }
-
-    setFileNames(names);
-    setQuestions(allQuestions);
-
-    const withAnswers = allQuestions.filter((q) => q.answer).length;
-    const withImages = allQuestions.filter(
-      (q) => q.questionImages.length > 0 || q.optionImages.some((img) => img)
-    ).length;
-    const matchedAnswers = allQuestions.filter((q) => q.correctIndex !== null).length;
-
-    setStats({
-      total: allQuestions.length,
-      withAnswers,
-      withImages,
-      matchedAnswers,
-    });
-
-    toast.success(`Parsed ${allQuestions.length} questions from ${files.length} file(s)`);
   };
 
   const uploadImageToStorage = async (
@@ -429,9 +449,12 @@ export const HtmlUpload = () => {
                 type="file"
                 accept=".html,.htm"
                 onChange={handleFileChange}
-                disabled={uploading}
+                disabled={uploading || parsing}
                 multiple
               />
+              {parsing && (
+                <p className="text-xs text-muted-foreground">Parsing files...</p>
+              )}
               {fileNames.length > 0 && (
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p className="font-medium">Loaded {fileNames.length} file(s):</p>
@@ -456,11 +479,11 @@ export const HtmlUpload = () => {
 
             <Button
               type="button"
-              disabled={!questions.length || !chapterId || uploading}
+              disabled={!questions.length || !chapterId || uploading || parsing}
               className="w-full"
               onClick={handleSaveToBackend}
             >
-              {uploading ? "Saving..." : "Save to Backend"}
+              {uploading ? "Saving..." : parsing ? "Parsing..." : "Save to Backend"}
             </Button>
           </CardContent>
         </Card>
