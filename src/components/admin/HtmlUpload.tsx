@@ -159,7 +159,7 @@ const parseQuestionsFromHtml = (html: string): ParsedQuestion[] => {
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
   const [chapterId, setChapterId] = useState<string>("");
-  const [fileName, setFileName] = useState<string>("");
+  const [fileNames, setFileNames] = useState<string[]>([]);
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -173,28 +173,37 @@ export const HtmlUpload = () => {
   const selectedSubject = neetSubjects.find((s) => s.id === subjectId) || neetSubjects[0];
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    const text = await file.text();
-    setFileName(file.name);
-    const parsed = parseQuestionsFromHtml(text);
-    setQuestions(parsed);
+    const allQuestions: ParsedQuestion[] = [];
+    const names: string[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const text = await file.text();
+      const parsed = parseQuestionsFromHtml(text);
+      allQuestions.push(...parsed);
+      names.push(file.name);
+    }
 
-    const withAnswers = parsed.filter((q) => q.answer).length;
-    const withImages = parsed.filter(
+    setFileNames(names);
+    setQuestions(allQuestions);
+
+    const withAnswers = allQuestions.filter((q) => q.answer).length;
+    const withImages = allQuestions.filter(
       (q) => q.questionImages.length > 0 || q.optionImages.some((img) => img)
     ).length;
-    const matchedAnswers = parsed.filter((q) => q.correctIndex !== null).length;
+    const matchedAnswers = allQuestions.filter((q) => q.correctIndex !== null).length;
 
     setStats({
-      total: parsed.length,
+      total: allQuestions.length,
       withAnswers,
       withImages,
       matchedAnswers,
     });
 
-    toast.success(`Parsed ${parsed.length} questions from ${file.name}`);
+    toast.success(`Parsed ${allQuestions.length} questions from ${files.length} file(s)`);
   };
 
   const uploadImageToStorage = async (
@@ -295,7 +304,7 @@ export const HtmlUpload = () => {
           difficulty: "auto_medium",
           subject_id: subjectId,
           chapter_id: chapterId,
-          source_file: fileName,
+          source_file: fileNames.join(", "),
         });
       }
 
@@ -316,7 +325,7 @@ export const HtmlUpload = () => {
       );
 
       setQuestions([]);
-      setFileName("");
+      setFileNames([]);
       setStats({ total: 0, withAnswers: 0, withImages: 0, matchedAnswers: 0 });
     } catch (error: any) {
       console.error("Save error:", error);
@@ -415,15 +424,23 @@ export const HtmlUpload = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">HTML File</label>
+              <label className="text-sm font-medium">HTML Files (Multiple)</label>
               <Input
                 type="file"
                 accept=".html,.htm"
                 onChange={handleFileChange}
                 disabled={uploading}
+                multiple
               />
-              {fileName && (
-                <p className="text-xs text-muted-foreground">Loaded: {fileName}</p>
+              {fileNames.length > 0 && (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium">Loaded {fileNames.length} file(s):</p>
+                  <ul className="list-disc list-inside max-h-20 overflow-y-auto">
+                    {fileNames.map((name, idx) => (
+                      <li key={idx}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
