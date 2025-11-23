@@ -54,39 +54,110 @@ const Test = () => {
   const fetchQuestionsMutation = useMutation({
     mutationFn: async (params: { type: 'custom' | 'full', chapterIds?: string[] }) => {
       if (params.type === 'full') {
-        // Fetch 45 questions from each subject (Physics, Chemistry, Biology)
-        const { data: subjects } = await supabase.from('subjects').select('id, name').order('name');
+        // Fetch exactly 45 Physics, 45 Chemistry, 90 Biology with weighted chapter selection
+        const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
         
         if (!subjects || subjects.length < 3) {
           throw new Error('Not enough subjects in database');
         }
 
-        // For Biology, we need to split between Botany and Zoology chapters
-        // This is a simplified approach - in production, you'd have better chapter categorization
+        // Get chapters for weighted selection
+        const { data: allChapters } = await supabase.from('chapters').select('id, subject_id, slug');
+        
+        if (!allChapters) {
+          throw new Error('No chapters found in database');
+        }
+
         const allQuestions: Question[] = [];
         
-        for (const subject of subjects) {
-          let questionsToFetch = 45;
+        // Import weightage data
+        const { getWeightageForSubject, addRandomVariation } = await import('@/data/neetWeightage');
+        
+        // Define required question counts per subject
+        const subjectRequirements = [
+          { name: 'Physics', count: 45 },
+          { name: 'Chemistry', count: 45 },
+          { name: 'Biology', count: 90 },
+        ];
+
+        for (const requirement of subjectRequirements) {
+          const subject = subjects.find(s => s.name.toLowerCase() === requirement.name.toLowerCase());
           
-          // If Biology, fetch roughly half for Botany and half for Zoology
-          if (subject.name.toLowerCase() === 'biology') {
-            questionsToFetch = 90; // 45 Botany + 45 Zoology
+          if (!subject) {
+            throw new Error(`${requirement.name} subject not found in database`);
           }
 
-          const { data } = await supabase
-            .from('questions')
-            .select('*')
-            .eq('subject_id', subject.id)
-            .limit(questionsToFetch);
+          // Get chapters for this subject
+          const subjectChapters = allChapters.filter(c => c.subject_id === subject.id);
+          
+          // Get weightage configuration
+          const weightageConfig = getWeightageForSubject(subject.slug);
+          
+          // Build chapter weights map with random variation
+          const chapterWeights = new Map<string, number>();
+          let totalWeight = 0;
+          
+          subjectChapters.forEach(chapter => {
+            const config = weightageConfig.find(w => w.chapterId === chapter.slug);
+            const baseWeight = config?.weight || 1;
+            const randomizedWeight = addRandomVariation(baseWeight);
+            chapterWeights.set(chapter.id, randomizedWeight);
+            totalWeight += randomizedWeight;
+          });
 
-          if (data) {
-            allQuestions.push(...(data as Question[]));
+          // Calculate how many questions from each chapter
+          const chapterQuestionCounts = new Map<string, number>();
+          let remainingQuestions = requirement.count;
+          
+          // Distribute questions based on weights
+          subjectChapters.forEach(chapter => {
+            const weight = chapterWeights.get(chapter.id) || 1;
+            const proportion = weight / totalWeight;
+            const questionCount = Math.max(1, Math.round(proportion * requirement.count));
+            chapterQuestionCounts.set(chapter.id, questionCount);
+            remainingQuestions -= questionCount;
+          });
+
+          // Adjust if we over/under allocated due to rounding
+          while (remainingQuestions !== 0) {
+            const chapters = Array.from(chapterQuestionCounts.keys());
+            const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
+            const currentCount = chapterQuestionCounts.get(randomChapter) || 0;
+            
+            if (remainingQuestions > 0) {
+              chapterQuestionCounts.set(randomChapter, currentCount + 1);
+              remainingQuestions--;
+            } else if (currentCount > 1) {
+              chapterQuestionCounts.set(randomChapter, currentCount - 1);
+              remainingQuestions++;
+            }
+          }
+
+          // Fetch questions from each chapter according to calculated counts
+          for (const [chapterId, count] of chapterQuestionCounts.entries()) {
+            const { data: chapterQuestions } = await supabase
+              .from('questions')
+              .select('*')
+              .eq('chapter_id', chapterId);
+
+            if (chapterQuestions && chapterQuestions.length > 0) {
+              // Shuffle and take required number
+              const shuffled = chapterQuestions.sort(() => Math.random() - 0.5);
+              const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+              allQuestions.push(...(selected as Question[]));
+            }
           }
         }
 
-        // Shuffle and limit to 180 total
-        const shuffled = allQuestions.sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, 180) as Question[];
+        // Final shuffle to mix subjects
+        const finalQuestions = allQuestions.sort(() => Math.random() - 0.5);
+        
+        // Ensure we have exactly 180 questions
+        if (finalQuestions.length < 180) {
+          throw new Error(`Not enough questions available. Found ${finalQuestions.length}, need 180`);
+        }
+        
+        return finalQuestions.slice(0, 180) as Question[];
       } else {
         // Custom test: fetch questions from selected chapters
         const { data } = await supabase
