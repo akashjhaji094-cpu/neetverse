@@ -65,10 +65,10 @@ const Index = () => {
     {
       icon: Crown,
       title: 'Premium Tests',
-      description: 'Advanced test series and analytics (Coming Soon)',
-      action: () => {},
+      description: 'Exclusive test series based on 20 years PYQs - Only ₹399',
+      action: () => navigate('/test'),
       color: 'bg-warning',
-      badge: 'Coming Soon',
+      badge: 'Exclusive',
     },
     {
       icon: Shield,
