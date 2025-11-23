@@ -14,7 +14,7 @@ import { Loader2 } from "lucide-react";
 
 const Practice = () => {
   const { toast } = useToast();
-  const [selectedChapter, setSelectedChapter] = useState<{ id: string; name: string; subjectId: string } | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<{ id: string; name: string; subjectId: string; subjectSlug: string; chapterSlug: string } | null>(null);
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
@@ -145,7 +145,13 @@ const Practice = () => {
     const { data: chapters } = await supabase.from('chapters').select('id').eq('slug', chapter.id).single();
 
     if (subjects && chapters) {
-      setSelectedChapter({ id: chapters.id, name: chapter.name, subjectId: subjects.id });
+      setSelectedChapter({
+        id: chapters.id,
+        name: chapter.name,
+        subjectId: subjects.id,
+        subjectSlug,
+        chapterSlug: chapter.id,
+      });
     }
   };
 
@@ -244,7 +250,7 @@ const Practice = () => {
               open={!!selectedChapter}
               onClose={() => setSelectedChapter(null)}
               chapterName={selectedChapter.name}
-              totalQuestions={questionCounts?.[`${selectedChapter.subjectId}-${selectedChapter.id}`] || 0}
+              totalQuestions={questionCounts?.[`${selectedChapter.subjectSlug}-${selectedChapter.chapterSlug}`] || 0}
               onStart={handleStartTest}
               loading={startTestMutation.isPending}
             />
