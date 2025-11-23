@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { TestInterface } from "@/components/practice/TestInterface";
 import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
+import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { toast } from "sonner";
 import { ListChecks, BookOpen, Loader2 } from "lucide-react";
 import { Question } from "@/lib/supabase";
@@ -307,6 +308,11 @@ const Test = () => {
     setQuestions([]);
     setResults(null);
   };
+
+  // Show loading animation for full syllabus test
+  if (testType === 'full' && fetchQuestionsMutation.isPending) {
+    return <LoadingQuestions totalQuestions={180} />;
+  }
 
   if (testMode === 'custom-config') {
     return (
