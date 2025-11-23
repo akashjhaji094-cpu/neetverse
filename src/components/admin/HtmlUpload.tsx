@@ -36,14 +36,12 @@ const sanitizeMathText = (value: string): string => {
 };
 
 const extractImageSrc = (element: Element): string | null => {
-  const img = element.querySelector("img");
+  const img = element instanceof HTMLImageElement ? element : element.querySelector("img");
   if (!img) return null;
-  
+
   const src = img.getAttribute("src") || "";
-  if (src.startsWith("data:image")) {
-    return src;
-  }
-  return null;
+  if (!src) return null;
+  return src;
 };
 
 const findCorrectOptionIndex = (
@@ -110,11 +108,18 @@ const parseQuestionsFromHtml = (html: string): ParsedQuestion[] => {
     const numberMatch = numberRaw.match(/(\d+)/);
     const number = numberMatch ? Number(numberMatch[1]) : index + 1;
 
-    const contentNode = node.querySelector(".question-content") || node;
-    const rawQuestion = contentNode.textContent || "";
-    
+    const contentNode =
+      (node.querySelector(".question-content") as HTMLElement | null) || (node as HTMLElement);
+
+    // Clone and strip options & images from question text so it stays clean
+    const contentClone = contentNode.cloneNode(true) as HTMLElement;
+    contentClone.querySelectorAll(".options").forEach((el) => el.remove());
+    contentClone.querySelectorAll(".question-image").forEach((el) => el.remove());
+
+    const rawQuestion = contentClone.textContent || "";
+
     const questionImageNodes = Array.from(
-      contentNode.querySelectorAll(".question-image")
+      contentNode.querySelectorAll(".question-image img, img.question-image")
     );
     const questionImages = questionImageNodes
       .map((img) => extractImageSrc(img))
@@ -130,8 +135,10 @@ const parseQuestionsFromHtml = (html: string): ParsedQuestion[] => {
       const full = `${label} ${text}`.trim();
       options.push(sanitizeMathText(full));
 
-      const optImg = opt.querySelector(".option-image");
-      optionImages.push(optImg ? extractImageSrc(optImg) : null);
+      const optImgEl =
+        (opt.querySelector(".option-image img") as HTMLElement | null) ||
+        (opt.querySelector("img") as HTMLElement | null);
+      optionImages.push(optImgEl ? extractImageSrc(optImgEl) : null);
     });
 
     const answer = answerMap.get(number);
@@ -257,7 +264,11 @@ export const HtmlUpload = () => {
         for (const imgData of q.questionImages) {
           if (imgData.startsWith("data:image")) {
             const url = await uploadImageToStorage(imgData, q.number, "question");
-            if (url) uploadedQuestionImages.push(url);
+            if (url) {
+              uploadedQuestionImages.push(url);
+            }
+          } else if (imgData) {
+            uploadedQuestionImages.push(imgData);
           }
         }
 
@@ -267,6 +278,9 @@ export const HtmlUpload = () => {
             if (optImg && optImg.startsWith("data:image")) {
               const url = await uploadImageToStorage(optImg, q.number, "option", idx);
               return url ? `${opt}|IMG:${url}` : opt;
+            }
+            if (optImg) {
+              return `${opt}|IMG:${optImg}`;
             }
             return opt;
           })
