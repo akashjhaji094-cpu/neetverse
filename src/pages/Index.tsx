@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut } from 'lucide-react';
+import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -50,6 +50,13 @@ const Index = () => {
       action: () => {},
       color: 'bg-warning',
       badge: 'Coming Soon',
+    },
+    {
+      icon: Shield,
+      title: 'Admin Panel',
+      description: 'Upload HTML tests and manage chapters & questions',
+      action: () => navigate('/admin'),
+      color: 'bg-secondary',
     },
   ];
 
