@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield } from 'lucide-react';
@@ -18,6 +19,26 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, loading, isGuest } = useAuth();
   const [showSignupDialog, setShowSignupDialog] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .in("role", ["superadmin", "content_admin"]);
+
+      setIsAdmin(!!roles && roles.length > 0);
+    };
+
+    checkAdminRole();
+  }, [user]);
 
   if (loading) {
     return (
@@ -70,14 +91,21 @@ const Index = () => {
       color: 'bg-warning',
       badge: 'Exclusive',
     },
-    {
-      icon: Shield,
-      title: 'Admin Panel',
-      description: 'Upload HTML tests and manage chapters & questions',
-      action: () => navigate('/admin'),
-      color: 'bg-secondary',
-    },
   ];
+
+  // Add admin panel for admin users only
+  const allFeatures = isAdmin
+    ? [
+        ...features,
+        {
+          icon: Shield,
+          title: 'Admin Panel',
+          description: 'Upload HTML tests and manage chapters & questions',
+          action: () => navigate('/admin'),
+          color: 'bg-secondary',
+        },
+      ]
+    : features;
 
   return (
     <div className="min-h-screen" style={{ backgroundImage: 'var(--gradient-hero)' }}>
@@ -110,7 +138,7 @@ const Index = () => {
 
           {/* Feature Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {features.map((feature, index) => {
+            {allFeatures.map((feature, index) => {
               const Icon = feature.icon;
               return (
                 <Card
