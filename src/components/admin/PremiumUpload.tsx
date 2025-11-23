@@ -238,7 +238,7 @@ export const PremiumUpload = () => {
       title: testTitle,
       description: testDescription,
       file_url: urlData.publicUrl,
-      access_key: selectedAccessKey,
+      access_key: selectedAccessKey === "all" ? null : selectedAccessKey,
       uploaded_by: authData.user.id,
     });
 
@@ -440,6 +440,7 @@ export const PremiumUpload = () => {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="">Select access key...</option>
+                <option value="all">All Access Keys</option>
                 {accessKeys
                   .filter((key) => key.is_active)
                   .map((key) => (
@@ -449,7 +450,9 @@ export const PremiumUpload = () => {
                   ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                Only users with this access key can view/download this test
+                {selectedAccessKey === "all" 
+                  ? "Available to all users with any active access key"
+                  : "Only users with this access key can view/download this test"}
               </p>
             </div>
             <div className="space-y-2">
