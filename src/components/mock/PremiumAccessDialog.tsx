@@ -27,6 +27,14 @@ interface Planner {
   created_at: string;
 }
 
+interface PremiumTest {
+  id: string;
+  title: string;
+  description: string | null;
+  file_url: string;
+  created_at: string;
+}
+
 export const PremiumAccessDialog = ({
   open,
   onOpenChange,
@@ -36,6 +44,7 @@ export const PremiumAccessDialog = ({
   const [loading, setLoading] = useState(false);
   const [hasAccess, setHasAccess] = useState(false);
   const [planners, setPlanners] = useState<Planner[]>([]);
+  const [premiumTests, setPremiumTests] = useState<PremiumTest[]>([]);
 
   const verifyAccessKey = async () => {
     if (!accessKey.trim()) {
@@ -67,11 +76,21 @@ export const PremiumAccessDialog = ({
       return;
     }
 
-    // Fetch planners
+    // Fetch premium tests
+    const { data: testsData, error: testsError } = await supabase
+      .from("premium_tests")
+      .select("*")
+      .eq("access_key", accessKey)
+      .order("created_at", { ascending: false });
+
+    if (testsError) {
+      console.error(testsError);
+    }
+
+    // Fetch all planners (public, no key needed)
     const { data: plannersData, error: plannersError } = await supabase
       .from("premium_planners")
       .select("*")
-      .eq("access_key", accessKey)
       .order("created_at", { ascending: false });
 
     if (plannersError) {
@@ -79,15 +98,12 @@ export const PremiumAccessDialog = ({
     }
 
     setHasAccess(true);
+    setPremiumTests(testsData || []);
     setPlanners(plannersData || []);
     toast.success("Access verified! You can now access premium tests.");
     setLoading(false);
   };
 
-  const handleContinue = () => {
-    onAccessGranted();
-    onOpenChange(false);
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,19 +149,51 @@ export const PremiumAccessDialog = ({
               <p className="text-sm text-green-800 dark:text-green-200 font-medium">
                 ✓ Access Verified Successfully
               </p>
+              <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                📚 Based on 20 Years PYQs + PW, Allen, Akash questions
+              </p>
             </div>
 
-            {planners.length > 0 ? (
+            {/* Premium Tests Section */}
+            {premiumTests.length > 0 && (
               <div className="space-y-2">
-                <Label>Your Test Planners</Label>
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-2">
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    📚 <span className="font-semibold">Based on 20 Years PYQs</span> + PW, Allen, Akash questions
-                  </p>
+                <Label className="text-base font-semibold">Premium Test PDFs</Label>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                  {premiumTests.map((test) => (
+                    <Card key={test.id} className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">{test.title}</h4>
+                          {test.description && (
+                            <p className="text-xs text-muted-foreground mt-1">{test.description}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(test.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="bg-yellow-500 hover:bg-yellow-600 text-white shrink-0"
+                          onClick={() => window.open(test.file_url, "_blank")}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {/* Study Planners Section */}
+            {planners.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Study Planners</Label>
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
                   {planners.map((planner) => (
-                    <Card key={planner.id} className="p-3 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border-yellow-200 dark:border-yellow-800">
+                    <Card key={planner.id} className="p-3 border-border">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <h4 className="font-medium text-sm">{planner.title}</h4>
@@ -154,9 +202,8 @@ export const PremiumAccessDialog = ({
                           </p>
                         </div>
                         <Button
-                          variant="default"
+                          variant="outline"
                           size="sm"
-                          className="bg-yellow-500 hover:bg-yellow-600 text-white"
                           onClick={() => window.open(planner.file_url, "_blank")}
                         >
                           <Download className="h-4 w-4 mr-1" />
@@ -167,15 +214,13 @@ export const PremiumAccessDialog = ({
                   ))}
                 </div>
               </div>
-            ) : (
-              <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
-                No test planners available yet. Contact admin for more info.
-              </div>
             )}
 
-            <Button onClick={handleContinue} className="w-full">
-              Continue to Premium Tests
-            </Button>
+            {premiumTests.length === 0 && planners.length === 0 && (
+              <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
+                No materials available yet. Contact admin for more info.
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
