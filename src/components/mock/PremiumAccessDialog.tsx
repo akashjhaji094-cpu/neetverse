@@ -76,11 +76,11 @@ export const PremiumAccessDialog = ({
       return;
     }
 
-    // Fetch premium tests
+    // Fetch premium tests (specific to this key OR available to all keys)
     const { data: testsData, error: testsError } = await supabase
       .from("premium_tests")
       .select("*")
-      .eq("access_key", accessKey)
+      .or(`access_key.eq.${accessKey},access_key.is.null`)
       .order("created_at", { ascending: false });
 
     if (testsError) {
