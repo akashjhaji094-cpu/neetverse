@@ -1,12 +1,29 @@
-import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HtmlUpload } from "@/components/admin/HtmlUpload";
 import { ResourceUpload } from "@/components/admin/ResourceUpload";
 import { PremiumUpload } from "@/components/admin/PremiumUpload";
-import { Upload, BookOpen, Crown } from "lucide-react";
+import { useAdminAccess } from "@/hooks/useAdminAccess";
+import { Upload, BookOpen, Crown, Loader2 } from "lucide-react";
 
 const Admin = () => {
+  const { isAdmin, loading } = useAdminAccess();
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Verifying access...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <main className="min-h-screen bg-background">
       <section className="section-padding">
