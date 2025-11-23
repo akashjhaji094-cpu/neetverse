@@ -8,8 +8,9 @@ import { TestInterface } from "@/components/practice/TestInterface";
 import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
+import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { toast } from "sonner";
-import { ListChecks, BookOpen, Loader2 } from "lucide-react";
+import { ListChecks, BookOpen, Loader2, Crown } from "lucide-react";
 import { Question } from "@/lib/supabase";
 
 interface SubjectAnalytics {
@@ -25,8 +26,9 @@ interface SubjectAnalytics {
 const Test = () => {
   const { user } = useAuth();
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'testing' | 'results'>('select');
-  const [testType, setTestType] = useState<'custom' | 'full' | null>(null);
+  const [testType, setTestType] = useState<'custom' | 'full' | 'premium' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [results, setResults] = useState<{
     score: number;
     correctCount: number;
@@ -294,6 +296,15 @@ const Test = () => {
     fetchQuestionsMutation.mutate({ type: 'full' });
   };
 
+  const handleStartPremiumTest = () => {
+    setShowPremiumDialog(true);
+  };
+
+  const handlePremiumAccessGranted = () => {
+    setTestType('premium');
+    setTestMode('custom-config');
+  };
+
   const handleCustomTestStart = (chapterIds: string[]) => {
     fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
   };
@@ -434,6 +445,31 @@ const Test = () => {
             </div>
           )}
 
+          {/* Premium Test Card */}
+          <Card className="mt-6 border-2 border-yellow-500/30 bg-gradient-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/10 dark:to-orange-900/10">
+            <CardHeader>
+              <div className="w-12 h-12 rounded-lg bg-yellow-500 flex items-center justify-center mb-4">
+                <Crown className="w-6 h-6 text-white" />
+              </div>
+              <CardTitle className="flex items-center gap-2">
+                Premium Test Series
+                <span className="px-2 py-1 text-xs bg-yellow-500 text-white rounded-full">Exclusive</span>
+              </CardTitle>
+              <CardDescription>
+                Access exclusive test series with detailed planners (Requires access key)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={handleStartPremiumTest}
+                className="w-full bg-yellow-500 hover:bg-yellow-600"
+              >
+                <Crown className="h-4 w-4 mr-2" />
+                Access Premium Tests
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Question Bank Stats */}
           {questionCounts && questionCounts.length > 0 && (
             <Card className="mt-8">
@@ -454,6 +490,12 @@ const Test = () => {
           )}
         </div>
       </section>
+
+      <PremiumAccessDialog
+        open={showPremiumDialog}
+        onOpenChange={setShowPremiumDialog}
+        onAccessGranted={handlePremiumAccessGranted}
+      />
     </main>
   );
 };
