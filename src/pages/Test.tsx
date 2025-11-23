@@ -10,7 +10,7 @@ import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { toast } from "sonner";
-import { ListChecks, BookOpen, Loader2, Crown } from "lucide-react";
+import { ListChecks, BookOpen, Loader2, Crown, Download } from "lucide-react";
 import { Question } from "@/lib/supabase";
 
 interface SubjectAnalytics {
@@ -36,6 +36,43 @@ const Test = () => {
     unattemptedCount: number;
     subjectAnalytics: SubjectAnalytics[];
   } | null>(null);
+
+  // Fetch available premium tests and planners
+  const { data: premiumContent } = useQuery({
+    queryKey: ['premium-content', user?.id],
+    queryFn: async () => {
+      if (!user) return { tests: [], planners: [], hasAccess: false };
+
+      // Check if user has any active access key
+      const { data: accessKeys } = await supabase
+        .from('premium_access_keys')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1);
+
+      const hasAccess = (accessKeys?.length || 0) > 0;
+
+      if (!hasAccess) {
+        return { tests: [], planners: [], hasAccess: false };
+      }
+
+      // Fetch premium tests (available to all OR specific to user's key)
+      const { data: tests } = await supabase
+        .from('premium_tests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Fetch all planners (public)
+      const { data: planners } = await supabase
+        .from('premium_planners')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      return { tests: tests || [], planners: planners || [], hasAccess };
+    },
+    enabled: !!user,
+  });
 
   const { data: questionCounts, isLoading: countsLoading } = useQuery({
     queryKey: ['question-counts-by-subject'],
@@ -468,13 +505,91 @@ const Test = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                onClick={handleStartPremiumTest}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
-              >
-                <Crown className="h-4 w-4 mr-2" />
-                Enter Access Key
-              </Button>
+              {premiumContent?.hasAccess ? (
+                <div className="space-y-4">
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                      ✓ Premium Access Active
+                    </p>
+                  </div>
+
+                  {/* Premium Tests */}
+                  {premiumContent.tests.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-sm">Premium Test PDFs</h3>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        {premiumContent.tests.map((test: any) => (
+                          <div key={test.id} className="p-3 bg-white dark:bg-gray-800 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-sm">{test.title}</h4>
+                                {test.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{test.description}</p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {new Date(test.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-yellow-500 hover:bg-yellow-600 text-white shrink-0"
+                                onClick={() => window.open(test.file_url, "_blank")}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Study Planners */}
+                  {premiumContent.planners.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-sm">Study Planners</h3>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {premiumContent.planners.map((planner: any) => (
+                          <div key={planner.id} className="p-3 bg-white dark:bg-gray-800 border border-border rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-sm">{planner.title}</h4>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(planner.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(planner.file_url, "_blank")}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {premiumContent.tests.length === 0 && premiumContent.planners.length === 0 && (
+                    <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
+                      No materials available yet. New tests coming soon!
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Button 
+                  onClick={handleStartPremiumTest}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
+                >
+                  <Crown className="h-4 w-4 mr-2" />
+                  Enter Access Key
+                </Button>
+              )}
             </CardContent>
           </Card>
 
