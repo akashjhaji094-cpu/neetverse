@@ -12,7 +12,7 @@ export const LoadingQuestions = ({ totalQuestions }: LoadingQuestionsProps) => {
   useEffect(() => {
     if (currentCount >= totalQuestions) return;
 
-    const increment = Math.ceil(totalQuestions / 60); // Complete in ~1 second (60 frames)
+    const increment = Math.max(1, Math.ceil(totalQuestions / (60 * 20))); // Complete in ~20 seconds at 60fps
     const timer = setTimeout(() => {
       setCurrentCount(prev => Math.min(prev + increment, totalQuestions));
     }, 16); // ~60fps
@@ -37,7 +37,7 @@ export const LoadingQuestions = ({ totalQuestions }: LoadingQuestionsProps) => {
             
             <div className="text-center space-y-3">
               <h3 className="text-3xl font-bold text-gradient">Preparing Your Test</h3>
-              <p className="text-muted-foreground animate-pulse">Loading questions from database...</p>
+              <p className="text-muted-foreground animate-pulse">Fetching questions from the database...</p>
             </div>
 
             <div className="w-full space-y-4">
