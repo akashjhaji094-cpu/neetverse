@@ -62,6 +62,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) {
       toast.error(error.message);
     } else {
+      // Clear guest mode when user signs up
+      clearGuestMode();
       toast.success('Account created successfully!');
     }
 
@@ -77,6 +79,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) {
       toast.error(error.message);
     } else {
+      // Clear guest mode when user signs in
+      clearGuestMode();
       toast.success('Welcome back!');
     }
 

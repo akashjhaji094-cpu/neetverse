@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { GraduationCap } from 'lucide-react';
+import neetverseLogo from '@/assets/neetverse-logo.jpg';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -57,11 +57,15 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center section-padding" style={{ backgroundImage: 'var(--gradient-hero)' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary mb-4">
-            <GraduationCap className="w-8 h-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center mb-6">
+            <img 
+              src={neetverseLogo} 
+              alt="NEETVerse" 
+              className="w-24 h-24 rounded-2xl shadow-2xl border-2 border-primary/20"
+            />
           </div>
-          <h1 className="text-4xl font-bold text-gradient mb-2">NEETVERSE</h1>
-          <p className="text-muted-foreground">Your journey to NEET success starts here</p>
+          <h1 className="text-5xl font-bold text-gradient mb-3">NEETVerse</h1>
+          <p className="text-lg text-muted-foreground">Your journey to NEET success starts here</p>
         </div>
 
         <Card>
