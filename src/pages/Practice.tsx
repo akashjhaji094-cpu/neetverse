@@ -23,36 +23,29 @@ const Practice = () => {
   const { data: questionCounts } = useQuery({
     queryKey: ['question-counts'],
     queryFn: async () => {
-      const [{ data: subjects }, { data: chapters }, { data: questions }] = await Promise.all([
-        supabase.from('subjects').select('id, slug'),
-        supabase.from('chapters').select('id, slug'),
-        supabase.from('questions').select('subject_id, chapter_id'),
-      ]);
-
-      const subjectSlugById: Record<string, string> = {};
-      (subjects || []).forEach((subject) => {
-        subjectSlugById[subject.id] = subject.slug;
-      });
-
-      const chapterSlugById: Record<string, string> = {};
-      (chapters || []).forEach((chapter) => {
-        chapterSlugById[chapter.id] = chapter.slug;
-      });
-
+      const { data: subjects } = await supabase.from('subjects').select('id, slug');
+      
       const counts: Record<string, number> = {};
-
-      (questions || []).forEach((question: any) => {
-        const subjectSlug = subjectSlugById[question.subject_id];
-        const chapterSlug = chapterSlugById[question.chapter_id];
-
-        if (!subjectSlug || !chapterSlug) return;
-
-        const key = `${subjectSlug}-${chapterSlug}`;
-        counts[key] = (counts[key] || 0) + 1;
-      });
-
+      
+      for (const subject of subjects || []) {
+        const { data: chapters } = await supabase
+          .from('chapters')
+          .select('id, slug')
+          .eq('subject_id', subject.id);
+        
+        for (const chapter of chapters || []) {
+          const { count } = await supabase
+            .from('questions')
+            .select('*', { count: 'exact', head: true })
+            .eq('subject_id', subject.id)
+            .eq('chapter_id', chapter.id);
+          
+          counts[`${subject.slug}-${chapter.slug}`] = count || 0;
+        }
+      }
+      
       return counts;
-    },
+    }
   });
 
   const startTestMutation = useMutation({
@@ -66,8 +59,8 @@ const Practice = () => {
 
       if (error) throw error;
       
-      // Add artificial delay to show loading screen (min 20 seconds)
-      await new Promise(resolve => setTimeout(resolve, 20000));
+      // Add artificial delay to show loading screen (min 1 second)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       return questions as Question[];
     },
