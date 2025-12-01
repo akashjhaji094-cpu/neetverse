@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { TestConfig } from "@/components/practice/TestConfig";
 import { TestInterface } from "@/components/practice/TestInterface";
 import { TestResults } from "@/components/practice/TestResults";
+import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -57,6 +58,10 @@ const Practice = () => {
         .limit(count);
 
       if (error) throw error;
+      
+      // Add artificial delay to show loading screen (min 1 second)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       return questions as Question[];
     },
     onSuccess: (questions) => {
@@ -173,6 +178,11 @@ const Practice = () => {
     setTestResults(null);
     setTestQuestions([]);
   };
+
+  // Show loading screen while fetching questions
+  if (startTestMutation.isPending) {
+    return <LoadingQuestions totalQuestions={selectedChapter ? 50 : 0} />;
+  }
 
   if (testResults) {
     return (

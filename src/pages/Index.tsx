@@ -4,9 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download } from 'lucide-react';
+import { BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { PremiumAccessDialog } from '@/components/mock/PremiumAccessDialog';
+import neetverseLogo from '@/assets/neetverse-logo.jpg';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,11 +158,13 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container-custom section-padding py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-bold text-gradient">NEETVERSE</h1>
+          <div className="flex items-center gap-4">
+            <img 
+              src={neetverseLogo} 
+              alt="NEETVerse" 
+              className="w-12 h-12 rounded-xl shadow-lg border border-primary/20"
+            />
+            <h1 className="text-3xl font-bold text-gradient">NEETVerse</h1>
           </div>
           <Button variant="outline" onClick={signOut}>
             <LogOut className="w-4 h-4 mr-2" />
@@ -174,7 +177,7 @@ const Index = () => {
       <section className="section-padding">
         <div className="container-custom text-center">
           <h2 className="text-5xl font-bold mb-4">
-            Welcome to <span className="text-gradient">NEETVERSE</span>
+            Welcome to <span className="text-gradient">NEETVerse</span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12">
             Your complete platform for NEET preparation with unlimited practice,
