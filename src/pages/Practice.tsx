@@ -59,15 +59,25 @@ const Practice = () => {
 
       if (error) throw error;
       
-      // Shuffle questions using Fisher-Yates algorithm for true randomization
-      const shuffled = [...(allQuestions || [])];
+      if (!allQuestions || allQuestions.length === 0) {
+        throw new Error('No questions available');
+      }
+
+      // Cryptographically secure shuffle using Fisher-Yates with crypto.getRandomValues
+      const shuffled = [...allQuestions];
+      const randomValues = new Uint32Array(shuffled.length);
+      crypto.getRandomValues(randomValues);
+      
       for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = randomValues[i] % (i + 1);
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       
       // Take requested count from shuffled array
       const randomQuestions = shuffled.slice(0, count);
+      
+      console.log('Fetched questions:', allQuestions.length, 'Shuffled and selected:', randomQuestions.length);
+      console.log('First question ID:', randomQuestions[0]?.id);
       
       // Add artificial delay to show loading screen (min 1 second)
       await new Promise(resolve => setTimeout(resolve, 1000));
