@@ -199,19 +199,96 @@ const Test = () => {
         
         return finalQuestions.slice(0, 180) as Question[];
       } else {
-        // Custom test: fetch questions from selected chapters
-        const { data } = await supabase
-          .from('questions')
-          .select('*')
-          .in('chapter_id', params.chapterIds || [])
-          .limit(180);
-
-        if (!data || data.length < 180) {
-          throw new Error('Not enough questions available from selected chapters');
+        // Custom test: fetch questions from selected chapters with proper subject distribution
+        // NEET ratio: 45 Physics, 45 Chemistry, 90 Biology
+        const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
+        
+        if (!subjects || subjects.length < 3) {
+          throw new Error('Not enough subjects in database');
         }
 
-        // Shuffle questions
-        return data.sort(() => Math.random() - 0.5) as Question[];
+        // Get chapters to identify which subject each belongs to
+        const { data: allChapters } = await supabase
+          .from('chapters')
+          .select('id, subject_id')
+          .in('id', params.chapterIds || []);
+
+        if (!allChapters || allChapters.length === 0) {
+          throw new Error('No valid chapters selected');
+        }
+
+        // Group selected chapters by subject
+        const chaptersBySubject = new Map<string, string[]>();
+        allChapters.forEach(chapter => {
+          const existing = chaptersBySubject.get(chapter.subject_id) || [];
+          existing.push(chapter.id);
+          chaptersBySubject.set(chapter.subject_id, existing);
+        });
+
+        // Define required question counts per subject (NEET ratio)
+        const subjectRequirements = [
+          { name: 'Physics', count: 45 },
+          { name: 'Chemistry', count: 45 },
+          { name: 'Biology', count: 90 },
+        ];
+
+        const allQuestions: Question[] = [];
+
+        for (const requirement of subjectRequirements) {
+          const subject = subjects.find(s => s.name.toLowerCase() === requirement.name.toLowerCase());
+          
+          if (!subject) {
+            throw new Error(`${requirement.name} subject not found in database`);
+          }
+
+          // Get selected chapters for this subject
+          const selectedChaptersForSubject = chaptersBySubject.get(subject.id) || [];
+          
+          if (selectedChaptersForSubject.length === 0) {
+            throw new Error(`No chapters selected for ${requirement.name}. Please select at least one chapter from each subject.`);
+          }
+
+          // Fetch all questions from selected chapters for this subject
+          const { data: subjectQuestions } = await supabase
+            .from('questions')
+            .select('*')
+            .in('chapter_id', selectedChaptersForSubject);
+
+          if (!subjectQuestions || subjectQuestions.length < requirement.count) {
+            throw new Error(`Not enough ${requirement.name} questions. Found ${subjectQuestions?.length || 0}, need ${requirement.count}. Please select more chapters.`);
+          }
+
+          // Cryptographically secure shuffle using Fisher-Yates
+          const shuffled = [...subjectQuestions];
+          const randomValues = new Uint32Array(shuffled.length);
+          crypto.getRandomValues(randomValues);
+          
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = randomValues[i] % (i + 1);
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          // Take required count for this subject
+          allQuestions.push(...(shuffled.slice(0, requirement.count) as Question[]));
+        }
+
+        // Final shuffle to mix all subjects together
+        const finalRandomValues = new Uint32Array(allQuestions.length);
+        crypto.getRandomValues(finalRandomValues);
+        
+        for (let i = allQuestions.length - 1; i > 0; i--) {
+          const j = finalRandomValues[i] % (i + 1);
+          [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+        }
+
+        console.log('Custom mock test distribution:', {
+          total: allQuestions.length,
+          physics: allQuestions.filter(q => subjects.find(s => s.name === 'Physics')?.id === q.subject_id).length,
+          chemistry: allQuestions.filter(q => subjects.find(s => s.name === 'Chemistry')?.id === q.subject_id).length,
+          biology: allQuestions.filter(q => subjects.find(s => s.name === 'Biology')?.id === q.subject_id).length,
+        });
+
+        return allQuestions;
       }
     },
     onSuccess: (data) => {
