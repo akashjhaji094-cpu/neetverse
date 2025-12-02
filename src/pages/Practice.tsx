@@ -50,19 +50,29 @@ const Practice = () => {
 
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
-      const { data: questions, error } = await supabase
+      // Fetch all available questions for the chapter
+      const { data: allQuestions, error } = await supabase
         .from('questions')
         .select('*')
         .eq('chapter_id', chapterId)
-        .eq('subject_id', subjectId)
-        .limit(count);
+        .eq('subject_id', subjectId);
 
       if (error) throw error;
+      
+      // Shuffle questions using Fisher-Yates algorithm for true randomization
+      const shuffled = [...(allQuestions || [])];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      // Take requested count from shuffled array
+      const randomQuestions = shuffled.slice(0, count);
       
       // Add artificial delay to show loading screen (min 1 second)
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      return questions as Question[];
+      return randomQuestions as Question[];
     },
     onSuccess: (questions) => {
       setTestQuestions(questions);
