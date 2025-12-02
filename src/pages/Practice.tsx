@@ -12,7 +12,6 @@ import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const Practice = () => {
   const { toast } = useToast();
@@ -21,45 +20,32 @@ const Practice = () => {
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
 
-  // Optimized single query to fetch all question counts
-  const { data: questionCounts, isLoading: isLoadingCounts } = useQuery({
+  const { data: questionCounts } = useQuery({
     queryKey: ['question-counts'],
     queryFn: async () => {
-      // Fetch all data in parallel with a single efficient approach
-      const [subjectsRes, chaptersRes, questionsRes] = await Promise.all([
-        supabase.from('subjects').select('id, slug'),
-        supabase.from('chapters').select('id, slug, subject_id'),
-        supabase.from('questions').select('chapter_id, subject_id')
-      ]);
-
-      const subjects = subjectsRes.data || [];
-      const chapters = chaptersRes.data || [];
-      const questions = questionsRes.data || [];
-
-      // Create lookup maps for efficiency
-      const subjectSlugMap = new Map(subjects.map(s => [s.id, s.slug]));
+      const { data: subjects } = await supabase.from('subjects').select('id, slug');
       
-      // Count questions per chapter
-      const questionCountMap = new Map<string, number>();
-      questions.forEach(q => {
-        const key = q.chapter_id;
-        questionCountMap.set(key, (questionCountMap.get(key) || 0) + 1);
-      });
-
-      // Build the counts object with subject-chapter slug keys
       const counts: Record<string, number> = {};
-      chapters.forEach(chapter => {
-        const subjectSlug = subjectSlugMap.get(chapter.subject_id);
-        if (subjectSlug) {
-          const key = `${subjectSlug}-${chapter.slug}`;
-          counts[key] = questionCountMap.get(chapter.id) || 0;
+      
+      for (const subject of subjects || []) {
+        const { data: chapters } = await supabase
+          .from('chapters')
+          .select('id, slug')
+          .eq('subject_id', subject.id);
+        
+        for (const chapter of chapters || []) {
+          const { count } = await supabase
+            .from('questions')
+            .select('*', { count: 'exact', head: true })
+            .eq('subject_id', subject.id)
+            .eq('chapter_id', chapter.id);
+          
+          counts[`${subject.slug}-${chapter.slug}`] = count || 0;
         }
-      });
-
-      console.log('Question counts loaded:', Object.keys(counts).length, 'chapters');
+      }
+      
       return counts;
-    },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    }
   });
 
   const startTestMutation = useMutation({
@@ -216,52 +202,6 @@ const Practice = () => {
   // Show loading screen while fetching questions
   if (startTestMutation.isPending) {
     return <LoadingQuestions totalQuestions={selectedChapter ? 50 : 0} />;
-  }
-
-  // Show loading screen while fetching initial question counts
-  if (isLoadingCounts) {
-    return (
-      <main className="min-h-screen bg-background">
-        <section className="section-padding">
-          <div className="container-custom space-y-6">
-            <header className="space-y-2 text-center md:text-left">
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                Practice Centre
-              </p>
-              <h1 className="text-3xl md:text-4xl font-bold">
-                NEET Chapters for Focused Practice
-              </h1>
-              <p className="text-muted-foreground max-w-2xl mx-auto md:mx-0">
-                Loading chapters and question counts...
-              </p>
-            </header>
-
-            <div className="flex items-center justify-center py-8">
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="text-muted-foreground">Fetching questions from database...</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="h-full flex flex-col">
-                  <CardHeader>
-                    <Skeleton className="h-6 w-24" />
-                    <Skeleton className="h-4 w-48" />
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {[1, 2, 3, 4, 5].map((j) => (
-                      <Skeleton key={j} className="h-10 w-full" />
-                    ))}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-      </main>
-    );
   }
 
   if (testResults) {
