@@ -9,6 +9,7 @@ import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
+import { QuestionReview } from "@/components/practice/QuestionReview";
 import { toast } from "sonner";
 import { ListChecks, BookOpen, Loader2, Crown, Download } from "lucide-react";
 import { Question } from "@/lib/supabase";
@@ -25,10 +26,11 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
-  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'testing' | 'results'>('select');
+  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full' | 'premium' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
+  const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [results, setResults] = useState<{
     score: number;
     correctCount: number;
@@ -365,7 +367,7 @@ const Test = () => {
           config: { type: testType, questionCount: questions.length } as any,
           score,
           finished_at: new Date().toISOString(),
-          details: { subjectScores } as any,
+          details: { subjectScores, correctCount, wrongCount, unattemptedCount } as any,
         }])
         .select()
         .single();
@@ -388,10 +390,12 @@ const Test = () => {
         wrongCount,
         unattemptedCount,
         subjectAnalytics: Object.values(subjectScores),
+        answers,
       };
     },
     onSuccess: (data) => {
       setResults(data);
+      setTestAnswers(data.answers);
       setTestMode('results');
       toast.success('Test submitted successfully!');
     },
@@ -420,6 +424,7 @@ const Test = () => {
   };
 
   const handleTestSubmit = (answers: Record<string, number | null>) => {
+    setTestAnswers(answers);
     submitTestMutation.mutate(answers);
   };
 
@@ -428,6 +433,11 @@ const Test = () => {
     setTestType(null);
     setQuestions([]);
     setResults(null);
+    setTestAnswers({});
+  };
+
+  const handleReview = () => {
+    setTestMode('review');
   };
 
   // Show loading animation for full syllabus test
@@ -450,6 +460,16 @@ const Test = () => {
     return <TestInterface questions={questions} onSubmit={handleTestSubmit} />;
   }
 
+  if (testMode === 'review' && questions.length > 0) {
+    return (
+      <QuestionReview
+        questions={questions}
+        answers={testAnswers}
+        onClose={() => setTestMode('results')}
+      />
+    );
+  }
+
   if (testMode === 'results' && results) {
     return (
       <MockTestAnalytics
@@ -460,6 +480,7 @@ const Test = () => {
         unattemptedCount={results.unattemptedCount}
         subjectAnalytics={results.subjectAnalytics}
         onClose={handleReset}
+        onReview={handleReview}
       />
     );
   }

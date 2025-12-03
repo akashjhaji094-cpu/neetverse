@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, MinusCircle } from "lucide-react";
+import { CheckCircle2, XCircle, MinusCircle, Eye } from "lucide-react";
 
 interface TestResultsProps {
   score: number;
@@ -9,6 +9,7 @@ interface TestResultsProps {
   wrongCount: number;
   unattemptedCount: number;
   onClose: () => void;
+  onReview?: () => void;
 }
 
 export const TestResults = ({
@@ -17,7 +18,8 @@ export const TestResults = ({
   correctCount,
   wrongCount,
   unattemptedCount,
-  onClose
+  onClose,
+  onReview
 }: TestResultsProps) => {
   const percentage = ((correctCount / totalQuestions) * 100).toFixed(1);
 
@@ -82,6 +84,12 @@ export const TestResults = ({
           </Card>
 
           <div className="flex justify-center gap-4">
+            {onReview && (
+              <Button onClick={onReview} variant="outline" size="lg">
+                <Eye className="w-4 h-4 mr-2" />
+                Review Answers
+              </Button>
+            )}
             <Button onClick={onClose} size="lg">
               Back to Practice
             </Button>

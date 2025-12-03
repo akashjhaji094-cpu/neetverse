@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { TestConfig } from "@/components/practice/TestConfig";
 import { TestInterface } from "@/components/practice/TestInterface";
 import { TestResults } from "@/components/practice/TestResults";
+import { QuestionReview } from "@/components/practice/QuestionReview";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,8 @@ const Practice = () => {
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
+  const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
+  const [showReview, setShowReview] = useState(false);
 
   const { data: questionCounts } = useQuery({
     queryKey: ['question-counts'],
@@ -150,10 +153,11 @@ const Practice = () => {
         })
         .eq('id', attempt.id);
 
-      return { score, correctCount, wrongCount, unattemptedCount };
+      return { score, correctCount, wrongCount, unattemptedCount, answers };
     },
     onSuccess: (results) => {
       setTestResults(results);
+      setTestAnswers(results.answers);
       setShowTest(false);
     },
     onError: () => {
@@ -197,11 +201,27 @@ const Practice = () => {
   const handleCloseResults = () => {
     setTestResults(null);
     setTestQuestions([]);
+    setTestAnswers({});
+    setShowReview(false);
+  };
+
+  const handleReview = () => {
+    setShowReview(true);
   };
 
   // Show loading screen while fetching questions
   if (startTestMutation.isPending) {
     return <LoadingQuestions totalQuestions={selectedChapter ? 50 : 0} />;
+  }
+
+  if (showReview && testQuestions.length > 0) {
+    return (
+      <QuestionReview
+        questions={testQuestions}
+        answers={testAnswers}
+        onClose={() => setShowReview(false)}
+      />
+    );
   }
 
   if (testResults) {
@@ -213,6 +233,7 @@ const Practice = () => {
         wrongCount={testResults.wrongCount}
         unattemptedCount={testResults.unattemptedCount}
         onClose={handleCloseResults}
+        onReview={handleReview}
       />
     );
   }
