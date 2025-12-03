@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, XCircle, MinusCircle, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, MinusCircle, TrendingUp, TrendingDown, AlertCircle, Eye } from "lucide-react";
 
 interface SubjectAnalytics {
   subject: string;
@@ -21,6 +21,7 @@ interface MockTestAnalyticsProps {
   unattemptedCount: number;
   subjectAnalytics: SubjectAnalytics[];
   onClose: () => void;
+  onReview?: () => void;
 }
 
 export const MockTestAnalytics = ({
@@ -30,7 +31,8 @@ export const MockTestAnalytics = ({
   wrongCount,
   unattemptedCount,
   subjectAnalytics,
-  onClose
+  onClose,
+  onReview
 }: MockTestAnalyticsProps) => {
   const maxScore = totalQuestions * 4;
   const percentage = ((score / maxScore) * 100).toFixed(1);
@@ -181,6 +183,12 @@ export const MockTestAnalytics = ({
 
         {/* Actions */}
         <div className="flex justify-center gap-4">
+          {onReview && (
+            <Button onClick={onReview} variant="outline" size="lg">
+              <Eye className="w-4 h-4 mr-2" />
+              Review Answers
+            </Button>
+          )}
           <Button onClick={onClose} size="lg">
             Back to Tests
           </Button>

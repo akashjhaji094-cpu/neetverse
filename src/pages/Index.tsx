@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download } from 'lucide-react';
+import { BookOpen, TestTube, FileText, Crown, LogOut, Shield, Download, BarChart3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { PremiumAccessDialog } from '@/components/mock/PremiumAccessDialog';
 import neetverseLogo from '@/assets/neetverse-logo.jpg';
@@ -123,11 +123,18 @@ const Index = () => {
       color: 'bg-secondary',
     },
     {
+      icon: BarChart3,
+      title: 'My Analytics',
+      description: 'Track your progress, view all attempts and analyze your performance',
+      action: () => navigate('/analytics'),
+      color: 'bg-accent',
+    },
+    {
       icon: FileText,
       title: 'Free Notes & Books',
       description: 'Access comprehensive study materials for all subjects',
       action: () => navigate('/notes'),
-      color: 'bg-accent',
+      color: 'bg-muted',
     },
     {
       icon: Crown,
