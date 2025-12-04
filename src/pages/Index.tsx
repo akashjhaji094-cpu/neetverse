@@ -32,6 +32,13 @@ const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
     return () => clearInterval(timer);
   }, []);
 
+  // Navigate after 25 seconds (20 sec min + 5 sec after message)
+  useEffect(() => {
+    if (elapsedSeconds >= 25) {
+      onComplete();
+    }
+  }, [elapsedSeconds, onComplete]);
+
   useEffect(() => {
     const fetchQuestionCounts = async () => {
       try {
@@ -42,35 +49,29 @@ const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
         
         setTotalQuestions(count || 0);
         
-        // Animate the loading counter
+        // Animate the loading counter over 20 seconds
         const targetCount = count || 0;
         let current = 0;
-        const increment = Math.ceil(targetCount / 50);
+        const increment = Math.ceil(targetCount / 100); // Slower animation
         
         const counterInterval = setInterval(() => {
           current += increment;
           if (current >= targetCount) {
             setLoadedQuestions(targetCount);
             clearInterval(counterInterval);
-            // Navigate after a brief moment
-            setTimeout(() => {
-              onComplete();
-            }, 500);
           } else {
             setLoadedQuestions(current);
           }
-        }, 30);
+        }, 200); // Update every 200ms for ~20 seconds total
 
         return () => clearInterval(counterInterval);
       } catch (error) {
         console.error('Error fetching questions:', error);
-        // Navigate anyway after 3 seconds if there's an error
-        setTimeout(() => onComplete(), 3000);
       }
     };
 
     fetchQuestionCounts();
-  }, [onComplete]);
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -122,10 +123,10 @@ const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
                 Fetching questions from database...
               </p>
               
-              {/* Show message if loading takes more than 20 seconds */}
-              {elapsedSeconds > 20 && (
+              {/* Show message after 20 seconds */}
+              {elapsedSeconds >= 20 && (
                 <p className="text-sm text-amber-500 animate-pulse font-medium mt-2">
-                  Fetching hard... please wait 10 sec more
+                  Fetching hard... please wait {Math.max(0, 25 - elapsedSeconds)} sec more
                 </p>
               )}
             </div>
