@@ -18,12 +18,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 // Loading screen component for Unlimited Practice
 const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [loadedQuestions, setLoadedQuestions] = useState(0);
+  const [dataReady, setDataReady] = useState(false);
+  const queryClient = useQueryClient();
 
+  // Timer for elapsed seconds
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedSeconds(prev => prev + 1);
@@ -32,46 +37,61 @@ const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Navigate after 25 seconds (20 sec min + 5 sec after message)
+  // Navigate after 25 seconds AND data is ready
   useEffect(() => {
-    if (elapsedSeconds >= 25) {
+    if (elapsedSeconds >= 25 && dataReady) {
       onComplete();
     }
-  }, [elapsedSeconds, onComplete]);
+  }, [elapsedSeconds, dataReady, onComplete]);
 
+  // Pre-fetch all data that Practice page needs (runs in background)
   useEffect(() => {
-    const fetchQuestionCounts = async () => {
+    const prefetchPracticeData = async () => {
       try {
-        // Fetch total question count
+        // Fetch total question count for display
         const { count } = await supabase
           .from('questions')
           .select('*', { count: 'exact', head: true });
         
         setTotalQuestions(count || 0);
-        
-        // Animate the loading counter over 20 seconds
-        const targetCount = count || 0;
-        let current = 0;
-        const increment = Math.ceil(targetCount / 100); // Slower animation
-        
-        const counterInterval = setInterval(() => {
-          current += increment;
-          if (current >= targetCount) {
-            setLoadedQuestions(targetCount);
-            clearInterval(counterInterval);
-          } else {
-            setLoadedQuestions(current);
-          }
-        }, 200); // Update every 200ms for ~20 seconds total
 
-        return () => clearInterval(counterInterval);
+        // Pre-fetch the question counts by chapter (same query as Practice page)
+        const questionCounts: Record<string, number> = {};
+        
+        const { data: subjects } = await supabase.from('subjects').select('id, slug');
+        
+        for (const subject of subjects || []) {
+          const { data: chapters } = await supabase
+            .from('chapters')
+            .select('id, slug')
+            .eq('subject_id', subject.id);
+          
+          for (const chapter of chapters || []) {
+            const { count: chapterCount } = await supabase
+              .from('questions')
+              .select('*', { count: 'exact', head: true })
+              .eq('subject_id', subject.id)
+              .eq('chapter_id', chapter.id);
+            
+            questionCounts[`${subject.slug}-${chapter.slug}`] = chapterCount || 0;
+            
+            // Update loaded questions counter
+            setLoadedQuestions(prev => prev + (chapterCount || 0));
+          }
+        }
+
+        // Store in React Query cache so Practice page uses cached data
+        queryClient.setQueryData(['question-counts'], questionCounts);
+        
+        setDataReady(true);
       } catch (error) {
-        console.error('Error fetching questions:', error);
+        console.error('Error prefetching data:', error);
+        setDataReady(true); // Still allow navigation even on error
       }
     };
 
-    fetchQuestionCounts();
-  }, []);
+    prefetchPracticeData();
+  }, [queryClient]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
