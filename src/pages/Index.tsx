@@ -18,12 +18,162 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+// Loading screen component for Unlimited Practice
+const PracticeLoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [loadedQuestions, setLoadedQuestions] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedSeconds(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchQuestionCounts = async () => {
+      try {
+        // Fetch total question count
+        const { count } = await supabase
+          .from('questions')
+          .select('*', { count: 'exact', head: true });
+        
+        setTotalQuestions(count || 0);
+        
+        // Animate the loading counter
+        const targetCount = count || 0;
+        let current = 0;
+        const increment = Math.ceil(targetCount / 50);
+        
+        const counterInterval = setInterval(() => {
+          current += increment;
+          if (current >= targetCount) {
+            setLoadedQuestions(targetCount);
+            clearInterval(counterInterval);
+            // Navigate after a brief moment
+            setTimeout(() => {
+              onComplete();
+            }, 500);
+          } else {
+            setLoadedQuestions(current);
+          }
+        }, 30);
+
+        return () => clearInterval(counterInterval);
+      } catch (error) {
+        console.error('Error fetching questions:', error);
+        // Navigate anyway after 3 seconds if there's an error
+        setTimeout(() => onComplete(), 3000);
+      }
+    };
+
+    fetchQuestionCounts();
+  }, [onComplete]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md mx-4 border-primary/20 shadow-2xl">
+        <CardContent className="pt-8 pb-10">
+          <div className="flex flex-col items-center space-y-8">
+            {/* Logo with spinning circle */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-3xl animate-pulse" />
+              
+              {/* Spinning circle around logo */}
+              <div className="absolute -inset-4">
+                <svg className="w-full h-full animate-spin" style={{ animationDuration: '3s' }}>
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="48%"
+                    fill="none"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth="3"
+                    strokeDasharray="60 200"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+              
+              <img 
+                src={neetverseLogo} 
+                alt="NEETVerse" 
+                className="relative w-32 h-32 rounded-2xl shadow-lg"
+              />
+            </div>
+            
+            {/* Timer display */}
+            <div className="text-center space-y-2">
+              <div className="text-4xl font-bold text-primary tabular-nums">
+                {formatTime(elapsedSeconds)}
+              </div>
+              <h3 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Loading Practice Centre
+              </h3>
+              <p className="text-muted-foreground">
+                Fetching questions from database...
+              </p>
+              
+              {/* Show message if loading takes more than 20 seconds */}
+              {elapsedSeconds > 20 && (
+                <p className="text-sm text-amber-500 animate-pulse font-medium mt-2">
+                  Fetching hard... please wait 10 sec more
+                </p>
+              )}
+            </div>
+
+            {/* Progress display */}
+            <div className="w-full space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-semibold text-muted-foreground">Questions Found</span>
+                <span className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                  {loadedQuestions.toLocaleString()}
+                </span>
+              </div>
+              
+              <div className="relative w-full h-3 bg-muted/50 rounded-full overflow-hidden border border-primary/20">
+                <div 
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary via-primary/80 to-primary transition-all duration-300 ease-out"
+                  style={{ width: totalQuestions > 0 ? `${(loadedQuestions / totalQuestions) * 100}%` : '0%' }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_1.5s_ease-in-out_infinite]" />
+                </div>
+              </div>
+            </div>
+
+            {/* Info cards */}
+            <div className="grid grid-cols-2 gap-3 w-full text-center text-xs">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+                <div className="font-bold text-xl text-primary">All Chapters</div>
+                <div className="text-muted-foreground mt-1">Available</div>
+              </div>
+              <div className="p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
+                <div className="font-bold text-xl text-primary">Unlimited</div>
+                <div className="text-muted-foreground mt-1">Practice</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, loading, isGuest } = useAuth();
   const [showSignupDialog, setShowSignupDialog] = useState(false);
   const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showPracticeLoading, setShowPracticeLoading] = useState(false);
 
   // Fetch all premium tests and planners (visible to everyone)
   const { data: allPremiumContent } = useQuery({
@@ -107,12 +257,17 @@ const Index = () => {
     }
   };
 
+  // Show practice loading screen
+  if (showPracticeLoading) {
+    return <PracticeLoadingScreen onComplete={() => navigate('/practice')} />;
+  }
+
   const features = [
     {
       icon: BookOpen,
       title: 'Unlimited Practice',
       description: 'Choose any chapter and practice as many questions as you want',
-      action: () => navigate('/practice'),
+      action: () => setShowPracticeLoading(true),
       color: 'bg-primary',
     },
     {
