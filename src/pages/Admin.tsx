@@ -3,8 +3,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HtmlUpload } from "@/components/admin/HtmlUpload";
 import { ResourceUpload } from "@/components/admin/ResourceUpload";
 import { PremiumUpload } from "@/components/admin/PremiumUpload";
+import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2 } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -44,7 +45,7 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-2xl grid-cols-3">
+            <TabsList className="grid w-full max-w-3xl grid-cols-4">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 <span className="hidden sm:inline">HTML Upload</span>
@@ -59,6 +60,11 @@ const Admin = () => {
                 <Crown className="h-4 w-4" />
                 <span className="hidden sm:inline">Premium Tests</span>
                 <span className="sm:hidden">Premium</span>
+              </TabsTrigger>
+              <TabsTrigger value="cleaner" className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Clean DB</span>
+                <span className="sm:hidden">Clean</span>
               </TabsTrigger>
             </TabsList>
 
@@ -95,6 +101,10 @@ const Admin = () => {
 
               <TabsContent value="premium" className="m-0">
                 <PremiumUpload />
+              </TabsContent>
+
+              <TabsContent value="cleaner" className="m-0">
+                <QuestionCleaner />
               </TabsContent>
             </div>
           </Tabs>
