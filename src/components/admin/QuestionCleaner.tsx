@@ -1,13 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle, AlertCircle, Play, Pause } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Play, Pause, RotateCcw } from 'lucide-react';
 
 const TOTAL_QUESTIONS = 21945;
 const BATCH_SIZE = 200;
+const STORAGE_KEY = 'question_cleaner_state';
+
+interface CleanerState {
+  currentOffset: number;
+  totalUpdated: number;
+  totalErrors: number;
+  isComplete: boolean;
+  logs: string[];
+}
+
+const loadState = (): CleanerState => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { currentOffset: 0, totalUpdated: 0, totalErrors: 0, isComplete: false, logs: [] };
+};
+
+const saveState = (state: CleanerState) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+};
 
 export const QuestionCleaner = () => {
   const [isRunning, setIsRunning] = useState(false);
@@ -17,6 +38,24 @@ export const QuestionCleaner = () => {
   const [totalErrors, setTotalErrors] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+
+  // Load saved state on mount
+  useEffect(() => {
+    const saved = loadState();
+    setCurrentOffset(saved.currentOffset);
+    setTotalUpdated(saved.totalUpdated);
+    setTotalErrors(saved.totalErrors);
+    setIsComplete(saved.isComplete);
+    setLogs(saved.logs);
+    if (saved.currentOffset > 0 && !saved.isComplete) {
+      setIsPaused(true);
+    }
+  }, []);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    saveState({ currentOffset, totalUpdated, totalErrors, isComplete, logs });
+  }, [currentOffset, totalUpdated, totalErrors, isComplete, logs]);
 
   const addLog = (message: string) => {
     setLogs(prev => [...prev.slice(-50), `[${new Date().toLocaleTimeString()}] ${message}`]);
@@ -158,14 +197,17 @@ export const QuestionCleaner = () => {
               Pause
             </Button>
           )}
-          {isComplete && (
+          {(isComplete || isPaused) && (
             <Button variant="outline" onClick={() => {
               setIsComplete(false);
+              setIsPaused(false);
               setCurrentOffset(0);
               setTotalUpdated(0);
               setTotalErrors(0);
               setLogs([]);
+              localStorage.removeItem(STORAGE_KEY);
             }}>
+              <RotateCcw className="h-4 w-4 mr-2" />
               Reset
             </Button>
           )}
