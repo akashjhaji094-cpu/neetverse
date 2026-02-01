@@ -173,6 +173,45 @@ export type Database = {
           },
         ]
       }
+      in_progress_tests: {
+        Row: {
+          answers: Json
+          config: Json
+          current_question_index: number
+          id: string
+          question_ids: string[]
+          started_at: string
+          test_type: string
+          total_questions: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          config?: Json
+          current_question_index?: number
+          id?: string
+          question_ids?: string[]
+          started_at?: string
+          test_type?: string
+          total_questions?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          config?: Json
+          current_question_index?: number
+          id?: string
+          question_ids?: string[]
+          started_at?: string
+          test_type?: string
+          total_questions?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           chapter_id: string | null
@@ -448,6 +487,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_streaks: {
+        Row: {
+          created_at: string
+          current_streak: number
+          id: string
+          last_activity_date: string | null
+          longest_streak: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
