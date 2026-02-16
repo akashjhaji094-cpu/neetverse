@@ -97,18 +97,24 @@ const Test = () => {
   const fetchQuestionsMutation = useMutation({
     mutationFn: async (params: { type: 'custom' | 'full', chapterIds?: string[] }) => {
       if (params.type === 'full') {
-        // Fetch exactly 45 Physics, 45 Chemistry, 90 Biology with weighted chapter selection
+        // Fetch 90 Biology questions only with weighted chapter selection
         const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
         
-        if (!subjects || subjects.length < 3) {
-          throw new Error('Not enough subjects in database');
+        if (!subjects) {
+          throw new Error('No subjects found in database');
+        }
+
+        const biologySubject = subjects.find(s => s.name.toLowerCase() === 'biology');
+        if (!biologySubject) {
+          throw new Error('Biology subject not found in database');
         }
 
         // Get chapters for weighted selection
-        const { data: allChapters } = await supabase.from('chapters').select('id, subject_id, slug');
+        const { data: allChapters } = await supabase.from('chapters').select('id, subject_id, slug')
+          .eq('subject_id', biologySubject.id);
         
-        if (!allChapters) {
-          throw new Error('No chapters found in database');
+        if (!allChapters || allChapters.length === 0) {
+          throw new Error('No Biology chapters found in database');
         }
 
         const allQuestions: Question[] = [];
@@ -116,91 +122,69 @@ const Test = () => {
         // Import weightage data
         const { getWeightageForSubject, addRandomVariation } = await import('@/data/neetWeightage');
         
-        // Define required question counts per subject
-        const subjectRequirements = [
-          { name: 'Physics', count: 45 },
-          { name: 'Chemistry', count: 45 },
-          { name: 'Biology', count: 90 },
-        ];
+        const weightageConfig = getWeightageForSubject(biologySubject.slug);
+        
+        // Build chapter weights map with random variation
+        const chapterWeights = new Map<string, number>();
+        let totalWeight = 0;
+        
+        allChapters.forEach(chapter => {
+          const config = weightageConfig.find(w => w.chapterId === chapter.slug);
+          const baseWeight = config?.weight || 1;
+          const randomizedWeight = addRandomVariation(baseWeight);
+          chapterWeights.set(chapter.id, randomizedWeight);
+          totalWeight += randomizedWeight;
+        });
 
-        for (const requirement of subjectRequirements) {
-          const subject = subjects.find(s => s.name.toLowerCase() === requirement.name.toLowerCase());
+        // Calculate how many questions from each chapter
+        const chapterQuestionCounts = new Map<string, number>();
+        let remainingQuestions = 90;
+        
+        allChapters.forEach(chapter => {
+          const weight = chapterWeights.get(chapter.id) || 1;
+          const proportion = weight / totalWeight;
+          const questionCount = Math.max(1, Math.round(proportion * 90));
+          chapterQuestionCounts.set(chapter.id, questionCount);
+          remainingQuestions -= questionCount;
+        });
+
+        // Adjust if we over/under allocated due to rounding
+        while (remainingQuestions !== 0) {
+          const chapters = Array.from(chapterQuestionCounts.keys());
+          const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
+          const currentCount = chapterQuestionCounts.get(randomChapter) || 0;
           
-          if (!subject) {
-            throw new Error(`${requirement.name} subject not found in database`);
-          }
-
-          // Get chapters for this subject
-          const subjectChapters = allChapters.filter(c => c.subject_id === subject.id);
-          
-          // Get weightage configuration
-          const weightageConfig = getWeightageForSubject(subject.slug);
-          
-          // Build chapter weights map with random variation
-          const chapterWeights = new Map<string, number>();
-          let totalWeight = 0;
-          
-          subjectChapters.forEach(chapter => {
-            const config = weightageConfig.find(w => w.chapterId === chapter.slug);
-            const baseWeight = config?.weight || 1;
-            const randomizedWeight = addRandomVariation(baseWeight);
-            chapterWeights.set(chapter.id, randomizedWeight);
-            totalWeight += randomizedWeight;
-          });
-
-          // Calculate how many questions from each chapter
-          const chapterQuestionCounts = new Map<string, number>();
-          let remainingQuestions = requirement.count;
-          
-          // Distribute questions based on weights
-          subjectChapters.forEach(chapter => {
-            const weight = chapterWeights.get(chapter.id) || 1;
-            const proportion = weight / totalWeight;
-            const questionCount = Math.max(1, Math.round(proportion * requirement.count));
-            chapterQuestionCounts.set(chapter.id, questionCount);
-            remainingQuestions -= questionCount;
-          });
-
-          // Adjust if we over/under allocated due to rounding
-          while (remainingQuestions !== 0) {
-            const chapters = Array.from(chapterQuestionCounts.keys());
-            const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
-            const currentCount = chapterQuestionCounts.get(randomChapter) || 0;
-            
-            if (remainingQuestions > 0) {
-              chapterQuestionCounts.set(randomChapter, currentCount + 1);
-              remainingQuestions--;
-            } else if (currentCount > 1) {
-              chapterQuestionCounts.set(randomChapter, currentCount - 1);
-              remainingQuestions++;
-            }
-          }
-
-          // Fetch questions from each chapter according to calculated counts
-          for (const [chapterId, count] of chapterQuestionCounts.entries()) {
-            const { data: chapterQuestions } = await supabase
-              .from('questions')
-              .select('*')
-              .eq('chapter_id', chapterId);
-
-            if (chapterQuestions && chapterQuestions.length > 0) {
-              // Shuffle and take required number
-              const shuffled = chapterQuestions.sort(() => Math.random() - 0.5);
-              const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-              allQuestions.push(...(selected as Question[]));
-            }
+          if (remainingQuestions > 0) {
+            chapterQuestionCounts.set(randomChapter, currentCount + 1);
+            remainingQuestions--;
+          } else if (currentCount > 1) {
+            chapterQuestionCounts.set(randomChapter, currentCount - 1);
+            remainingQuestions++;
           }
         }
 
-        // Final shuffle to mix subjects
+        // Fetch questions from each chapter according to calculated counts
+        for (const [chapterId, count] of chapterQuestionCounts.entries()) {
+          const { data: chapterQuestions } = await supabase
+            .from('questions')
+            .select('*')
+            .eq('chapter_id', chapterId);
+
+          if (chapterQuestions && chapterQuestions.length > 0) {
+            const shuffled = chapterQuestions.sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+            allQuestions.push(...(selected as Question[]));
+          }
+        }
+
+        // Final shuffle
         const finalQuestions = allQuestions.sort(() => Math.random() - 0.5);
         
-        // Ensure we have exactly 180 questions
-        if (finalQuestions.length < 180) {
-          throw new Error(`Not enough questions available. Found ${finalQuestions.length}, need 180`);
+        if (finalQuestions.length < 90) {
+          throw new Error(`Not enough Biology questions available. Found ${finalQuestions.length}, need 90`);
         }
         
-        return finalQuestions.slice(0, 180) as Question[];
+        return finalQuestions.slice(0, 90) as Question[];
       } else {
         // Custom test: fetch questions from selected chapters with proper subject distribution
         // NEET ratio: 45 Physics, 45 Chemistry, 90 Biology
@@ -443,7 +427,7 @@ const Test = () => {
 
   // Show loading animation for full syllabus test
   if (testType === 'full' && fetchQuestionsMutation.isPending) {
-    return <LoadingQuestions totalQuestions={180} />;
+    return <LoadingQuestions totalQuestions={90} />;
   }
 
   if (testMode === 'custom-config') {
@@ -492,97 +476,71 @@ const Test = () => {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-accent/10 rounded-xl">
-              <GraduationCap className="h-7 w-7 text-accent" />
+            <div className="p-2.5 bg-success/10 rounded-xl">
+              <GraduationCap className="h-7 w-7 text-success" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold">NEET Mock Tests</h1>
+              <h1 className="text-2xl lg:text-3xl font-bold">Biology Mock Test</h1>
               <p className="text-muted-foreground">
-                Full-length mock tests with 180 questions and 3-hour time limit
+                90 questions from full Biology syllabus — NEET pattern
               </p>
             </div>
           </div>
 
-          {countsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          {/* Biology Hero Banner */}
+          <Card className="overflow-hidden border-0 shadow-lg">
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 text-white">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    🧬 Full Syllabus Biology Test
+                  </h2>
+                  <p className="text-white/90 text-lg font-semibold">
+                    90/90 questions will be from here
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">Botany + Zoology</span>
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">NEET Weighted</span>
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">+4 / -1 Marking</span>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-5xl font-black">90</p>
+                  <p className="text-sm text-white/80">Questions</p>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Custom Test */}
-              <Card className="card-hover cursor-pointer" onClick={handleStartCustomTest}>
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center mb-4">
-                    <ListChecks className="w-6 h-6 text-primary-foreground" />
-                  </div>
-                  <CardTitle>Custom Mock Test</CardTitle>
-                  <CardDescription>
-                    Select chapters from each subject and attempt 180 questions
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total Questions:</span>
-                      <span className="font-medium">180</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Time Limit:</span>
-                      <span className="font-medium">3 Hours</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Selection:</span>
-                      <span className="font-medium">Choose Chapters</span>
-                    </div>
-                  </div>
-                  <Button className="w-full mt-4">Configure & Start</Button>
-                </CardContent>
-              </Card>
-
-              {/* Full Syllabus Test */}
-              <Card className="card-hover cursor-pointer" onClick={handleStartFullTest}>
-                <CardHeader>
-                  <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center mb-4">
-                    <BookOpen className="w-6 h-6 text-secondary-foreground" />
-                  </div>
-                  <CardTitle>Full Syllabus Test</CardTitle>
-                  <CardDescription>
-                    Complete NEET mock test covering all subjects
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Physics:</span>
-                      <span className="font-medium">45 Questions</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Chemistry:</span>
-                      <span className="font-medium">45 Questions</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Biology:</span>
-                      <span className="font-medium">90 Questions</span>
-                    </div>
-                  </div>
-                  <Button 
-                    className="w-full mt-4"
-                    disabled={fetchQuestionsMutation.isPending}
-                  >
-                    {fetchQuestionsMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      'Start Full Test'
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="p-3 bg-muted rounded-xl">
+                  <p className="text-xl font-bold text-foreground">90</p>
+                  <p className="text-xs text-muted-foreground">Total Questions</p>
+                </div>
+                <div className="p-3 bg-muted rounded-xl">
+                  <p className="text-xl font-bold text-foreground">60 min</p>
+                  <p className="text-xs text-muted-foreground">Time Limit</p>
+                </div>
+                <div className="p-3 bg-muted rounded-xl">
+                  <p className="text-xl font-bold text-foreground">360</p>
+                  <p className="text-xs text-muted-foreground">Max Marks</p>
+                </div>
+              </div>
+              <Button 
+                className="w-full h-12 text-base font-semibold"
+                onClick={handleStartFullTest}
+                disabled={fetchQuestionsMutation.isPending}
+              >
+                {fetchQuestionsMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Loading Questions...
+                  </>
+                ) : (
+                  '🚀 Start Biology Mock Test'
+                )}
+              </Button>
+            </CardContent>
+          </Card>
           {/* Premium Test Card */}
           <Card className="mt-6 border-2 border-yellow-500/30 bg-gradient-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/10 dark:to-orange-900/10">
             <CardHeader>
@@ -698,20 +656,18 @@ const Test = () => {
             </CardContent>
           </Card>
 
-          {/* Question Bank Stats */}
+          {/* Question Bank Stats - Biology Only */}
           {questionCounts && questionCounts.length > 0 && (
-            <Card className="mt-8">
+            <Card>
               <CardHeader>
-                <CardTitle>Available Questions</CardTitle>
+                <CardTitle>Biology Question Bank</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {questionCounts.map((item) => (
-                    <div key={item.subject} className="text-center p-4 bg-muted rounded-lg">
-                      <div className="text-2xl font-bold text-primary">{item.count}</div>
-                      <div className="text-sm text-muted-foreground">{item.subject}</div>
-                    </div>
-                  ))}
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-3xl font-bold text-primary">
+                    {questionCounts.find(q => q.subject.toLowerCase() === 'biology')?.count || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Biology Questions Available</div>
                 </div>
               </CardContent>
             </Card>
