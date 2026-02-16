@@ -11,8 +11,9 @@ import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { toast } from "sonner";
-import { ListChecks, BookOpen, Loader2, Crown, Download } from "lucide-react";
+import { ListChecks, BookOpen, Loader2, Crown, Download, GraduationCap } from "lucide-react";
 import { Question } from "@/lib/supabase";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 interface SubjectAnalytics {
   subject: string;
@@ -486,14 +487,20 @@ const Test = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <section className="section-padding">
-        <div className="container-custom max-w-4xl">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold mb-3">NEET Mock Tests</h1>
-            <p className="text-muted-foreground">
-              Full-length mock tests with 180 questions and 3-hour time limit
-            </p>
+    <DashboardLayout>
+      <div className="p-4 lg:p-6 space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-accent/10 rounded-xl">
+              <GraduationCap className="h-7 w-7 text-accent" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold">NEET Mock Tests</h1>
+              <p className="text-muted-foreground">
+                Full-length mock tests with 180 questions and 3-hour time limit
+              </p>
+            </div>
           </div>
 
           {countsLoading ? (
@@ -709,15 +716,15 @@ const Test = () => {
               </CardContent>
             </Card>
           )}
-        </div>
-      </section>
 
-      <PremiumAccessDialog
-        open={showPremiumDialog}
-        onOpenChange={setShowPremiumDialog}
-        onAccessGranted={() => {}}
-      />
-    </main>
+          <PremiumAccessDialog
+            open={showPremiumDialog}
+            onOpenChange={setShowPremiumDialog}
+            onAccessGranted={() => {}}
+          />
+        </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
