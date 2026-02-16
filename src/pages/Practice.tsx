@@ -12,7 +12,20 @@ import { QuestionReview } from "@/components/practice/QuestionReview";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Target, Atom, FlaskConical, Dna } from "lucide-react";
+
+const subjectIcons: Record<string, React.ElementType> = {
+  physics: Atom,
+  chemistry: FlaskConical,
+  biology: Dna,
+};
+
+const subjectGradients: Record<string, string> = {
+  physics: "from-blue-500 to-blue-600",
+  chemistry: "from-green-500 to-green-600",
+  biology: "from-purple-500 to-purple-600",
+};
 
 const Practice = () => {
   const { toast } = useToast();
@@ -53,7 +66,6 @@ const Practice = () => {
 
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
-      // Fetch all available questions for the chapter
       const { data: allQuestions, error } = await supabase
         .from('questions')
         .select('*')
@@ -66,7 +78,6 @@ const Practice = () => {
         throw new Error('No questions available');
       }
 
-      // Cryptographically secure shuffle using Fisher-Yates with crypto.getRandomValues
       const shuffled = [...allQuestions];
       const randomValues = new Uint32Array(shuffled.length);
       crypto.getRandomValues(randomValues);
@@ -76,13 +87,8 @@ const Practice = () => {
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
       
-      // Take requested count from shuffled array
       const randomQuestions = shuffled.slice(0, count);
       
-      console.log('Fetched questions:', allQuestions.length, 'Shuffled and selected:', randomQuestions.length);
-      console.log('First question ID:', randomQuestions[0]?.id);
-      
-      // Add artificial delay to show loading screen (min 1 second)
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       return randomQuestions as Question[];
@@ -209,7 +215,6 @@ const Practice = () => {
     setShowReview(true);
   };
 
-  // Show loading screen while fetching questions
   if (startTestMutation.isPending) {
     return <LoadingQuestions totalQuestions={selectedChapter ? 50 : 0} />;
   }
@@ -248,67 +253,83 @@ const Practice = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <section className="section-padding">
-        <div className="container-custom space-y-6">
-          <header className="space-y-2 text-center md:text-left">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Practice Centre
+    <DashboardLayout>
+      <div className="p-4 lg:p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl">
+            <Target className="h-7 w-7 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold">Practice Centre</h1>
+            <p className="text-muted-foreground">
+              Select a chapter and start your focused practice
             </p>
-            <h1 className="text-3xl md:text-4xl font-bold">
-              NEET Chapters for Focused Practice
-            </h1>
-            <p className="text-muted-foreground max-w-2xl mx-auto md:mx-0">
-              Select a chapter and choose the number of questions to start your practice test.
-            </p>
-          </header>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {neetSubjects.map((subject) => (
-              <Card key={subject.id} className="h-full flex flex-col">
-                <CardHeader>
-                  <CardTitle>{subject.name}</CardTitle>
-                  {subject.tagline && (
-                    <p className="text-sm text-muted-foreground">{subject.tagline}</p>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-2 overflow-y-auto max-h-[480px]">
+        {/* Subject Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {neetSubjects.map((subject) => {
+            const Icon = subjectIcons[subject.id] || Atom;
+            const gradient = subjectGradients[subject.id] || "from-primary to-primary-glow";
+            
+            return (
+              <Card key={subject.id} className="overflow-hidden">
+                {/* Subject Header with Gradient */}
+                <div className={`bg-gradient-to-r ${gradient} p-4 text-white`}>
+                  <div className="flex items-center gap-3">
+                    <Icon className="h-7 w-7" />
+                    <div>
+                      <h2 className="text-lg font-bold">{subject.name}</h2>
+                      {subject.tagline && (
+                        <p className="text-sm text-white/80">{subject.tagline}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Chapter List */}
+                <CardContent className="p-3 space-y-1.5 overflow-y-auto max-h-[420px]">
                   {subject.chapters.map((chapter) => {
                     const count = questionCounts?.[`${subject.id}-${chapter.id}`] || 0;
                     return (
                       <Button
                         key={chapter.id}
-                        variant="outline"
-                        className="w-full justify-between text-left text-sm"
+                        variant="ghost"
+                        className="w-full justify-between text-left text-sm h-auto py-2.5 px-3 hover:bg-muted/80"
                         type="button"
                         onClick={() => handleChapterClick(chapter, subject.id)}
                         disabled={count === 0}
                       >
-                        <span>{chapter.name}</span>
-                        <Badge variant={count > 0 ? "default" : "secondary"}>
-                          {count > 0 ? `${count} Q` : 'No Q'}
+                        <span className="truncate mr-2">{chapter.name}</span>
+                        <Badge 
+                          variant={count > 0 ? "default" : "secondary"} 
+                          className={count > 0 ? "bg-primary/15 text-primary hover:bg-primary/20 border-0" : ""}
+                        >
+                          {count > 0 ? `${count} Q` : '—'}
                         </Badge>
                       </Button>
                     );
                   })}
                 </CardContent>
               </Card>
-            ))}
-          </div>
-
-          {selectedChapter && (
-            <TestConfig
-              open={!!selectedChapter}
-              onClose={() => setSelectedChapter(null)}
-              chapterName={selectedChapter.name}
-              totalQuestions={questionCounts?.[`${selectedChapter.subjectSlug}-${selectedChapter.chapterSlug}`] || 0}
-              onStart={handleStartTest}
-              loading={startTestMutation.isPending}
-            />
-          )}
+            );
+          })}
         </div>
-      </section>
-    </main>
+
+        {selectedChapter && (
+          <TestConfig
+            open={!!selectedChapter}
+            onClose={() => setSelectedChapter(null)}
+            chapterName={selectedChapter.name}
+            totalQuestions={questionCounts?.[`${selectedChapter.subjectSlug}-${selectedChapter.chapterSlug}`] || 0}
+            onStart={handleStartTest}
+            loading={startTestMutation.isPending}
+          />
+        )}
+      </div>
+    </DashboardLayout>
   );
 };
 
