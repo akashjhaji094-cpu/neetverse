@@ -48,7 +48,7 @@ export function AccuracyStats() {
     enabled: !!user,
   });
 
-  const accuracyNum = parseFloat(stats?.accuracy || '0');
+  const accuracyNum = parseFloat(String(stats?.accuracy || '0'));
 
   return (
     <Card>
