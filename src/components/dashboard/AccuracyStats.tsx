@@ -39,7 +39,8 @@ export function AccuracyStats() {
       });
 
       const accuracy = totalCorrect + totalWrong > 0 
-        ? ((totalCorrect / (totalCorrect + totalWrong)) * 100).toFixed(2) 
+        ? ((totalCorrect / (totalCorrect + totalWrong)) * 100).toFixed(2)
+
         : '0.00';
 
       return { totalCorrect, totalWrong, accuracy };
