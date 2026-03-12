@@ -1,12 +1,15 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { StreakTracker } from "@/components/dashboard/StreakTracker";
-import { QuickActions } from "@/components/dashboard/QuickActions";
 import { AccuracyStats } from "@/components/dashboard/AccuracyStats";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
-import { SubjectCards } from "@/components/dashboard/SubjectCards";
+import { QuickActions } from "@/components/dashboard/QuickActions";
+import { TestSeriesWidget } from "@/components/dashboard/TestSeriesWidget";
+import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview";
 import { useEffect } from "react";
+import { Crown, Bell, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -28,34 +31,51 @@ const Dashboard = () => {
     );
   }
 
+  const userName = user?.user_metadata?.name || 'Student';
+
   return (
     <DashboardLayout>
-      <div className="p-4 lg:p-6 space-y-6">
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="text-2xl lg:text-3xl font-bold">
-            Welcome back{user?.user_metadata?.name ? `, ${user.user_metadata.name}` : ''}! 👋
-          </h1>
-          <p className="text-muted-foreground">
-            Ready to continue your NEET preparation?
-          </p>
+      <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
+        {/* Top Header Bar */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl lg:text-2xl font-bold">
+              Hello, <span className="text-primary">{userName}</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Let's Continue Your Preparation.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-1.5 border-warning text-warning hover:bg-warning/10"
+              onClick={() => navigate('/premium')}
+            >
+              <Crown className="h-4 w-4" />
+              Premium
+            </Button>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Streak & Actions */}
-          <div className="lg:col-span-2 space-y-6">
-            <StreakTracker />
-            <SubjectCards />
-          </div>
+        {/* Performance Overview */}
+        <PerformanceOverview />
 
-          {/* Right Column - Stats & Activity */}
-          <div className="space-y-6">
-            <QuickActions />
-            <AccuracyStats />
-            <RecentActivity />
-          </div>
+        {/* Quick Actions - Test Series Style */}
+        <TestSeriesWidget />
+
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AccuracyStats />
+          <RecentActivity />
         </div>
+
+        {/* Quick Actions */}
+        <QuickActions />
       </div>
     </DashboardLayout>
   );
