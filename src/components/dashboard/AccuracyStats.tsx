@@ -1,32 +1,24 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CheckCircle, XCircle, Clock } from "lucide-react";
-
-interface SubjectStats {
-  subject: string;
-  correct: number;
-  total: number;
-  color: string;
-}
+import { Target, ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export function AccuracyStats() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const { data: stats } = useQuery({
-    queryKey: ['user-accuracy-stats', user?.id],
+    queryKey: ['custom-test-analytics', user?.id],
     queryFn: async () => {
       if (!user) return null;
 
-      // Get all attempts with their answers
       const { data: attempts } = await supabase
         .from('attempts')
         .select(`
           id,
-          type,
-          config,
           attempt_answers (
             is_correct,
             question_id
@@ -34,113 +26,78 @@ export function AccuracyStats() {
         `)
         .eq('user_id', user.id);
 
-      if (!attempts) return { totalCorrect: 0, totalAttempted: 0, subjects: [] };
+      if (!attempts) return { totalCorrect: 0, totalWrong: 0, accuracy: 0, subjects: [] };
 
       let totalCorrect = 0;
-      let totalAttempted = 0;
+      let totalWrong = 0;
 
       attempts.forEach(attempt => {
         attempt.attempt_answers?.forEach(answer => {
-          totalAttempted++;
-          if (answer.is_correct) totalCorrect++;
+          if (answer.is_correct === true) totalCorrect++;
+          else if (answer.is_correct === false) totalWrong++;
         });
       });
 
-      // Subject-wise breakdown (simplified)
-      const subjects: SubjectStats[] = [
-        { subject: "Physics", correct: Math.floor(totalCorrect * 0.3), total: Math.floor(totalAttempted * 0.3), color: "bg-blue-500" },
-        { subject: "Chemistry", correct: Math.floor(totalCorrect * 0.35), total: Math.floor(totalAttempted * 0.35), color: "bg-green-500" },
-        { subject: "Biology", correct: Math.floor(totalCorrect * 0.35), total: Math.floor(totalAttempted * 0.35), color: "bg-purple-500" },
-      ];
+      const accuracy = totalCorrect + totalWrong > 0 
+        ? ((totalCorrect / (totalCorrect + totalWrong)) * 100).toFixed(2) 
+        : '0.00';
 
-      return { totalCorrect, totalAttempted, subjects };
+      return { totalCorrect, totalWrong, accuracy };
     },
     enabled: !!user,
   });
 
-  const accuracy = stats?.totalAttempted ? Math.round((stats.totalCorrect / stats.totalAttempted) * 100) : 0;
+  const accuracyNum = parseFloat(stats?.accuracy || '0');
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          Your Accuracy
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Overall Accuracy Circle */}
-        <div className="flex items-center justify-center">
-          <div className="relative w-32 h-32">
-            <svg className="w-full h-full -rotate-90">
-              <circle
-                cx="64"
-                cy="64"
-                r="56"
-                className="fill-none stroke-muted"
-                strokeWidth="12"
-              />
-              <circle
-                cx="64"
-                cy="64"
-                r="56"
-                className="fill-none stroke-primary transition-all duration-500"
-                strokeWidth="12"
-                strokeDasharray={`${accuracy * 3.52} 352`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-bold">{accuracy}%</span>
-              <span className="text-xs text-muted-foreground">Accuracy</span>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-full bg-primary/10">
+              <Target className="h-4 w-4 text-primary" />
             </div>
+            <h3 className="font-semibold text-base italic">Practice Analytics</h3>
+          </div>
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="rounded-full gap-1 text-xs"
+            onClick={() => navigate('/practice')}
+          >
+            Create Test <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {/* Overall accuracy */}
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-muted-foreground tracking-wider uppercase mb-1">Overall Accuracy</p>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl font-bold">{stats?.accuracy || '0.00'}%</span>
+            {accuracyNum >= 70 && (
+              <span className="text-xs font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded-full uppercase">Excellent</span>
+            )}
+            {accuracyNum >= 40 && accuracyNum < 70 && (
+              <span className="text-xs font-semibold text-warning bg-warning/10 px-2 py-0.5 rounded-full uppercase">Good</span>
+            )}
+            {accuracyNum > 0 && accuracyNum < 40 && (
+              <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full uppercase">Needs Work</span>
+            )}
           </div>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="space-y-1">
-            <div className="flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-            </div>
-            <p className="text-xl font-bold text-green-600">{stats?.totalCorrect || 0}</p>
-            <p className="text-xs text-muted-foreground">Correct</p>
+        {/* Stats table */}
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-3 bg-muted/50 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground">
+            <div className="p-2.5 text-center">Subject</div>
+            <div className="p-2.5 text-center text-green-600">Correct</div>
+            <div className="p-2.5 text-center text-destructive">Wrong</div>
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-center">
-              <XCircle className="h-5 w-5 text-red-500" />
-            </div>
-            <p className="text-xl font-bold text-red-600">
-              {(stats?.totalAttempted || 0) - (stats?.totalCorrect || 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">Incorrect</p>
+          <div className="grid grid-cols-3 border-t border-border">
+            <div className="p-2.5 text-center text-sm font-medium">Biology</div>
+            <div className="p-2.5 text-center text-sm font-bold text-green-600">{stats?.totalCorrect || 0}</div>
+            <div className="p-2.5 text-center text-sm font-bold text-destructive">{stats?.totalWrong || 0}</div>
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-center">
-              <Clock className="h-5 w-5 text-blue-500" />
-            </div>
-            <p className="text-xl font-bold text-blue-600">{stats?.totalAttempted || 0}</p>
-            <p className="text-xs text-muted-foreground">Attempted</p>
-          </div>
-        </div>
-
-        {/* Subject Progress */}
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-muted-foreground">Subject-wise</p>
-          {stats?.subjects?.map((subject, i) => (
-            <div key={i} className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">{subject.subject}</span>
-                <span className="text-muted-foreground">
-                  {subject.total > 0 ? Math.round((subject.correct / subject.total) * 100) : 0}%
-                </span>
-              </div>
-              <Progress 
-                value={subject.total > 0 ? (subject.correct / subject.total) * 100 : 0} 
-                className="h-2"
-              />
-            </div>
-          ))}
         </div>
       </CardContent>
     </Card>

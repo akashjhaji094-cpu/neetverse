@@ -11,7 +11,11 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Shield
+  Shield,
+  Trophy,
+  Bookmark,
+  XCircle,
+  ClipboardList
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -30,15 +34,37 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { icon: Home, label: "Dashboard", path: "/" },
-  { icon: MessageCircle, label: "AI Chat", path: "/chat" },
-  { icon: Target, label: "Practice", path: "/practice" },
-  { icon: BookOpen, label: "Mock Tests", path: "/test" },
-  { icon: BarChart3, label: "Progress", path: "/progress" },
-  { icon: Crown, label: "Premium", path: "/premium", badge: "Pro" },
-  { icon: Shield, label: "Admin", path: "/admin", adminOnly: true },
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: "",
+    items: [
+      { icon: Home, label: "Dashboard", path: "/" },
+      { icon: MessageCircle, label: "AI Chat", path: "/chat" },
+    ],
+  },
+  {
+    title: "PRACTICE",
+    items: [
+      { icon: Target, label: "Practice Questions", path: "/practice" },
+      { icon: BookOpen, label: "Notes & PDFs", path: "/notes" },
+      { icon: ClipboardList, label: "Mock Tests", path: "/test" },
+    ],
+  },
+  {
+    title: "ANALYSIS",
+    items: [
+      { icon: BarChart3, label: "Reports", path: "/progress" },
+      { icon: Trophy, label: "Leaderboard", path: "/premium", badge: "Pro" },
+    ],
+  },
 ];
+
+const adminItem: NavItem = { icon: Shield, label: "Admin", path: "/admin", adminOnly: true };
 
 const bottomNavItems: NavItem[] = [
   { icon: User, label: "Account", path: "/account" },
@@ -50,7 +76,6 @@ export function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
 
-  // Check if user is admin
   const { data: isAdmin } = useQuery({
     queryKey: ['user-is-admin', user?.id],
     queryFn: async () => {
@@ -65,8 +90,6 @@ export function AppSidebar() {
     enabled: !!user,
   });
 
-  const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
-
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
@@ -75,16 +98,20 @@ export function AppSidebar() {
       <NavLink
         to={item.path}
         className={cn(
-          "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
+          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
           isActive 
-            ? "bg-primary text-primary-foreground shadow-md" 
+            ? "bg-primary/10 text-primary font-semibold" 
             : "hover:bg-muted text-muted-foreground hover:text-foreground"
         )}
       >
-        <Icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-primary-foreground")} />
+        {/* Active indicator bar */}
+        {isActive && (
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
+        )}
+        <Icon className={cn("h-5 w-5 flex-shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
         {!collapsed && (
           <>
-            <span className="font-medium text-sm">{item.label}</span>
+            <span className="text-sm">{item.label}</span>
             {item.badge && (
               <span className="ml-auto px-2 py-0.5 text-xs font-semibold bg-warning text-warning-foreground rounded-full">
                 {item.badge}
@@ -104,7 +131,6 @@ export function AppSidebar() {
           <TooltipTrigger asChild>{content}</TooltipTrigger>
           <TooltipContent side="right" className="font-medium">
             {item.label}
-            {item.badge && <span className="ml-2 text-warning">({item.badge})</span>}
           </TooltipContent>
         </Tooltip>
       );
@@ -116,56 +142,80 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar flex flex-col transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        "fixed left-0 top-0 z-40 h-screen border-r border-border bg-card flex flex-col transition-all duration-300",
+        collapsed ? "w-16" : "w-60"
       )}
     >
-      {/* Logo & Toggle */}
-      <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
+      {/* Logo */}
+      <div className="flex items-center justify-between px-4 py-4 border-b border-border">
         {!collapsed && (
-          <div className="flex items-center gap-3">
-            <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-xl shadow-md" />
-            <span className="text-xl font-bold text-gradient">NEETVerse</span>
+          <div className="flex items-center gap-2.5">
+            <img src={neetverseLogo} alt="NEETVerse" className="w-9 h-9 rounded-xl" />
+            <span className="text-lg font-bold text-primary">NEETVerse</span>
           </div>
         )}
         {collapsed && (
-          <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-xl shadow-md mx-auto" />
+          <img src={neetverseLogo} alt="NEETVerse" className="w-9 h-9 rounded-xl mx-auto" />
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setCollapsed(!collapsed)}
-          className={cn("h-8 w-8", collapsed && "absolute -right-4 top-6 bg-background border shadow-md")}
+          className={cn("h-7 w-7", collapsed && "absolute -right-3.5 top-5 bg-card border shadow-sm rounded-full")}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </Button>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {filteredNavItems.map((item) => (
-          <NavItemComponent key={item.path} item={item} />
+      {/* Navigation Groups */}
+      <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-1">
+        {navGroups.map((group, gi) => (
+          <div key={gi} className={cn(gi > 0 && "mt-4")}>
+            {group.title && !collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                {group.title}
+              </p>
+            )}
+            {group.title && collapsed && gi > 0 && (
+              <div className="mx-3 my-2 border-t border-border" />
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <NavItemComponent key={item.path} item={item} />
+              ))}
+            </div>
+          </div>
         ))}
+        
+        {isAdmin && (
+          <div className="mt-4">
+            {!collapsed && (
+              <p className="px-3 mb-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                ADMIN
+              </p>
+            )}
+            <NavItemComponent item={adminItem} />
+          </div>
+        )}
       </nav>
 
-      {/* Bottom Navigation */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
+      {/* Bottom - User Profile & Actions */}
+      <div className="p-3 border-t border-border space-y-0.5">
         {bottomNavItems.map((item) => (
           <NavItemComponent key={item.path} item={item} />
         ))}
         
-        {/* Sign Out Button */}
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <button
               onClick={signOut}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 w-full",
                 "text-destructive hover:bg-destructive/10"
               )}
             >
               <LogOut className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span className="font-medium text-sm">Sign Out</span>}
+              {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
             </button>
           </TooltipTrigger>
           {collapsed && (
@@ -174,6 +224,19 @@ export function AppSidebar() {
             </TooltipContent>
           )}
         </Tooltip>
+
+        {/* User info */}
+        {user && !collapsed && (
+          <div className="mt-2 px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{user.user_metadata?.name || 'Student'}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

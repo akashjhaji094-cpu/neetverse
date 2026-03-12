@@ -1,8 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, Calendar } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export function RecentActivity() {
@@ -21,7 +21,10 @@ export function RecentActivity() {
           score,
           started_at,
           finished_at,
-          config
+          config,
+          attempt_answers (
+            is_correct
+          )
         `)
         .eq('user_id', user.id)
         .order('started_at', { ascending: false })
@@ -34,69 +37,69 @@ export function RecentActivity() {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          Recent Activity
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-1.5 rounded-full bg-primary/10">
+            <Activity className="h-4 w-4 text-primary" />
+          </div>
+          <h3 className="font-semibold text-base italic">Recent Activity</h3>
+        </div>
+
         {recentAttempts && recentAttempts.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {recentAttempts.map((attempt) => {
-              const config = attempt.config as Record<string, unknown> | null;
               const isCompleted = !!attempt.finished_at;
+              const total = attempt.attempt_answers?.length || 0;
+              const correct = attempt.attempt_answers?.filter(a => a.is_correct)?.length || 0;
+              const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
               
               return (
                 <div
                   key={attempt.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                 >
-                  <div className={`p-2 rounded-lg ${
-                    isCompleted 
-                      ? attempt.score && attempt.score > 50 
-                        ? 'bg-green-100 dark:bg-green-900/30' 
-                        : 'bg-red-100 dark:bg-red-900/30'
-                      : 'bg-amber-100 dark:bg-amber-900/30'
-                  }`}>
-                    {isCompleted ? (
-                      attempt.score && attempt.score > 50 
-                        ? <CheckCircle className="h-4 w-4 text-green-600" />
-                        : <XCircle className="h-4 w-4 text-red-600" />
-                    ) : (
-                      <Clock className="h-4 w-4 text-amber-600" />
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div className={`p-1.5 rounded-lg ${
+                      !isCompleted 
+                        ? 'bg-warning/10' 
+                        : accuracy >= 60 
+                          ? 'bg-green-100 dark:bg-green-900/20' 
+                          : 'bg-destructive/10'
+                    }`}>
+                      {!isCompleted ? (
+                        <Clock className="h-4 w-4 text-warning" />
+                      ) : accuracy >= 60 ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {attempt.type === 'practice' ? 'Practice Test' : 'Mock Test'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(attempt.started_at), { addSuffix: true })}
+                      </p>
+                    </div>
                   </div>
                   
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">
-                      {attempt.type === 'practice' ? 'Practice Test' : 'Mock Test'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(attempt.started_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                  
-                  <div className="text-right">
-                    {isCompleted ? (
-                      <span className={`text-sm font-semibold ${
-                        attempt.score && attempt.score > 50 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {attempt.score}%
-                      </span>
-                    ) : (
-                      <span className="text-xs text-amber-600 font-medium">In Progress</span>
-                    )}
-                  </div>
+                  {isCompleted ? (
+                    <span className={`text-sm font-bold ${accuracy >= 60 ? 'text-green-600' : 'text-destructive'}`}>
+                      {accuracy}%
+                    </span>
+                  ) : (
+                    <span className="text-xs text-warning font-semibold">In Progress</span>
+                  )}
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <Activity className="h-10 w-10 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No recent activity</p>
-            <p className="text-xs">Start practicing to see your progress!</p>
+          <div className="text-center py-8">
+            <Calendar className="h-10 w-10 mx-auto text-muted-foreground mb-2 opacity-50" />
+            <p className="text-sm font-medium text-muted-foreground">No recent activity</p>
+            <p className="text-xs text-muted-foreground">Start practicing to track your progress!</p>
           </div>
         )}
       </CardContent>
