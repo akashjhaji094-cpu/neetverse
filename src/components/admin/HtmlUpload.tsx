@@ -7,153 +7,73 @@ import { Progress } from "@/components/ui/progress";
 import { neetSubjects } from "@/data/neetChapters";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { Upload, FileCheck, AlertCircle, CheckCircle2, Image as ImageIcon } from "lucide-react";
+import {
+  Upload,
+  FileCheck,
+  AlertCircle,
+  CheckCircle2,
+  Brain,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 interface ParsedQuestion {
-  number: number;
-  text: string;
+  question_number: number;
+  question_text: string;
   options: string[];
-  optionImages: (string | null)[];
-  questionImages: string[];
-  answer?: string;
-  correctIndex?: number | null;
+  correct_option_index: number | null;
+  explanation: string | null;
+  has_diagram: boolean;
 }
 
-const sanitizeMathText = (value: string): string => {
-  return value
-    .replace(/\$/g, "")
-    .replace(/\\\(/g, "")
-    .replace(/\\\)/g, "")
-    .replace(/\\\[/g, "")
-    .replace(/\\\]/g, "")
-    .replace(/\\mathsf\{([^}]*)\}/g, "$1")
-    .replace(/\\mathrm\{([^}]*)\}/g, "$1")
-    .replace(/\\text\{([^}]*)\}/g, "$1")
-    .replace(/\\mathring\{([^}]*)\}/g, "$1")
-    .replace(/\\mathbb\{([^}]*)\}/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-const extractImageSrc = (element: Element): string | null => {
-  const img = element instanceof HTMLImageElement ? element : element.querySelector("img");
-  if (!img) return null;
-
-  const src = img.getAttribute("src") || "";
-  if (!src) return null;
-  return src;
-};
-
-const findCorrectOptionIndex = (
-  answerText: string,
-  options: string[]
-): number | null => {
-  if (!answerText || !options.length) return null;
-
-  const cleanAnswer = sanitizeMathText(answerText.toLowerCase().trim());
-
-  for (let i = 0; i < options.length; i++) {
-    const cleanOption = sanitizeMathText(options[i].toLowerCase().trim());
-    const optionWithoutLabel = cleanOption.replace(/^\(\d+\)\s*/, "");
-    
-    if (
-      cleanOption === cleanAnswer ||
-      optionWithoutLabel === cleanAnswer ||
-      cleanOption.includes(cleanAnswer) ||
-      cleanAnswer.includes(optionWithoutLabel)
-    ) {
-      return i;
-    }
-  }
-
-  if (cleanAnswer.length < 50) {
-    for (let i = 0; i < options.length; i++) {
-      const cleanOption = sanitizeMathText(options[i].toLowerCase().trim());
-      const optionWithoutLabel = cleanOption.replace(/^\(\d+\)\s*/, "");
-      
-      const similarity = 
-        cleanAnswer.split(" ").filter((word) => optionWithoutLabel.includes(word)).length;
-      
-      if (similarity > 0 && cleanAnswer.split(" ").length <= 5) {
-        return i;
-      }
-    }
-  }
-
-  return null;
-};
-
-const parseQuestionsFromHtml = (html: string): ParsedQuestion[] => {
+const cleanPdf2HtmlText = (html: string): string => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
-  const answerMap = new Map<number, string>();
-  const answerItems = Array.from(doc.querySelectorAll(".answer-item"));
+  // Remove scripts, styles, sidebar
+  doc.querySelectorAll("script, style, #sidebar").forEach((el) => el.remove());
 
-  answerItems.forEach((item) => {
-    const numberText = item.querySelector(".answer-number")?.textContent || "";
-    const valueText = item.querySelector(".answer-value")?.textContent || "";
-    const match = numberText.match(/(\d+)/);
-    if (!match) return;
-    const qNum = Number(match[1]);
-    if (!Number.isNaN(qNum)) {
-      answerMap.set(qNum, sanitizeMathText(valueText));
-    }
+  const pageContainer = doc.getElementById("page-container");
+  if (!pageContainer) {
+    // Fallback: get body text
+    return (doc.body.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  // Get all text nodes from pages, preserving some structure
+  const pages = pageContainer.querySelectorAll(".pf");
+  const textParts: string[] = [];
+
+  pages.forEach((page) => {
+    const textContent = page.textContent || "";
+    textParts.push(textContent);
   });
 
-  const questionNodes = Array.from(doc.querySelectorAll(".question-item"));
+  let rawText = textParts.join("\n\n");
 
-  return questionNodes.map((node, index) => {
-    const numberRaw = node.querySelector(".question-number")?.textContent || "";
-    const numberMatch = numberRaw.match(/(\d+)/);
-    const number = numberMatch ? Number(numberMatch[1]) : index + 1;
+  // Fix pdf2htmlEX character spacing: merge single-char-space patterns
+  // e.g., "C h e m i s t r y" → "Chemistry"
+  rawText = rawText.replace(
+    /(?<=[A-Za-z0-9]) (?=[A-Za-z0-9]) (?=[A-Za-z0-9])/g,
+    ""
+  );
 
-    const contentNode =
-      (node.querySelector(".question-content") as HTMLElement | null) || (node as HTMLElement);
-
-    // Clone and strip options & images from question text so it stays clean
-    const contentClone = contentNode.cloneNode(true) as HTMLElement;
-    contentClone.querySelectorAll(".options").forEach((el) => el.remove());
-    contentClone.querySelectorAll(".question-image").forEach((el) => el.remove());
-
-    const rawQuestion = contentClone.textContent || "";
-
-    const questionImageNodes = Array.from(
-      contentNode.querySelectorAll(".question-image img, img.question-image")
+  // Multiple passes to clean up character spacing
+  for (let i = 0; i < 5; i++) {
+    rawText = rawText.replace(
+      /(\b[A-Za-z])\s([A-Za-z]\b)/g,
+      (_, a, b) => {
+        // Only merge if both are single chars
+        return a + b;
+      }
     );
-    const questionImages = questionImageNodes
-      .map((img) => extractImageSrc(img))
-      .filter((src): src is string => src !== null);
+  }
 
-    const optionNodes = Array.from(node.querySelectorAll(".option"));
-    const options: string[] = [];
-    const optionImages: (string | null)[] = [];
+  // Clean up excessive whitespace
+  rawText = rawText.replace(/[ \t]+/g, " ");
+  rawText = rawText.replace(/\n{3,}/g, "\n\n");
 
-    optionNodes.forEach((opt) => {
-      const label = opt.querySelector(".option-label")?.textContent || "";
-      const text = opt.querySelector(".option-text")?.textContent || "";
-      const full = `${label} ${text}`.trim();
-      options.push(sanitizeMathText(full));
-
-      const optImgEl =
-        (opt.querySelector(".option-image img") as HTMLElement | null) ||
-        (opt.querySelector("img") as HTMLElement | null);
-      optionImages.push(optImgEl ? extractImageSrc(optImgEl) : null);
-    });
-
-    const answer = answerMap.get(number);
-    const correctIndex = answer ? findCorrectOptionIndex(answer, options) : null;
-
-    return {
-      number,
-      text: sanitizeMathText(rawQuestion),
-      options,
-      optionImages,
-      questionImages,
-      answer,
-      correctIndex,
-    };
-  });
+  return rawText.trim();
 };
 
 export const HtmlUpload = () => {
@@ -164,22 +84,26 @@ export const HtmlUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [parsing, setParsing] = useState(false);
+  const [expandedQ, setExpandedQ] = useState<number | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     withAnswers: 0,
-    withImages: 0,
-    matchedAnswers: 0,
+    withExplanations: 0,
+    withDiagrams: 0,
   });
 
-  const selectedSubject = neetSubjects.find((s) => s.id === subjectId) || neetSubjects[0];
+  const selectedSubject =
+    neetSubjects.find((s) => s.id === subjectId) || neetSubjects[0];
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     const MAX_FILES = 3;
     if (files.length > MAX_FILES) {
-      toast.error(`Please upload at most ${MAX_FILES} HTML files at a time`);
+      toast.error(`Maximum ${MAX_FILES} files at a time`);
       return;
     }
 
@@ -187,99 +111,81 @@ export const HtmlUpload = () => {
     for (let i = 0; i < files.length; i++) {
       totalSizeMB += files[i].size / (1024 * 1024);
     }
-    const MAX_TOTAL_MB = 8;
-    if (totalSizeMB > MAX_TOTAL_MB) {
-      toast.error(`Total file size too large. Please upload up to ${MAX_TOTAL_MB} MB at a time`);
+    if (totalSizeMB > 10) {
+      toast.error("Total file size too large (max 10MB)");
       return;
     }
 
     setParsing(true);
-    const allQuestions: ParsedQuestion[] = [];
-    const names: string[] = [];
-    
+    setQuestions([]);
+    setStats({ total: 0, withAnswers: 0, withExplanations: 0, withDiagrams: 0 });
+
     try {
+      const names: string[] = [];
+      let combinedText = "";
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        try {
-          const text = await file.text();
-          const parsed = parseQuestionsFromHtml(text);
-          allQuestions.push(...parsed);
-          names.push(file.name);
-        } catch (error) {
-          console.error(`Error parsing ${file.name}:`, error);
-          toast.error(`Failed to parse ${file.name}`);
-        }
+        names.push(file.name);
+        const htmlContent = await file.text();
+        const extracted = cleanPdf2HtmlText(htmlContent);
+        combinedText += extracted + "\n\n---FILE BREAK---\n\n";
       }
 
-      if (allQuestions.length === 0) {
-        toast.error("No questions could be parsed from the selected files");
+      setFileNames(names);
+
+      if (combinedText.length < 50) {
+        toast.error("No readable text found in the uploaded files");
         setParsing(false);
         return;
       }
 
-      setFileNames(names);
-      setQuestions(allQuestions);
+      toast.info("AI is analyzing your files... This may take a moment");
 
-      const withAnswers = allQuestions.filter((q) => q.answer).length;
-      const withImages = allQuestions.filter(
-        (q) => q.questionImages.length > 0 || q.optionImages.some((img) => img)
+      // Send to AI edge function
+      const { data, error } = await supabase.functions.invoke(
+        "parse-pdf-questions",
+        {
+          body: { text: combinedText },
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || "AI parsing failed");
+      }
+
+      if (!data?.success || !data?.questions?.length) {
+        toast.error(data?.error || "No questions could be extracted");
+        setParsing(false);
+        return;
+      }
+
+      const parsed: ParsedQuestion[] = data.questions;
+      setQuestions(parsed);
+
+      const withAnswers = parsed.filter(
+        (q) => q.correct_option_index !== null
       ).length;
-      const matchedAnswers = allQuestions.filter((q) => q.correctIndex !== null).length;
+      const withExplanations = parsed.filter(
+        (q) => q.explanation !== null
+      ).length;
+      const withDiagrams = parsed.filter((q) => q.has_diagram).length;
 
       setStats({
-        total: allQuestions.length,
+        total: parsed.length,
         withAnswers,
-        withImages,
-        matchedAnswers,
+        withExplanations,
+        withDiagrams,
       });
 
-      toast.success(`Parsed ${allQuestions.length} questions from ${files.length} file(s)`);
-    } catch (error) {
-      console.error("File processing error:", error);
-      toast.error("An error occurred while processing files");
+      toast.success(
+        `AI extracted ${parsed.length} questions from ${files.length} file(s)`
+      );
+    } catch (error: any) {
+      console.error("Parse error:", error);
+      toast.error(`Failed to parse: ${error.message}`);
     } finally {
       setParsing(false);
-    }
-  };
-  const uploadImageToStorage = async (
-    base64Data: string,
-    questionNum: number,
-    type: "question" | "option",
-    optionIndex?: number
-  ): Promise<string | null> => {
-    try {
-      const match = base64Data.match(/^data:image\/(png|jpg|jpeg|gif|webp);base64,(.+)$/);
-      if (!match) return null;
-
-      const [, ext, base64] = match;
-      const fileName = `q${questionNum}_${type}${optionIndex !== undefined ? `_opt${optionIndex}` : ""}.${ext}`;
-      const filePath = `${chapterId}/${fileName}`;
-
-      const byteString = atob(base64);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      const blob = new Blob([ab], { type: `image/${ext}` });
-
-      const { data, error } = await supabase.storage
-        .from("question-images")
-        .upload(filePath, blob, {
-          upsert: true,
-          contentType: `image/${ext}`,
-        });
-
-      if (error) throw error;
-
-      const { data: publicURL } = supabase.storage
-        .from("question-images")
-        .getPublicUrl(data.path);
-
-      return publicURL.publicUrl;
-    } catch (error) {
-      console.error("Image upload error:", error);
-      return null;
     }
   };
 
@@ -288,7 +194,6 @@ export const HtmlUpload = () => {
       toast.error("Please select a chapter");
       return;
     }
-
     if (questions.length === 0) {
       toast.error("No questions to save");
       return;
@@ -298,56 +203,30 @@ export const HtmlUpload = () => {
     setUploadProgress(0);
 
     try {
-      const questionsToSave = [];
-
-      for (let i = 0; i < questions.length; i++) {
-        const q = questions[i];
-        setUploadProgress(Math.floor(((i + 1) / questions.length) * 100));
-
-        const uploadedQuestionImages: string[] = [];
-        for (const imgData of q.questionImages) {
-          if (imgData.startsWith("data:image")) {
-            const url = await uploadImageToStorage(imgData, q.number, "question");
-            if (url) {
-              uploadedQuestionImages.push(url);
-            }
-          } else if (imgData) {
-            uploadedQuestionImages.push(imgData);
-          }
-        }
-
-        const uploadedOptions = await Promise.all(
-          q.options.map(async (opt, idx) => {
-            const optImg = q.optionImages[idx];
-            if (optImg && optImg.startsWith("data:image")) {
-              const url = await uploadImageToStorage(optImg, q.number, "option", idx);
-              return url ? `${opt}|IMG:${url}` : opt;
-            }
-            if (optImg) {
-              return `${opt}|IMG:${optImg}`;
-            }
-            return opt;
-          })
-        );
-
-        questionsToSave.push({
-          question_text: q.text,
-          options: uploadedOptions,
-          correct_option_index: q.correctIndex,
-          explanation: null,
-          images: uploadedQuestionImages,
+      const questionsToSave = questions.map((q, i) => {
+        setUploadProgress(Math.floor(((i + 1) / questions.length) * 50));
+        return {
+          question_text: q.question_text,
+          options: q.options,
+          correct_option_index: q.correct_option_index,
+          explanation: q.explanation,
+          images: [],
           difficulty: "auto_medium",
           subject_id: subjectId,
           chapter_id: chapterId,
           source_file: fileNames.join(", "),
-        });
-      }
+        };
+      });
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Please log in to save questions");
         return;
       }
+
+      setUploadProgress(60);
 
       const response = await supabase.functions.invoke("import-questions", {
         body: { questions: questionsToSave },
@@ -355,13 +234,14 @@ export const HtmlUpload = () => {
 
       if (response.error) throw response.error;
 
+      setUploadProgress(100);
       toast.success(
-        `Successfully saved ${questionsToSave.length} questions to ${selectedSubject.name} - ${selectedSubject.chapters.find((c) => c.id === chapterId)?.name}`
+        `Saved ${questionsToSave.length} questions to ${selectedSubject.name} - ${selectedSubject.chapters.find((c) => c.id === chapterId)?.name}`
       );
 
       setQuestions([]);
       setFileNames([]);
-      setStats({ total: 0, withAnswers: 0, withImages: 0, matchedAnswers: 0 });
+      setStats({ total: 0, withAnswers: 0, withExplanations: 0, withDiagrams: 0 });
     } catch (error: any) {
       console.error("Save error:", error);
       toast.error(`Failed to save: ${error.message}`);
@@ -373,6 +253,7 @@ export const HtmlUpload = () => {
 
   return (
     <div className="space-y-6">
+      {/* Stats Cards */}
       {questions.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
@@ -388,17 +269,19 @@ export const HtmlUpload = () => {
             <CardContent className="pt-6">
               <div className="text-center">
                 <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                <p className="text-2xl font-bold">{stats.matchedAnswers}</p>
-                <p className="text-xs text-muted-foreground">Matched Answers</p>
+                <p className="text-2xl font-bold">{stats.withAnswers}</p>
+                <p className="text-xs text-muted-foreground">With Answers</p>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <ImageIcon className="w-8 h-8 mx-auto mb-2 text-blue-500" />
-                <p className="text-2xl font-bold">{stats.withImages}</p>
-                <p className="text-xs text-muted-foreground">With Images</p>
+                <Brain className="w-8 h-8 mx-auto mb-2 text-purple-500" />
+                <p className="text-2xl font-bold">{stats.withExplanations}</p>
+                <p className="text-xs text-muted-foreground">
+                  With Explanations
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -406,10 +289,8 @@ export const HtmlUpload = () => {
             <CardContent className="pt-6">
               <div className="text-center">
                 <AlertCircle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
-                <p className="text-2xl font-bold">
-                  {stats.total - stats.matchedAnswers}
-                </p>
-                <p className="text-xs text-muted-foreground">Need Review</p>
+                <p className="text-2xl font-bold">{stats.withDiagrams}</p>
+                <p className="text-xs text-muted-foreground">Has Diagrams</p>
               </div>
             </CardContent>
           </Card>
@@ -417,9 +298,13 @@ export const HtmlUpload = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Settings Panel */}
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Import Settings</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              AI Import Settings
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -431,7 +316,7 @@ export const HtmlUpload = () => {
                   setSubjectId(e.target.value);
                   setChapterId("");
                 }}
-                disabled={uploading}
+                disabled={uploading || parsing}
               >
                 {neetSubjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
@@ -447,7 +332,7 @@ export const HtmlUpload = () => {
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={chapterId}
                 onChange={(e) => setChapterId(e.target.value)}
-                disabled={uploading}
+                disabled={uploading || parsing}
               >
                 <option value="">Select chapter</option>
                 {selectedSubject.chapters.map((chapter) => (
@@ -459,7 +344,9 @@ export const HtmlUpload = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">HTML Files (up to 3 at once)</label>
+              <label className="text-sm font-medium">
+                HTML Files (up to 3)
+              </label>
               <Input
                 type="file"
                 accept=".html,.htm"
@@ -468,12 +355,17 @@ export const HtmlUpload = () => {
                 multiple
               />
               {parsing && (
-                <p className="text-xs text-muted-foreground">Parsing files...</p>
+                <div className="flex items-center gap-2 text-sm text-primary">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>AI is extracting questions...</span>
+                </div>
               )}
-              {fileNames.length > 0 && (
+              {fileNames.length > 0 && !parsing && (
                 <div className="text-xs text-muted-foreground space-y-1">
-                  <p className="font-medium">Loaded {fileNames.length} file(s):</p>
-                  <ul className="list-disc list-inside max-h-20 overflow-y-auto">
+                  <p className="font-medium">
+                    Loaded {fileNames.length} file(s):
+                  </p>
+                  <ul className="list-disc list-inside">
                     {fileNames.map((name, idx) => (
                       <li key={idx}>{name}</li>
                     ))}
@@ -485,7 +377,7 @@ export const HtmlUpload = () => {
             {uploading && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Uploading...</span>
+                  <span>Saving...</span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} />
@@ -494,66 +386,130 @@ export const HtmlUpload = () => {
 
             <Button
               type="button"
-              disabled={!questions.length || !chapterId || uploading || parsing}
+              disabled={
+                !questions.length || !chapterId || uploading || parsing
+              }
               className="w-full"
               onClick={handleSaveToBackend}
             >
-              {uploading ? "Saving..." : parsing ? "Parsing..." : "Save to Backend"}
+              {uploading
+                ? "Saving..."
+                : parsing
+                  ? "AI Parsing..."
+                  : `Save ${questions.length} Questions`}
             </Button>
           </CardContent>
         </Card>
 
+        {/* Preview Panel */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Parsed Questions Preview</CardTitle>
+            <CardTitle>AI Extracted Questions Preview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!questions.length ? (
+            {parsing ? (
+              <div className="text-center py-12">
+                <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-primary" />
+                <p className="text-muted-foreground">
+                  AI is reading and extracting questions...
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  This may take 30-60 seconds depending on file size
+                </p>
+              </div>
+            ) : !questions.length ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Upload className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Upload an HTML file to see parsed questions</p>
+                <p>Upload HTML files to extract questions using AI</p>
+                <p className="text-xs mt-2">
+                  Supports pdf2htmlEX converted files
+                </p>
               </div>
             ) : (
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                {questions.slice(0, 15).map((q) => (
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                {questions.map((q, idx) => (
                   <div
-                    key={q.number}
+                    key={idx}
                     className="rounded-md border border-border bg-card/60 p-4 text-sm space-y-3"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div
+                      className="flex items-start justify-between gap-2 cursor-pointer"
+                      onClick={() =>
+                        setExpandedQ(expandedQ === idx ? null : idx)
+                      }
+                    >
                       <div className="font-medium flex-1">
-                        <span className="text-primary mr-2">Q{q.number}.</span>
-                        {q.text}
+                        <span className="text-primary mr-2">
+                          Q{q.question_number}.
+                        </span>
+                        {q.question_text.length > 120 && expandedQ !== idx
+                          ? q.question_text.substring(0, 120) + "..."
+                          : q.question_text}
                       </div>
-                      {q.correctIndex !== null ? (
-                        <Badge variant="default">
-                          Answer: {q.correctIndex + 1}
-                        </Badge>
-                      ) : (
-                        <Badge variant="destructive">No Answer</Badge>
-                      )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {q.correct_option_index !== null ? (
+                          <Badge variant="default">
+                            Ans: {String.fromCharCode(65 + q.correct_option_index)}
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive">No Ans</Badge>
+                        )}
+                        {expandedQ === idx ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </div>
                     </div>
+
+                    {/* Options always visible */}
                     <div className="space-y-1 pl-4">
-                      {q.options.map((opt, idx) => (
+                      {q.options.map((opt, optIdx) => (
                         <div
-                          key={idx}
-                          className={`text-xs ${
-                            q.correctIndex === idx
-                              ? "text-green-600 dark:text-green-400 font-medium"
+                          key={optIdx}
+                          className={`text-xs py-1 px-2 rounded ${
+                            q.correct_option_index === optIdx
+                              ? "bg-green-500/10 text-green-600 dark:text-green-400 font-medium border border-green-500/20"
                               : ""
                           }`}
                         >
+                          <span className="font-medium mr-1">
+                            {String.fromCharCode(65 + optIdx)})
+                          </span>
                           {opt}
                         </div>
                       ))}
                     </div>
+
+                    {/* Explanation (expanded) */}
+                    {expandedQ === idx && q.explanation && (
+                      <div className="mt-3 p-3 bg-muted/50 rounded-md text-xs">
+                        <p className="font-medium text-primary mb-1">
+                          Explanation:
+                        </p>
+                        <p className="text-muted-foreground">
+                          {q.explanation}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Badges */}
+                    {expandedQ === idx && (
+                      <div className="flex gap-2 mt-2">
+                        {q.has_diagram && (
+                          <Badge variant="outline" className="text-xs">
+                            📊 Has Diagram
+                          </Badge>
+                        )}
+                        {q.explanation && (
+                          <Badge variant="outline" className="text-xs">
+                            💡 Has Explanation
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
-                {questions.length > 15 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Showing first 15 of {questions.length} questions
-                  </p>
-                )}
               </div>
             )}
           </CardContent>
