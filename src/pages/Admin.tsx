@@ -75,6 +75,21 @@ const Admin = () => {
             </TabsList>
 
             <div className="mt-6">
+              <TabsContent value="pdf" className="m-0">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-2 mb-6">
+                      <h2 className="text-xl font-semibold">PDF Question Importer (AI-Powered)</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Upload NEET-style PDF files. AI will automatically extract questions, options,
+                        correct answers, and explanations. Review before saving.
+                      </p>
+                    </div>
+                    <PdfUpload />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="html" className="m-0">
                 <Card>
                   <CardContent className="pt-6">
