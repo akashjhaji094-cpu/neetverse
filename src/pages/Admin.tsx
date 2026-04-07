@@ -1,11 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HtmlUpload } from "@/components/admin/HtmlUpload";
+import { PdfUpload } from "@/components/admin/PdfUpload";
 import { ResourceUpload } from "@/components/admin/ResourceUpload";
 import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles } from "lucide-react";
+import { Upload, FileText, BookOpen, Crown, Loader2, Sparkles } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -44,8 +45,13 @@ const Admin = () => {
             </p>
           </header>
 
-          <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-3xl grid-cols-4">
+          <Tabs defaultValue="pdf" className="w-full">
+            <TabsList className="grid w-full max-w-4xl grid-cols-5">
+              <TabsTrigger value="pdf" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF Upload</span>
+                <span className="sm:hidden">PDF</span>
+              </TabsTrigger>
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 <span className="hidden sm:inline">HTML Upload</span>
@@ -69,6 +75,21 @@ const Admin = () => {
             </TabsList>
 
             <div className="mt-6">
+              <TabsContent value="pdf" className="m-0">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-2 mb-6">
+                      <h2 className="text-xl font-semibold">PDF Question Importer (AI-Powered)</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Upload NEET-style PDF files. AI will automatically extract questions, options,
+                        correct answers, and explanations. Review before saving.
+                      </p>
+                    </div>
+                    <PdfUpload />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="html" className="m-0">
                 <Card>
                   <CardContent className="pt-6">
