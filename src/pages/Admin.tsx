@@ -73,10 +73,10 @@ const Admin = () => {
                 <Card>
                   <CardContent className="pt-6">
                     <div className="space-y-2 mb-6">
-                      <h2 className="text-xl font-semibold">AI-Powered Question Importer</h2>
+                      <h2 className="text-xl font-semibold">HTML Question Importer</h2>
                       <p className="text-sm text-muted-foreground">
-                        Upload HTML files (pdf2htmlEX format). AI will automatically extract
-                        questions, options, correct answers, and explanations. Review everything before saving.
+                        Upload HTML files (up to 10). Questions, options, images & correct answers 
+                        are parsed instantly — no AI needed. Review everything before saving.
                       </p>
                     </div>
                     <HtmlUpload />
