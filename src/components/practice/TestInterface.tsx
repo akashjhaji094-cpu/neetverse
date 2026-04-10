@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Question } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { useMathJax } from "@/hooks/useMathJax";
 
 interface TestInterfaceProps {
   questions: Question[];
@@ -55,9 +56,10 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   };
 
   const answeredCount = Object.keys(answers).length;
+  const mathRef = useMathJax([currentIndex]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" ref={mathRef}>
       <div className="sticky top-0 z-10 bg-background border-b">
         <div className="container-custom py-4">
           <div className="flex items-center justify-between mb-2">
@@ -81,7 +83,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
               <div className="flex items-start gap-2">
                 <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
                 <div className="flex-1">
-                  <p className="text-base leading-relaxed">{currentQuestion.question_text}</p>
+                  <div className="text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: currentQuestion.question_text }} />
                   {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
                     <div className="mt-4 space-y-2">
                       {currentQuestion.images.map((url, idx) => (
@@ -116,7 +118,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                       }`}>
                         {answers[currentQuestion.id] === index && '✓'}
                       </div>
-                      <span className="text-sm">{option}</span>
+                      <span className="text-sm" dangerouslySetInnerHTML={{ __html: String(option) }} />
                     </div>
                   </button>
                 ))}
