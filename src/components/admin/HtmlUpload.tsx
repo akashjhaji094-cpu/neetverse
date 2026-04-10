@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,29 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 
+// Load MathJax once
+const loadMathJax = () => {
+  if (document.getElementById('mathjax-script')) return;
+  const config = document.createElement('script');
+  config.type = 'text/javascript';
+  config.textContent = `window.MathJax = {
+    tex: { inlineMath: [['$','$'],['\\\\(','\\\\)']], displayMath: [['$$','$$'],['\\\\[','\\\\]']], processEscapes: true },
+    options: { ignoreHtmlClass: "tex2jax_ignore", processHtmlClass: "tex2jax_process" },
+    startup: { typeset: false }
+  };`;
+  document.head.appendChild(config);
+  const script = document.createElement('script');
+  script.id = 'mathjax-script';
+  script.async = true;
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+  document.head.appendChild(script);
+};
+
+const typesetMath = (el: HTMLElement | null) => {
+  if (!el || !(window as any).MathJax?.typesetPromise) return;
+  (window as any).MathJax.typesetPromise([el]).catch(() => {});
+};
+
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
   const [chapterId, setChapterId] = useState<string>("");
@@ -34,8 +57,19 @@ export const HtmlUpload = () => {
     unmatched: 0,
   });
 
+  const previewRef = useRef<HTMLDivElement>(null);
+
   const selectedSubject =
     neetSubjects.find((s) => s.id === subjectId) || neetSubjects[0];
+
+  // Load MathJax on mount, typeset when questions change
+  useEffect(() => { loadMathJax(); }, []);
+  useEffect(() => {
+    if (questions.length > 0) {
+      const timer = setTimeout(() => typesetMath(previewRef.current), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [questions, expandedQ]);
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -323,7 +357,7 @@ export const HtmlUpload = () => {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+              <div ref={previewRef} className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                 {questions.map((q, idx) => (
                   <div
                     key={idx}
@@ -339,9 +373,7 @@ export const HtmlUpload = () => {
                         <span className="text-primary mr-2">
                           Q{q.question_number}.
                         </span>
-                        {q.question_text.length > 120 && expandedQ !== idx
-                          ? q.question_text.substring(0, 120) + "..."
-                          : q.question_text}
+                        <span dangerouslySetInnerHTML={{ __html: expandedQ === idx ? q.question_html : (q.question_html.length > 200 ? q.question_html.substring(0, 200) + '...' : q.question_html) }} />
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {q.correct_option_index !== null ? (
@@ -373,7 +405,7 @@ export const HtmlUpload = () => {
                           <span className="font-medium mr-1">
                             ({optIdx + 1})
                           </span>
-                          {opt}
+                          <span dangerouslySetInnerHTML={{ __html: q.options_html[optIdx] || opt }} />
                         </div>
                       ))}
                     </div>
