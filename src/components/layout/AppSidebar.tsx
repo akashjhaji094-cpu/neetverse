@@ -6,15 +6,11 @@ import {
   BarChart3, 
   User, 
   Settings,
-  Crown,
   BookOpen,
   ChevronLeft,
   ChevronRight,
   LogOut,
   Shield,
-  Trophy,
-  Bookmark,
-  XCircle,
   ClipboardList
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -59,7 +55,6 @@ const navGroups: NavGroup[] = [
     title: "ANALYSIS",
     items: [
       { icon: BarChart3, label: "Reports", path: "/progress" },
-      { icon: Trophy, label: "Leaderboard", path: "/premium", badge: "Pro" },
     ],
   },
 ];
@@ -104,7 +99,6 @@ export function AppSidebar() {
             : "hover:bg-muted text-muted-foreground hover:text-foreground"
         )}
       >
-        {/* Active indicator bar */}
         {isActive && (
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
         )}
@@ -199,7 +193,7 @@ export function AppSidebar() {
         )}
       </nav>
 
-      {/* Bottom - User Profile & Actions */}
+      {/* Bottom */}
       <div className="p-3 border-t border-border space-y-0.5">
         {bottomNavItems.map((item) => (
           <NavItemComponent key={item.path} item={item} />
@@ -225,7 +219,6 @@ export function AppSidebar() {
           )}
         </Tooltip>
 
-        {/* User info */}
         {user && !collapsed && (
           <div className="mt-2 px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
