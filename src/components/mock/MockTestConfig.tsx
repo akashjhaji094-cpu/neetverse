@@ -13,6 +13,7 @@ interface MockTestConfigProps {
   onClose: () => void;
   onStart: (selectedChapters: string[]) => void;
   loading?: boolean;
+  bioOnly?: boolean;
 }
 
 interface Subject {
@@ -27,7 +28,7 @@ interface Chapter {
   subject_id: string;
 }
 
-export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConfigProps) => {
+export const MockTestConfig = ({ open, onClose, onStart, loading, bioOnly }: MockTestConfigProps) => {
   const [selectedChapters, setSelectedChapters] = useState<Record<string, string[]>>({});
 
   const { data: subjects, isLoading: subjectsLoading } = useQuery({
@@ -54,6 +55,10 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
     },
   });
 
+  const filteredSubjects = bioOnly
+    ? subjects?.filter(s => s.name.toLowerCase() === 'biology')
+    : subjects;
+
   const handleChapterToggle = (subjectId: string, chapterId: string) => {
     setSelectedChapters(prev => {
       const current = prev[subjectId] || [];
@@ -64,7 +69,15 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
     });
   };
 
-  const isValid = subjects?.every(subject => 
+  const handleSelectAll = (subjectId: string, chapterIds: string[]) => {
+    setSelectedChapters(prev => {
+      const current = prev[subjectId] || [];
+      const allSelected = chapterIds.every(id => current.includes(id));
+      return { ...prev, [subjectId]: allSelected ? [] : chapterIds };
+    });
+  };
+
+  const isValid = filteredSubjects?.every(subject => 
     (selectedChapters[subject.id] || []).length > 0
   );
 
@@ -78,6 +91,9 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
     acc[chapter.subject_id].push(chapter);
     return acc;
   }, {} as Record<string, Chapter[]>);
+
+  const totalQuestions = bioOnly ? 90 : 180;
+  const timeLimit = bioOnly ? '60 min' : '3 Hours';
 
   if (subjectsLoading || chaptersLoading) {
     return (
@@ -95,7 +111,9 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Custom Mock Test - Select Chapters</DialogTitle>
+          <DialogTitle>
+            {bioOnly ? 'Biology Mock Test — Select Chapters' : 'Full Mock Test — Select Chapters'}
+          </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
@@ -103,41 +121,56 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
             <AlertCircle className="h-5 w-5 text-primary mt-0.5" />
             <div className="text-sm">
               <p className="font-medium">Select at least one chapter from each subject</p>
-              <p className="text-muted-foreground">180 questions will be randomly selected from your chosen chapters</p>
+              <p className="text-muted-foreground">
+                {totalQuestions} questions will be randomly selected from your chosen chapters
+                {!bioOnly && ' (45 Phy + 45 Chem + 90 Bio)'}
+              </p>
             </div>
           </div>
 
           <ScrollArea className="h-[400px] pr-4">
             <div className="space-y-4">
-              {subjects?.map(subject => (
-                <Card key={subject.id}>
-                  <CardContent className="pt-6">
-                    <div className="mb-4">
-                      <h3 className="font-semibold text-lg">{subject.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {(selectedChapters[subject.id] || []).length} chapters selected
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {chaptersBySubject?.[subject.id]?.map(chapter => (
-                        <div key={chapter.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={chapter.id}
-                            checked={(selectedChapters[subject.id] || []).includes(chapter.id)}
-                            onCheckedChange={() => handleChapterToggle(subject.id, chapter.id)}
-                          />
-                          <label
-                            htmlFor={chapter.id}
-                            className="text-sm cursor-pointer flex-1"
-                          >
-                            {chapter.name}
-                          </label>
+              {filteredSubjects?.map(subject => {
+                const subjectChapters = chaptersBySubject?.[subject.id] || [];
+                const selectedCount = (selectedChapters[subject.id] || []).length;
+                const allSelected = subjectChapters.length > 0 && selectedCount === subjectChapters.length;
+
+                return (
+                  <Card key={subject.id}>
+                    <CardContent className="pt-6">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-lg">{subject.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {selectedCount} of {subjectChapters.length} chapters selected
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSelectAll(subject.id, subjectChapters.map(c => c.id))}
+                        >
+                          {allSelected ? 'Deselect All' : 'Select All'}
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {subjectChapters.map(chapter => (
+                          <div key={chapter.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={chapter.id}
+                              checked={(selectedChapters[subject.id] || []).includes(chapter.id)}
+                              onCheckedChange={() => handleChapterToggle(subject.id, chapter.id)}
+                            />
+                            <label htmlFor={chapter.id} className="text-sm cursor-pointer flex-1">
+                              {chapter.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </ScrollArea>
 
@@ -145,17 +178,11 @@ export const MockTestConfig = ({ open, onClose, onStart, loading }: MockTestConf
             <Button variant="outline" onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleStartTest} 
-              disabled={!isValid || loading}
-            >
+            <Button onClick={handleStartTest} disabled={!isValid || loading}>
               {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Preparing Test...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Preparing Test...</>
               ) : (
-                'Start Mock Test (180 Questions, 3 Hours)'
+                `Start Mock Test (${totalQuestions} Questions, ${timeLimit})`
               )}
             </Button>
           </div>

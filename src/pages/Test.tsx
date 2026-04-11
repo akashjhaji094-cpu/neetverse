@@ -8,10 +8,9 @@ import { TestInterface } from "@/components/practice/TestInterface";
 import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
-import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { toast } from "sonner";
-import { ListChecks, BookOpen, Loader2, Crown, Download, GraduationCap } from "lucide-react";
+import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
@@ -27,10 +26,9 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
-  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'testing' | 'results' | 'review'>('select');
-  const [testType, setTestType] = useState<'custom' | 'full' | 'premium' | null>(null);
+  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'testing' | 'results' | 'review'>('select');
+  const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [showPremiumDialog, setShowPremiumDialog] = useState(false);
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [results, setResults] = useState<{
     score: number;
@@ -40,44 +38,7 @@ const Test = () => {
     subjectAnalytics: SubjectAnalytics[];
   } | null>(null);
 
-  // Fetch available premium tests and planners
-  const { data: premiumContent } = useQuery({
-    queryKey: ['premium-content', user?.id],
-    queryFn: async () => {
-      if (!user) return { tests: [], planners: [], hasAccess: false };
-
-      // Check if user has any active access key
-      const { data: accessKeys } = await supabase
-        .from('premium_access_keys')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .limit(1);
-
-      const hasAccess = (accessKeys?.length || 0) > 0;
-
-      if (!hasAccess) {
-        return { tests: [], planners: [], hasAccess: false };
-      }
-
-      // Fetch premium tests (available to all OR specific to user's key)
-      const { data: tests } = await supabase
-        .from('premium_tests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Fetch all planners (public)
-      const { data: planners } = await supabase
-        .from('premium_planners')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      return { tests: tests || [], planners: planners || [], hasAccess };
-    },
-    enabled: !!user,
-  });
-
-  const { data: questionCounts, isLoading: countsLoading } = useQuery({
+  const { data: questionCounts } = useQuery({
     queryKey: ['question-counts-by-subject'],
     queryFn: async () => {
       const { data: subjects } = await supabase.from('subjects').select('*').order('name');
@@ -87,7 +48,7 @@ const Test = () => {
             .from('questions')
             .select('*', { count: 'exact', head: true })
             .eq('subject_id', subject.id);
-          return { subject: subject.name, count: count || 0 };
+          return { subject: subject.name, count: count || 0, id: subject.id };
         }) || []
       );
       return counts;
@@ -95,124 +56,12 @@ const Test = () => {
   });
 
   const fetchQuestionsMutation = useMutation({
-    mutationFn: async (params: { type: 'custom' | 'full', chapterIds?: string[] }) => {
-      if (params.type === 'full') {
-        // Fetch 90 Biology questions only with weighted chapter selection
-        const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
-        
-        if (!subjects) {
-          throw new Error('No subjects found in database');
-        }
+    mutationFn: async (params: { type: 'custom' | 'full-bio', chapterIds?: string[] }) => {
+      const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
+      if (!subjects) throw new Error('No subjects found');
 
-        const biologySubject = subjects.find(s => s.name.toLowerCase() === 'biology');
-        if (!biologySubject) {
-          throw new Error('Biology subject not found in database');
-        }
-
-        // Get chapters for weighted selection
-        const { data: allChapters } = await supabase.from('chapters').select('id, subject_id, slug')
-          .eq('subject_id', biologySubject.id);
-        
-        if (!allChapters || allChapters.length === 0) {
-          throw new Error('No Biology chapters found in database');
-        }
-
-        const allQuestions: Question[] = [];
-        
-        // Import weightage data
-        const { getWeightageForSubject, addRandomVariation } = await import('@/data/neetWeightage');
-        
-        const weightageConfig = getWeightageForSubject(biologySubject.slug);
-        
-        // Build chapter weights map with random variation
-        const chapterWeights = new Map<string, number>();
-        let totalWeight = 0;
-        
-        allChapters.forEach(chapter => {
-          const config = weightageConfig.find(w => w.chapterId === chapter.slug);
-          const baseWeight = config?.weight || 1;
-          const randomizedWeight = addRandomVariation(baseWeight);
-          chapterWeights.set(chapter.id, randomizedWeight);
-          totalWeight += randomizedWeight;
-        });
-
-        // Calculate how many questions from each chapter
-        const chapterQuestionCounts = new Map<string, number>();
-        let remainingQuestions = 90;
-        
-        allChapters.forEach(chapter => {
-          const weight = chapterWeights.get(chapter.id) || 1;
-          const proportion = weight / totalWeight;
-          const questionCount = Math.max(1, Math.round(proportion * 90));
-          chapterQuestionCounts.set(chapter.id, questionCount);
-          remainingQuestions -= questionCount;
-        });
-
-        // Adjust if we over/under allocated due to rounding
-        while (remainingQuestions !== 0) {
-          const chapters = Array.from(chapterQuestionCounts.keys());
-          const randomChapter = chapters[Math.floor(Math.random() * chapters.length)];
-          const currentCount = chapterQuestionCounts.get(randomChapter) || 0;
-          
-          if (remainingQuestions > 0) {
-            chapterQuestionCounts.set(randomChapter, currentCount + 1);
-            remainingQuestions--;
-          } else if (currentCount > 1) {
-            chapterQuestionCounts.set(randomChapter, currentCount - 1);
-            remainingQuestions++;
-          }
-        }
-
-        // Fetch questions from each chapter according to calculated counts
-        for (const [chapterId, count] of chapterQuestionCounts.entries()) {
-          const { data: chapterQuestions } = await supabase
-            .from('questions')
-            .select('*')
-            .eq('chapter_id', chapterId);
-
-          if (chapterQuestions && chapterQuestions.length > 0) {
-            const shuffled = chapterQuestions.sort(() => Math.random() - 0.5);
-            const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-            allQuestions.push(...(selected as Question[]));
-          }
-        }
-
-        // Final shuffle
-        const finalQuestions = allQuestions.sort(() => Math.random() - 0.5);
-        
-        if (finalQuestions.length < 90) {
-          throw new Error(`Not enough Biology questions available. Found ${finalQuestions.length}, need 90`);
-        }
-        
-        return finalQuestions.slice(0, 90) as Question[];
-      } else {
-        // Custom test: fetch questions from selected chapters with proper subject distribution
-        // NEET ratio: 45 Physics, 45 Chemistry, 90 Biology
-        const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
-        
-        if (!subjects || subjects.length < 3) {
-          throw new Error('Not enough subjects in database');
-        }
-
-        // Get chapters to identify which subject each belongs to
-        const { data: allChapters } = await supabase
-          .from('chapters')
-          .select('id, subject_id')
-          .in('id', params.chapterIds || []);
-
-        if (!allChapters || allChapters.length === 0) {
-          throw new Error('No valid chapters selected');
-        }
-
-        // Group selected chapters by subject
-        const chaptersBySubject = new Map<string, string[]>();
-        allChapters.forEach(chapter => {
-          const existing = chaptersBySubject.get(chapter.subject_id) || [];
-          existing.push(chapter.id);
-          chaptersBySubject.set(chapter.subject_id, existing);
-        });
-
-        // Define required question counts per subject (NEET ratio)
+      if (params.type === 'full-bio') {
+        // Full NEET Mock: 45 Phy + 45 Chem + 90 Bio, ordered Phy → Chem → Bio
         const subjectRequirements = [
           { name: 'Physics', count: 45 },
           { name: 'Chemistry', count: 45 },
@@ -221,62 +70,119 @@ const Test = () => {
 
         const allQuestions: Question[] = [];
 
-        for (const requirement of subjectRequirements) {
-          const subject = subjects.find(s => s.name.toLowerCase() === requirement.name.toLowerCase());
-          
-          if (!subject) {
-            throw new Error(`${requirement.name} subject not found in database`);
-          }
+        for (const req of subjectRequirements) {
+          const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
+          if (!subject) throw new Error(`${req.name} subject not found`);
 
-          // Get selected chapters for this subject
-          const selectedChaptersForSubject = chaptersBySubject.get(subject.id) || [];
-          
-          if (selectedChaptersForSubject.length === 0) {
-            throw new Error(`No chapters selected for ${requirement.name}. Please select at least one chapter from each subject.`);
-          }
-
-          // Fetch all questions from selected chapters for this subject
           const { data: subjectQuestions } = await supabase
             .from('questions')
             .select('*')
-            .in('chapter_id', selectedChaptersForSubject);
+            .eq('subject_id', subject.id);
 
-          if (!subjectQuestions || subjectQuestions.length < requirement.count) {
-            throw new Error(`Not enough ${requirement.name} questions. Found ${subjectQuestions?.length || 0}, need ${requirement.count}. Please select more chapters.`);
+          if (!subjectQuestions || subjectQuestions.length < req.count) {
+            throw new Error(`Not enough ${req.name} questions. Found ${subjectQuestions?.length || 0}, need ${req.count}`);
           }
 
-          // Cryptographically secure shuffle using Fisher-Yates
+          // Fisher-Yates shuffle
           const shuffled = [...subjectQuestions];
           const randomValues = new Uint32Array(shuffled.length);
           crypto.getRandomValues(randomValues);
-          
           for (let i = shuffled.length - 1; i > 0; i--) {
             const j = randomValues[i] % (i + 1);
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
           }
 
-          // Take required count for this subject
-          allQuestions.push(...(shuffled.slice(0, requirement.count) as Question[]));
+          allQuestions.push(...(shuffled.slice(0, req.count) as Question[]));
         }
 
-        // Final shuffle to mix all subjects together
-        const finalRandomValues = new Uint32Array(allQuestions.length);
-        crypto.getRandomValues(finalRandomValues);
-        
-        for (let i = allQuestions.length - 1; i > 0; i--) {
-          const j = finalRandomValues[i] % (i + 1);
-          [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
-        }
+        // Questions are already in order: Physics(0-44), Chemistry(45-89), Biology(90-179)
+        return allQuestions;
+      } else {
+        // Custom mock: 45 Phy + 45 Chem + 90 Bio from selected chapters, ordered Phy → Chem → Bio
+        const { data: allChapters } = await supabase
+          .from('chapters')
+          .select('id, subject_id')
+          .in('id', params.chapterIds || []);
 
-        console.log('Custom mock test distribution:', {
-          total: allQuestions.length,
-          physics: allQuestions.filter(q => subjects.find(s => s.name === 'Physics')?.id === q.subject_id).length,
-          chemistry: allQuestions.filter(q => subjects.find(s => s.name === 'Chemistry')?.id === q.subject_id).length,
-          biology: allQuestions.filter(q => subjects.find(s => s.name === 'Biology')?.id === q.subject_id).length,
+        if (!allChapters || allChapters.length === 0) throw new Error('No valid chapters selected');
+
+        const chaptersBySubject = new Map<string, string[]>();
+        allChapters.forEach(ch => {
+          const existing = chaptersBySubject.get(ch.subject_id) || [];
+          existing.push(ch.id);
+          chaptersBySubject.set(ch.subject_id, existing);
         });
+
+        const subjectRequirements = [
+          { name: 'Physics', count: 45 },
+          { name: 'Chemistry', count: 45 },
+          { name: 'Biology', count: 90 },
+        ];
+
+        const allQuestions: Question[] = [];
+
+        for (const req of subjectRequirements) {
+          const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
+          if (!subject) throw new Error(`${req.name} subject not found`);
+
+          const selectedChapters = chaptersBySubject.get(subject.id) || [];
+          if (selectedChapters.length === 0) {
+            throw new Error(`No chapters selected for ${req.name}. Please select at least one chapter from each subject.`);
+          }
+
+          const { data: subjectQuestions } = await supabase
+            .from('questions')
+            .select('*')
+            .in('chapter_id', selectedChapters);
+
+          if (!subjectQuestions || subjectQuestions.length < req.count) {
+            throw new Error(`Not enough ${req.name} questions. Found ${subjectQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
+          }
+
+          const shuffled = [...subjectQuestions];
+          const randomValues = new Uint32Array(shuffled.length);
+          crypto.getRandomValues(randomValues);
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = randomValues[i] % (i + 1);
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          allQuestions.push(...(shuffled.slice(0, req.count) as Question[]));
+        }
 
         return allQuestions;
       }
+    },
+    onSuccess: (data) => {
+      setQuestions(data);
+      setTestMode('testing');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to fetch questions');
+    },
+  });
+
+  // Bio-only mock from selected chapters
+  const fetchBioMockMutation = useMutation({
+    mutationFn: async (chapterIds: string[]) => {
+      const { data: bioQuestions } = await supabase
+        .from('questions')
+        .select('*')
+        .in('chapter_id', chapterIds);
+
+      if (!bioQuestions || bioQuestions.length < 90) {
+        throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
+      }
+
+      const shuffled = [...bioQuestions];
+      const randomValues = new Uint32Array(shuffled.length);
+      crypto.getRandomValues(randomValues);
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = randomValues[i] % (i + 1);
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      return shuffled.slice(0, 90) as Question[];
     },
     onSuccess: (data) => {
       setQuestions(data);
@@ -291,35 +197,19 @@ const Test = () => {
     mutationFn: async (answers: Record<string, number | null>) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Calculate scores
       let correctCount = 0;
       let wrongCount = 0;
       let unattemptedCount = 0;
 
       const subjectScores: Record<string, SubjectAnalytics> = {};
-
-      // Get subject names for questions
       const { data: subjects } = await supabase.from('subjects').select('*');
-      const subjectMap = subjects?.reduce((acc, s) => {
-        acc[s.id] = s.name;
-        return acc;
-      }, {} as Record<string, string>) || {};
+      const subjectMap = subjects?.reduce((acc, s) => { acc[s.id] = s.name; return acc; }, {} as Record<string, string>) || {};
 
       questions.forEach((q) => {
         const subjectName = subjectMap[q.subject_id] || 'Unknown';
-        
         if (!subjectScores[subjectName]) {
-          subjectScores[subjectName] = {
-            subject: subjectName,
-            correct: 0,
-            wrong: 0,
-            unattempted: 0,
-            total: 0,
-            score: 0,
-            percentage: 0,
-          };
+          subjectScores[subjectName] = { subject: subjectName, correct: 0, wrong: 0, unattempted: 0, total: 0, score: 0, percentage: 0 };
         }
-
         subjectScores[subjectName].total++;
 
         const userAnswer = answers[q.id];
@@ -336,14 +226,11 @@ const Test = () => {
       });
 
       const score = correctCount * 4 - wrongCount * 1;
-
-      // Calculate subject percentages and scores
-      Object.values(subjectScores).forEach(subject => {
-        subject.score = subject.correct * 4 - subject.wrong * 1;
-        subject.percentage = (subject.score / (subject.total * 4)) * 100;
+      Object.values(subjectScores).forEach(s => {
+        s.score = s.correct * 4 - s.wrong * 1;
+        s.percentage = (s.score / (s.total * 4)) * 100;
       });
 
-      // Create attempt record
       const { data: attempt } = await supabase
         .from('attempts')
         .insert([{
@@ -358,25 +245,16 @@ const Test = () => {
         .single();
 
       if (attempt) {
-        // Create answer records
         const answerRecords = questions.map((q) => ({
           attempt_id: attempt.id,
           question_id: q.id,
           chosen_option_index: answers[q.id] ?? null,
           is_correct: answers[q.id] === q.correct_option_index,
         }));
-
         await supabase.from('attempt_answers').insert(answerRecords);
       }
 
-      return {
-        score,
-        correctCount,
-        wrongCount,
-        unattemptedCount,
-        subjectAnalytics: Object.values(subjectScores),
-        answers,
-      };
+      return { score, correctCount, wrongCount, unattemptedCount, subjectAnalytics: Object.values(subjectScores), answers };
     },
     onSuccess: (data) => {
       setResults(data);
@@ -384,34 +262,8 @@ const Test = () => {
       setTestMode('results');
       toast.success('Test submitted successfully!');
     },
-    onError: () => {
-      toast.error('Failed to submit test');
-    },
+    onError: () => { toast.error('Failed to submit test'); },
   });
-
-  const handleStartCustomTest = () => {
-    setTestType('custom');
-    setTestMode('custom-config');
-  };
-
-  const handleStartFullTest = () => {
-    setTestType('full');
-    fetchQuestionsMutation.mutate({ type: 'full' });
-  };
-
-  const handleStartPremiumTest = () => {
-    setShowPremiumDialog(true);
-  };
-
-
-  const handleCustomTestStart = (chapterIds: string[]) => {
-    fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
-  };
-
-  const handleTestSubmit = (answers: Record<string, number | null>) => {
-    setTestAnswers(answers);
-    submitTestMutation.mutate(answers);
-  };
 
   const handleReset = () => {
     setTestMode('select');
@@ -421,13 +273,14 @@ const Test = () => {
     setTestAnswers({});
   };
 
-  const handleReview = () => {
-    setTestMode('review');
+  const handleTestSubmit = (answers: Record<string, number | null>) => {
+    setTestAnswers(answers);
+    submitTestMutation.mutate(answers);
   };
 
-  // Show loading animation for full syllabus test
-  if (testType === 'full' && fetchQuestionsMutation.isPending) {
-    return <LoadingQuestions totalQuestions={90} />;
+  // Loading states
+  if ((testType === 'full-bio' && fetchQuestionsMutation.isPending)) {
+    return <LoadingQuestions totalQuestions={180} />;
   }
 
   if (testMode === 'custom-config') {
@@ -435,8 +288,26 @@ const Test = () => {
       <MockTestConfig
         open={true}
         onClose={handleReset}
-        onStart={handleCustomTestStart}
+        onStart={(chapterIds) => {
+          setTestType('custom');
+          fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
+        }}
         loading={fetchQuestionsMutation.isPending}
+      />
+    );
+  }
+
+  if (testMode === 'bio-config') {
+    return (
+      <MockTestConfig
+        open={true}
+        onClose={handleReset}
+        onStart={(chapterIds) => {
+          setTestType('full-bio');
+          fetchBioMockMutation.mutate(chapterIds);
+        }}
+        loading={fetchBioMockMutation.isPending}
+        bioOnly={true}
       />
     );
   }
@@ -465,10 +336,17 @@ const Test = () => {
         unattemptedCount={results.unattemptedCount}
         subjectAnalytics={results.subjectAnalytics}
         onClose={handleReset}
-        onReview={handleReview}
+        onReview={() => setTestMode('review')}
+        questions={questions}
+        answers={testAnswers}
       />
     );
   }
+
+  const totalQuestions = questionCounts?.reduce((sum, q) => sum + q.count, 0) || 0;
+  const bioCount = questionCounts?.find(q => q.subject.toLowerCase() === 'biology')?.count || 0;
+  const phyCount = questionCounts?.find(q => q.subject.toLowerCase() === 'physics')?.count || 0;
+  const chemCount = questionCounts?.find(q => q.subject.toLowerCase() === 'chemistry')?.count || 0;
 
   return (
     <DashboardLayout>
@@ -476,31 +354,94 @@ const Test = () => {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-success/10 rounded-xl">
-              <GraduationCap className="h-7 w-7 text-success" />
+            <div className="p-2.5 bg-primary/10 rounded-xl">
+              <GraduationCap className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold">Biology Mock Test</h1>
-              <p className="text-muted-foreground">
-                90 questions from full Biology syllabus — NEET pattern
-              </p>
+              <h1 className="text-2xl lg:text-3xl font-bold">Mock Tests</h1>
+              <p className="text-muted-foreground">NEET pattern mock tests — Practice makes perfect</p>
             </div>
           </div>
 
-          {/* Biology Hero Banner */}
+          {/* Full NEET Mock (180Q) */}
+          <Card className="overflow-hidden border-0 shadow-lg">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Atom className="h-6 w-6" />
+                    Full NEET Mock Test
+                  </h2>
+                  <p className="text-white/90 text-lg font-semibold">
+                    45 Physics + 45 Chemistry + 90 Biology
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">3 Hours</span>
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">+4 / -1 Marking</span>
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">720 Marks</span>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-5xl font-black">180</p>
+                  <p className="text-sm text-white/80">Questions</p>
+                </div>
+              </div>
+            </div>
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-xl">
+                  <p className="text-xl font-bold text-foreground">45</p>
+                  <p className="text-xs text-muted-foreground">Physics</p>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-xl">
+                  <p className="text-xl font-bold text-foreground">45</p>
+                  <p className="text-xs text-muted-foreground">Chemistry</p>
+                </div>
+                <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-xl">
+                  <p className="text-xl font-bold text-foreground">90</p>
+                  <p className="text-xs text-muted-foreground">Biology</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Button
+                  className="h-12 text-base font-semibold"
+                  onClick={() => {
+                    setTestType('full-bio');
+                    fetchQuestionsMutation.mutate({ type: 'full-bio' });
+                  }}
+                  disabled={fetchQuestionsMutation.isPending}
+                >
+                  {fetchQuestionsMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading...</>
+                  ) : '🚀 Full Syllabus Mock'}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-12 text-base font-semibold"
+                  onClick={() => setTestMode('custom-config')}
+                >
+                  <ListChecks className="mr-2 h-5 w-5" />
+                  Select Chapters
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Biology Only Mock (90Q) */}
           <Card className="overflow-hidden border-0 shadow-lg">
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 text-white">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="space-y-2">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
-                    🧬 Full Syllabus Biology Test
+                    <Dna className="h-6 w-6" />
+                    Biology Mock Test
                   </h2>
                   <p className="text-white/90 text-lg font-semibold">
-                    90/90 questions will be from here
+                    90 questions — Full Biology syllabus
                   </p>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span className="px-3 py-1 bg-white/20 rounded-full text-sm">Botany + Zoology</span>
-                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm">NEET Weighted</span>
                     <span className="px-3 py-1 bg-white/20 rounded-full text-sm">+4 / -1 Marking</span>
                   </div>
                 </div>
@@ -510,174 +451,46 @@ const Test = () => {
                 </div>
               </div>
             </div>
-            <CardContent className="p-6 space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-3 bg-muted rounded-xl">
-                  <p className="text-xl font-bold text-foreground">90</p>
-                  <p className="text-xs text-muted-foreground">Total Questions</p>
-                </div>
-                <div className="p-3 bg-muted rounded-xl">
-                  <p className="text-xl font-bold text-foreground">60 min</p>
-                  <p className="text-xs text-muted-foreground">Time Limit</p>
-                </div>
-                <div className="p-3 bg-muted rounded-xl">
-                  <p className="text-xl font-bold text-foreground">360</p>
-                  <p className="text-xs text-muted-foreground">Max Marks</p>
-                </div>
-              </div>
-              <Button 
+            <CardContent className="p-6">
+              <Button
+                variant="outline"
                 className="w-full h-12 text-base font-semibold"
-                onClick={handleStartFullTest}
-                disabled={fetchQuestionsMutation.isPending}
+                onClick={() => setTestMode('bio-config')}
               >
-                {fetchQuestionsMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Loading Questions...
-                  </>
-                ) : (
-                  '🚀 Start Biology Mock Test'
-                )}
+                <Dna className="mr-2 h-5 w-5" />
+                Select Biology Chapters & Start
               </Button>
             </CardContent>
           </Card>
-          {/* Premium Test Card */}
-          <Card className="mt-6 border-2 border-yellow-500/30 bg-gradient-to-br from-yellow-50/50 to-orange-50/50 dark:from-yellow-900/10 dark:to-orange-900/10">
-            <CardHeader>
-              <div className="w-12 h-12 rounded-lg bg-yellow-500 flex items-center justify-center mb-4">
-                <Crown className="w-6 h-6 text-white" />
-              </div>
-              <CardTitle className="flex items-center gap-2">
-                Premium Test Series
-                <span className="px-2 py-1 text-xs bg-yellow-500 text-white rounded-full">Exclusive</span>
-              </CardTitle>
-              <CardDescription className="space-y-3">
-                <p className="font-semibold text-foreground">
-                  🎯 Based on <span className="text-yellow-600 dark:text-yellow-400 font-bold">Past 20 Years PYQs</span> + PW, Allen, Akash Test Questions
-                </p>
-                <p className="text-base font-bold text-primary">
-                  ✨ Use this and you will <span className="underline decoration-yellow-500 decoration-2">definitely be in a GMC next year!</span>
-                </p>
-                <div className="pt-2 border-t border-border">
-                  <p className="text-sm">Access exclusive test series with detailed planners</p>
-                  <p className="text-sm mt-2">
-                    💰 <span className="font-semibold text-green-600 dark:text-green-400">Only ₹399</span> | 
-                    Contact: <a href="https://t.me/akaxxh" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">@akaxxh</a> on Telegram
-                  </p>
-                </div>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {premiumContent?.hasAccess ? (
-                <div className="space-y-4">
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <p className="text-sm text-green-800 dark:text-green-200 font-medium">
-                      ✓ Premium Access Active
-                    </p>
-                  </div>
 
-                  {/* Premium Tests */}
-                  {premiumContent.tests.length > 0 && (
-                    <div className="space-y-3">
-                      <h3 className="font-semibold text-sm">Premium Test PDFs</h3>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {premiumContent.tests.map((test: any) => (
-                          <div key={test.id} className="p-3 bg-white dark:bg-gray-800 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex-1">
-                                <h4 className="font-semibold text-sm">{test.title}</h4>
-                                {test.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">{test.description}</p>
-                                )}
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {new Date(test.created_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-yellow-500 hover:bg-yellow-600 text-white shrink-0"
-                                onClick={() => window.open(test.file_url, "_blank")}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Download
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Study Planners */}
-                  {premiumContent.planners.length > 0 && (
-                    <div className="space-y-3">
-                      <h3 className="font-semibold text-sm">Study Planners</h3>
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                        {premiumContent.planners.map((planner: any) => (
-                          <div key={planner.id} className="p-3 bg-white dark:bg-gray-800 border border-border rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <h4 className="font-medium text-sm">{planner.title}</h4>
-                                <p className="text-xs text-muted-foreground">
-                                  {new Date(planner.created_at).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(planner.file_url, "_blank")}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Download
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {premiumContent.tests.length === 0 && premiumContent.planners.length === 0 && (
-                    <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
-                      No materials available yet. New tests coming soon!
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Button 
-                  onClick={handleStartPremiumTest}
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
-                >
-                  <Crown className="h-4 w-4 mr-2" />
-                  Enter Access Key
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Question Bank Stats - Biology Only */}
+          {/* Question Bank Stats */}
           {questionCounts && questionCounts.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Biology Question Bank</CardTitle>
+                <CardTitle>Question Bank</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center p-4 bg-muted rounded-lg">
-                  <div className="text-3xl font-bold text-primary">
-                    {questionCounts.find(q => q.subject.toLowerCase() === 'biology')?.count || 0}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{totalQuestions}</div>
+                    <div className="text-xs text-muted-foreground">Total</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Biology Questions Available</div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{phyCount}</div>
+                    <div className="text-xs text-muted-foreground">Physics</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{chemCount}</div>
+                    <div className="text-xs text-muted-foreground">Chemistry</div>
+                  </div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">{bioCount}</div>
+                    <div className="text-xs text-muted-foreground">Biology</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
-
-          <PremiumAccessDialog
-            open={showPremiumDialog}
-            onOpenChange={setShowPremiumDialog}
-            onAccessGranted={() => {}}
-          />
         </div>
       </div>
     </DashboardLayout>

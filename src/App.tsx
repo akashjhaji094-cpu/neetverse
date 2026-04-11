@@ -16,7 +16,6 @@ import Progress from "./pages/Progress";
 import Chat from "./pages/Chat";
 import Account from "./pages/Account";
 import Settings from "./pages/Settings";
-import Premium from "./pages/Premium";
 
 const queryClient = new QueryClient();
 
@@ -39,7 +38,6 @@ const App = () => (
             <Route path="/chat" element={<Chat />} />
             <Route path="/account" element={<Account />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/premium" element={<Premium />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
