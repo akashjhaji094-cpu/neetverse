@@ -9,6 +9,8 @@ import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { QuestionReview } from "@/components/practice/QuestionReview";
+import { AttemptModeSelector } from "@/components/mock/AttemptModeSelector";
+import { printQuestionPaper } from "@/components/mock/generateQuestionPaper";
 import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
