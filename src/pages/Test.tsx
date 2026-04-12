@@ -28,7 +28,7 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
-  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'testing' | 'results' | 'review'>('select');
+  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
