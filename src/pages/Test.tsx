@@ -157,7 +157,7 @@ const Test = () => {
     },
     onSuccess: (data) => {
       setQuestions(data);
-      setTestMode('testing');
+      setTestMode('choose-mode');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to fetch questions');
