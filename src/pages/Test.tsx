@@ -314,6 +314,49 @@ const Test = () => {
     );
   }
 
+  if (testMode === 'choose-mode' && questions.length > 0) {
+    const isBioOnly = testType === 'full-bio' && questions.length === 90;
+    const testLabel = isBioOnly ? 'Biology Mock Test' : 'Full NEET Mock Test';
+    const totalQ = questions.length;
+    const totalMarks = totalQ * 4;
+    const duration = isBioOnly ? '60 Minutes' : '3 Hours';
+
+    const handleOfflinePrint = async () => {
+      const { data: subjects } = await supabase.from('subjects').select('*');
+      const subjectMap = subjects?.reduce((acc, s) => { acc[s.id] = s.name; return acc; }, {} as Record<string, string>) || {};
+
+      let subjectGroups: { name: string; startIdx: number; endIdx: number }[];
+      if (isBioOnly) {
+        subjectGroups = [{ name: 'Biology', startIdx: 0, endIdx: 90 }];
+      } else {
+        subjectGroups = [
+          { name: 'Physics', startIdx: 0, endIdx: 45 },
+          { name: 'Chemistry', startIdx: 45, endIdx: 90 },
+          { name: 'Biology', startIdx: 90, endIdx: 180 },
+        ];
+      }
+
+      printQuestionPaper(questions, subjectMap, {
+        title: testLabel,
+        totalQuestions: totalQ,
+        totalMarks,
+        duration,
+        subjectGroups,
+      });
+      toast.success('Question paper opened for printing!');
+    };
+
+    return (
+      <AttemptModeSelector
+        totalQuestions={totalQ}
+        testLabel={testLabel}
+        onOnline={() => setTestMode('testing')}
+        onOffline={handleOfflinePrint}
+        onBack={handleReset}
+      />
+    );
+  }
+
   if (testMode === 'testing') {
     return <TestInterface questions={questions} onSubmit={handleTestSubmit} />;
   }
