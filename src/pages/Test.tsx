@@ -10,7 +10,7 @@ import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { AttemptModeSelector } from "@/components/mock/AttemptModeSelector";
-import { printQuestionPaper } from "@/components/mock/generateQuestionPaper";
+import { OfflinePaperPreview } from "@/components/mock/OfflinePaperPreview";
 import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
@@ -28,7 +28,7 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
-  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'testing' | 'results' | 'review'>('select');
+  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
