@@ -226,9 +226,9 @@ export const OfflinePaperPreview = ({
                             <img
                               key={ii}
                               src={src}
-                              crossOrigin="anonymous"
                               className="max-w-[90%] max-h-[180px] border border-gray-300 rounded"
                               alt={`Q${qNum} image`}
+                              loading="eager"
                             />
                           ))}
                         </div>
