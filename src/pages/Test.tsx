@@ -10,7 +10,7 @@ import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
 import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { AttemptModeSelector } from "@/components/mock/AttemptModeSelector";
-import { printQuestionPaper } from "@/components/mock/generateQuestionPaper";
+import { OfflinePaperPreview } from "@/components/mock/OfflinePaperPreview";
 import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
@@ -28,7 +28,7 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
-  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'testing' | 'results' | 'review'>('select');
+  const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
@@ -318,41 +318,45 @@ const Test = () => {
     const isBioOnly = testType === 'full-bio' && questions.length === 90;
     const testLabel = isBioOnly ? 'Biology Mock Test' : 'Full NEET Mock Test';
     const totalQ = questions.length;
-    const totalMarks = totalQ * 4;
-    const duration = isBioOnly ? '60 Minutes' : '3 Hours';
-
-    const handleOfflinePrint = async () => {
-      const { data: subjects } = await supabase.from('subjects').select('*');
-      const subjectMap = subjects?.reduce((acc, s) => { acc[s.id] = s.name; return acc; }, {} as Record<string, string>) || {};
-
-      let subjectGroups: { name: string; startIdx: number; endIdx: number }[];
-      if (isBioOnly) {
-        subjectGroups = [{ name: 'Biology', startIdx: 0, endIdx: 90 }];
-      } else {
-        subjectGroups = [
-          { name: 'Physics', startIdx: 0, endIdx: 45 },
-          { name: 'Chemistry', startIdx: 45, endIdx: 90 },
-          { name: 'Biology', startIdx: 90, endIdx: 180 },
-        ];
-      }
-
-      printQuestionPaper(questions, subjectMap, {
-        title: testLabel,
-        totalQuestions: totalQ,
-        totalMarks,
-        duration,
-        subjectGroups,
-      });
-      toast.success('Question paper opened for printing!');
-    };
 
     return (
       <AttemptModeSelector
         totalQuestions={totalQ}
         testLabel={testLabel}
         onOnline={() => setTestMode('testing')}
-        onOffline={handleOfflinePrint}
+        onOffline={() => setTestMode('offline-preview')}
         onBack={handleReset}
+      />
+    );
+  }
+
+  if (testMode === 'offline-preview' && questions.length > 0) {
+    const isBioOnly = testType === 'full-bio' && questions.length === 90;
+    const testLabel = isBioOnly ? 'Biology Mock Test' : 'Full NEET Mock Test';
+    const totalQ = questions.length;
+    const totalMarks = totalQ * 4;
+    const dur = isBioOnly ? '60 Minutes' : '3 Hours';
+
+    let subjectGroups: { name: string; startIdx: number; endIdx: number }[];
+    if (isBioOnly) {
+      subjectGroups = [{ name: 'Biology', startIdx: 0, endIdx: 90 }];
+    } else {
+      subjectGroups = [
+        { name: 'Physics', startIdx: 0, endIdx: 45 },
+        { name: 'Chemistry', startIdx: 45, endIdx: 90 },
+        { name: 'Biology', startIdx: 90, endIdx: 180 },
+      ];
+    }
+
+    return (
+      <OfflinePaperPreview
+        questions={questions}
+        title={testLabel}
+        totalQuestions={totalQ}
+        totalMarks={totalMarks}
+        duration={dur}
+        subjectGroups={subjectGroups}
+        onBack={() => setTestMode('choose-mode')}
       />
     );
   }
