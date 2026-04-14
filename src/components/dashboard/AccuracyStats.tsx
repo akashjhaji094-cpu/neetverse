@@ -44,14 +44,13 @@ export function AccuracyStats() {
       }
 
       // Collect all question IDs to fetch their subjects
-      const allQuestionIds: string[] = [];
+      const questionIdSet = new Set<string>();
       attempts.forEach(a => {
         a.attempt_answers?.forEach(ans => {
-          if (ans.question_id && !allQuestionIds.includes(ans.question_id)) {
-            allQuestionIds.push(ans.question_id);
-          }
+          if (ans.question_id) questionIdSet.add(ans.question_id);
         });
       });
+      const allQuestionIds = Array.from(questionIdSet);
 
       // Fetch questions in batches to get subject_id
       const questionSubjectMap = new Map<string, string>();
