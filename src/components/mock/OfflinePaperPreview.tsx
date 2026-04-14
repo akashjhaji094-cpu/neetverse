@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2, Download } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, Download, Camera } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 
@@ -31,16 +31,18 @@ export const OfflinePaperPreview = ({
 }: OfflinePaperPreviewProps) => {
   const [ready, setReady] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanResult, setScanResult] = useState<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const labels = ["A", "B", "C", "D"];
 
-  // Load MathJax and typeset
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
-      // Load MathJax
       const MJ = (window as any).MathJax;
       if (!MJ) {
         setLoadingStatus("Loading MathJax engine...");
@@ -66,32 +68,23 @@ export const OfflinePaperPreview = ({
 
       if (cancelled) return;
       setLoadingStatus("Rendering formulas...");
-
-      // Wait a tick for DOM to paint
       await new Promise((r) => setTimeout(r, 300));
 
-      // Typeset
       const mj = (window as any).MathJax;
       if (mj?.typesetPromise && containerRef.current) {
-        try {
-          await mj.typesetPromise([containerRef.current]);
-        } catch {}
+        try { await mj.typesetPromise([containerRef.current]); } catch {}
       }
 
       if (cancelled) return;
       setLoadingStatus("Loading images...");
 
-      // Wait for all images
       const imgs = containerRef.current?.querySelectorAll("img") || [];
       await Promise.all(
         Array.from(imgs).map(
           (img) =>
             new Promise<void>((resolve) => {
               if (img.complete) resolve();
-              else {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }
+              else { img.onload = () => resolve(); img.onerror = () => resolve(); }
             })
         )
       );
@@ -104,17 +97,316 @@ export const OfflinePaperPreview = ({
     return () => { cancelled = true; };
   }, []);
 
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
+  const handlePrint = useCallback(() => { window.print(); }, []);
 
-  // Generate OMR columns
+  // OMR Scanner Logic
+  const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Process OMR - detect filled bubbles
+        const detectedAnswers = processOMR(imageData, canvas.width, canvas.height, totalQuestions);
+        
+        // Generate report
+        const report = generateReport(detectedAnswers, questions, subjectGroups);
+        setScanResult(report);
+        setShowScanner(true);
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, [questions, totalQuestions, subjectGroups]);
+
+  // OMR Processing - detect dark bubbles in grid positions
+  const processOMR = (imageData: ImageData, w: number, h: number, totalQ: number): (number | null)[] => {
+    const data = imageData.data;
+    const answers: (number | null)[] = [];
+
+    // OMR grid parameters - estimate positions based on A4 proportions
+    const cols = totalQ <= 90 ? 6 : 9;
+    const perCol = Math.ceil(totalQ / cols);
+    
+    // OMR area roughly in lower 70% of page, after header
+    const omrTop = h * 0.15;
+    const omrBottom = h * 0.92;
+    const omrLeft = w * 0.03;
+    const omrRight = w * 0.97;
+    
+    const colWidth = (omrRight - omrLeft) / cols;
+    const rowHeight = (omrBottom - omrTop) / perCol;
+
+    for (let q = 0; q < totalQ; q++) {
+      const col = Math.floor(q / perCol);
+      const row = q % perCol;
+      
+      const cellLeft = omrLeft + col * colWidth;
+      const cellTop = omrTop + row * rowHeight;
+      
+      // Each cell has 5 columns: Q, A, B, C, D
+      const bubbleWidth = colWidth / 5;
+      
+      let darkest = -1;
+      let darkestValue = 255;
+
+      for (let opt = 0; opt < 4; opt++) {
+        const bx = cellLeft + (opt + 1) * bubbleWidth + bubbleWidth * 0.2;
+        const by = cellTop + rowHeight * 0.2;
+        const bw = bubbleWidth * 0.6;
+        const bh = rowHeight * 0.6;
+
+        // Sample darkness in bubble region
+        let totalDarkness = 0;
+        let pixelCount = 0;
+
+        for (let y = Math.floor(by); y < Math.min(Math.floor(by + bh), h); y++) {
+          for (let x = Math.floor(bx); x < Math.min(Math.floor(bx + bw), w); x++) {
+            const idx = (y * w + x) * 4;
+            const gray = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
+            totalDarkness += gray;
+            pixelCount++;
+          }
+        }
+
+        const avgBrightness = pixelCount > 0 ? totalDarkness / pixelCount : 255;
+        if (avgBrightness < darkestValue && avgBrightness < 160) {
+          darkestValue = avgBrightness;
+          darkest = opt;
+        }
+      }
+
+      answers.push(darkest >= 0 ? darkest : null);
+    }
+
+    return answers;
+  };
+
+  // Generate detailed report
+  const generateReport = (
+    detected: (number | null)[],
+    qs: Question[],
+    groups: SubjectGroup[]
+  ) => {
+    let totalCorrect = 0;
+    let totalWrong = 0;
+    let totalSkipped = 0;
+
+    const subjectReports = groups.map((group) => {
+      let correct = 0, wrong = 0, skipped = 0;
+      const questionDetails: any[] = [];
+
+      for (let i = group.startIdx; i < group.endIdx && i < qs.length; i++) {
+        const q = qs[i];
+        const userAns = detected[i];
+        const correctAns = q.correct_option_index;
+
+        if (userAns === null) {
+          skipped++;
+          totalSkipped++;
+          questionDetails.push({ qNum: i + 1, status: 'skipped', userAns: null, correctAns });
+        } else if (userAns === correctAns) {
+          correct++;
+          totalCorrect++;
+          questionDetails.push({ qNum: i + 1, status: 'correct', userAns, correctAns });
+        } else {
+          wrong++;
+          totalWrong++;
+          questionDetails.push({ qNum: i + 1, status: 'wrong', userAns, correctAns });
+        }
+      }
+
+      const score = correct * 4 - wrong * 1;
+      const maxScore = (group.endIdx - group.startIdx) * 4;
+
+      return {
+        name: group.name,
+        correct,
+        wrong,
+        skipped,
+        score,
+        maxScore,
+        percentage: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
+        questionDetails,
+      };
+    });
+
+    const totalScore = totalCorrect * 4 - totalWrong * 1;
+    const maxScore = totalQuestions * 4;
+
+    return {
+      totalScore,
+      maxScore,
+      totalCorrect,
+      totalWrong,
+      totalSkipped,
+      percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
+      subjects: subjectReports,
+    };
+  };
+
+  // OMR columns
   const omrCols = totalQuestions <= 90 ? 6 : 9;
   const omrPerCol = Math.ceil(totalQuestions / omrCols);
 
+  // Scan Result View
+  if (showScanner && scanResult) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-50 bg-white border-b shadow-sm">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <Button variant="ghost" onClick={() => { setShowScanner(false); setScanResult(null); }} size="sm">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Paper
+            </Button>
+            <Button onClick={() => window.print()} size="sm" className="gap-2">
+              <Printer className="h-4 w-4" /> Print Report
+            </Button>
+          </div>
+        </div>
+
+        <div className="max-w-4xl mx-auto p-6 space-y-6">
+          {/* Score Card */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="p-6 text-center" style={{ background: "linear-gradient(135deg, #1a1a6e, #3b82f6)" }}>
+              <img src={neetverseLogo} alt="NEETVerse" className="w-14 h-14 rounded-xl mx-auto mb-2" />
+              <h1 className="text-2xl font-black text-white tracking-wider">NEETVerse</h1>
+              <p className="text-white/80 text-sm">OMR Scan Report — {title}</p>
+              <div className="mt-4 bg-white/20 backdrop-blur rounded-xl p-4 inline-block">
+                <p className="text-5xl font-black text-white">{scanResult.totalScore}</p>
+                <p className="text-white/80 text-sm">out of {scanResult.maxScore}</p>
+              </div>
+            </div>
+
+            {/* Overall Stats */}
+            <div className="grid grid-cols-4 divide-x border-b">
+              <div className="p-4 text-center">
+                <p className="text-2xl font-bold text-green-600">{scanResult.totalCorrect}</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Correct</p>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-2xl font-bold text-red-600">{scanResult.totalWrong}</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Wrong</p>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-2xl font-bold text-gray-500">{scanResult.totalSkipped}</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Skipped</p>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-2xl font-bold text-blue-600">{scanResult.percentage}%</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">Accuracy</p>
+              </div>
+            </div>
+
+            {/* Subject-wise breakdown */}
+            <div className="p-6 space-y-4">
+              <h3 className="font-bold text-lg">Subject-wise Analysis</h3>
+              {scanResult.subjects.map((sub: any) => (
+                <div key={sub.name} className="border rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-bold text-base">{sub.name}</h4>
+                    <span className="font-bold text-lg" style={{ color: "#1a1a6e" }}>
+                      {sub.score}/{sub.maxScore}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-center text-sm">
+                    <div className="bg-green-50 rounded-lg p-2">
+                      <p className="font-bold text-green-600">{sub.correct}</p>
+                      <p className="text-[10px] text-green-700">Correct</p>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-2">
+                      <p className="font-bold text-red-600">{sub.wrong}</p>
+                      <p className="text-[10px] text-red-700">Wrong</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="font-bold text-gray-600">{sub.skipped}</p>
+                      <p className="text-[10px] text-gray-700">Skipped</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <p className="font-bold text-blue-600">{sub.percentage}%</p>
+                      <p className="text-[10px] text-blue-700">Score %</p>
+                    </div>
+                  </div>
+
+                  {/* Strength/Weakness */}
+                  <div className="mt-3 text-sm">
+                    {sub.percentage >= 70 && (
+                      <p className="text-green-600 font-semibold">✅ Strong — Keep it up!</p>
+                    )}
+                    {sub.percentage >= 40 && sub.percentage < 70 && (
+                      <p className="text-yellow-600 font-semibold">⚠️ Average — Needs more practice</p>
+                    )}
+                    {sub.percentage < 40 && (
+                      <p className="text-red-600 font-semibold">❌ Weak — Focus on this subject</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Question-wise details */}
+            <div className="p-6 border-t">
+              <h3 className="font-bold text-lg mb-4">Question-wise Details</h3>
+              {scanResult.subjects.map((sub: any) => (
+                <div key={sub.name} className="mb-4">
+                  <h4 className="font-bold text-sm uppercase text-gray-500 mb-2">{sub.name}</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sub.questionDetails.map((qd: any) => (
+                      <div
+                        key={qd.qNum}
+                        className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold border ${
+                          qd.status === 'correct'
+                            ? 'bg-green-100 text-green-700 border-green-300'
+                            : qd.status === 'wrong'
+                            ? 'bg-red-100 text-red-700 border-red-300'
+                            : 'bg-gray-100 text-gray-500 border-gray-300'
+                        }`}
+                        title={`Q${qd.qNum}: ${qd.status === 'skipped' ? 'Skipped' : `Your: ${labels[qd.userAns]}, Correct: ${labels[qd.correctAns]}`}`}
+                      >
+                        {qd.qNum}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-4 mt-3 text-xs">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-300" /> Correct</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300" /> Wrong</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-300" /> Skipped</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Fixed toolbar - hidden on print */}
+      {/* Hidden canvas for OMR processing */}
+      <canvas ref={canvasRef} className="hidden" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleOMRScan}
+      />
+
+      {/* Fixed toolbar */}
       <div className="print:hidden sticky top-0 z-50 bg-white border-b shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <Button variant="ghost" onClick={onBack} size="sm">
@@ -127,6 +419,16 @@ export const OfflinePaperPreview = ({
                 {loadingStatus}
               </span>
             )}
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!ready}
+              size="sm"
+              className="gap-2"
+            >
+              <Camera className="h-4 w-4" />
+              Scan OMR
+            </Button>
             <Button onClick={handlePrint} disabled={!ready} className="gap-2">
               {ready ? (
                 <>
@@ -150,132 +452,206 @@ export const OfflinePaperPreview = ({
         className="max-w-[210mm] mx-auto bg-white shadow-xl my-4 print:my-0 print:shadow-none"
         style={{ fontFamily: "'Times New Roman', Georgia, serif" }}
       >
-        {/* ===== HEADER ===== */}
-        <div className="px-[12mm] pt-[12mm]">
-          <div className="text-center border-b-4 border-double border-black pb-3 mb-4">
-            <div className="flex items-center justify-center gap-3 mb-1">
-              <img src={neetverseLogo} alt="NEETVerse" className="w-12 h-12 rounded-lg print:w-10 print:h-10" />
+        {/* ===== PREMIUM HEADER ===== */}
+        <div className="px-[12mm] pt-[10mm]">
+          {/* Top decorative line */}
+          <div className="h-1 w-full mb-2" style={{ background: "linear-gradient(90deg, #1a1a6e, #3b82f6, #1a1a6e)" }} />
+          
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <img src={neetverseLogo} alt="NEETVerse" className="w-14 h-14 rounded-xl print:w-12 print:h-12 shadow-md" />
               <div>
-                <h1 className="text-3xl font-black tracking-widest" style={{ color: "#1a1a6e" }}>
-                  NEETVerse
+                <h1 className="text-3xl font-black tracking-[6px] leading-none" style={{ color: "#1a1a6e" }}>
+                  NEETVERSE
                 </h1>
-                <p className="text-[9pt] text-gray-500 -mt-1">Your Universe of NEET Preparation</p>
+                <p className="text-[8pt] tracking-[3px] uppercase font-semibold mt-0.5" style={{ color: "#3b82f6" }}>
+                  Infinity Practice • Your Universe of NEET Preparation
+                </p>
               </div>
             </div>
-            <h2 className="text-lg font-bold uppercase tracking-wide mt-2">{title}</h2>
-            <div className="flex justify-between text-[10pt] mt-2 pt-2 border-t border-gray-300 font-semibold">
-              <span>Total Questions: {totalQuestions}</span>
-              <span>Maximum Marks: {totalMarks}</span>
-              <span>Duration: {duration}</span>
+            <div className="text-right">
+              <p className="text-[8pt] text-gray-500">neetverse.lovable.app</p>
+              <p className="text-[8pt] text-gray-400">Question Paper</p>
+            </div>
+          </div>
+
+          {/* Title bar */}
+          <div className="text-center py-2 my-2 rounded-lg" style={{ background: "#1a1a6e" }}>
+            <h2 className="text-white text-lg font-black uppercase tracking-[4px]">{title}</h2>
+          </div>
+
+          {/* Info strip */}
+          <div className="grid grid-cols-3 gap-2 text-center text-[9pt] font-bold mb-3">
+            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
+              Total Questions: {totalQuestions}
+            </div>
+            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
+              Maximum Marks: {totalMarks}
+            </div>
+            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
+              Duration: {duration}
             </div>
           </div>
 
           {/* Student info */}
-          <div className="flex gap-4 mb-3 text-[10pt]">
-            <div className="flex-1 border-b border-black pb-1">
-              <span className="font-bold">Name:</span> ___________________________
+          <div className="grid grid-cols-3 gap-3 mb-3 text-[10pt]">
+            <div className="border-b-2 border-gray-400 pb-1">
+              <span className="font-bold">Student Name:</span>
             </div>
-            <div className="border-b border-black pb-1">
-              <span className="font-bold">Date:</span> _______________
+            <div className="border-b-2 border-gray-400 pb-1">
+              <span className="font-bold">Date:</span>
             </div>
-            <div className="border-b border-black pb-1">
-              <span className="font-bold">Roll No:</span> ___________
+            <div className="border-b-2 border-gray-400 pb-1">
+              <span className="font-bold">Roll No:</span>
             </div>
           </div>
 
           {/* Instructions */}
-          <div className="border border-black p-3 mb-4 bg-gray-50 text-[9.5pt]" style={{ pageBreakInside: "avoid" }}>
-            <h4 className="text-[10pt] font-bold underline mb-1">General Instructions</h4>
-            <ul className="list-disc pl-5 space-y-0.5">
-              <li>This question paper contains <strong>{totalQuestions}</strong> questions.</li>
-              <li>Each question carries <strong>4 marks</strong>. For each wrong answer, <strong>1 mark</strong> will be deducted.</li>
-              <li>No marks will be deducted for unattempted questions.</li>
-              <li>Use the OMR sheet at the end to mark your answers.</li>
-              <li>Use of calculator is <strong>NOT</strong> permitted.</li>
-              <li>Duration of the test is <strong>{duration}</strong>.</li>
-            </ul>
+          <div className="border-2 rounded-lg p-3 mb-3 text-[9pt]" style={{ borderColor: "#1a1a6e", background: "#f8f9ff" }}>
+            <h4 className="text-[10pt] font-black uppercase tracking-wider mb-1" style={{ color: "#1a1a6e" }}>
+              📋 General Instructions
+            </h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+              <p>• This paper contains <b>{totalQuestions}</b> questions.</p>
+              <p>• Each correct answer: <b>+4 marks</b></p>
+              <p>• Each wrong answer: <b>−1 mark</b></p>
+              <p>• Unattempted: <b>0 marks</b></p>
+              <p>• Use OMR sheet at the end to mark answers.</p>
+              <p>• Duration: <b>{duration}</b></p>
+            </div>
           </div>
+
+          {/* Decorative line */}
+          <div className="h-0.5 w-full" style={{ background: "linear-gradient(90deg, transparent, #1a1a6e, transparent)" }} />
         </div>
 
-        {/* ===== QUESTIONS ===== */}
-        <div className="px-[12mm]">
+        {/* ===== QUESTIONS - Two Column Layout ===== */}
+        <div className="px-[10mm] pt-2">
           {subjectGroups.map((group) => {
             const sectionQs = questions.slice(group.startIdx, group.endIdx);
             return (
               <div key={group.name} className="mb-2">
+                {/* Subject header */}
                 <div
-                  className="text-center font-bold text-[12pt] uppercase tracking-wide py-1.5 my-3 border-t-2 border-b border-black bg-gray-100"
-                  style={{ pageBreakAfter: "avoid" }}
+                  className="text-center font-black text-[11pt] uppercase tracking-[3px] py-2 my-2 rounded"
+                  style={{
+                    background: "#1a1a6e",
+                    color: "white",
+                    pageBreakAfter: "avoid",
+                  }}
                 >
-                  {group.name} (Q.{group.startIdx + 1} – Q.{group.endIdx})
+                  SECTION — {group.name} &nbsp;&nbsp;(Q.{group.startIdx + 1} – Q.{group.endIdx})
                 </div>
-                {sectionQs.map((q, i) => {
-                  const qNum = group.startIdx + i + 1;
-                  const options = (q.options as string[]) || [];
-                  const images = (q.images as string[]) || [];
-                  const content = q.raw_html || q.question_text;
-                  return (
-                    <div key={q.id} className="mb-3" style={{ pageBreakInside: "avoid" }}>
-                      <div className="mb-1">
-                        <span className="font-bold mr-1">Q.{qNum}</span>
-                        <span dangerouslySetInnerHTML={{ __html: content }} />
-                      </div>
-                      {images.length > 0 && (
-                        <div className="ml-7 my-1">
-                          {images.map((src, ii) => (
-                            <img
-                              key={ii}
-                              src={src}
-                              className="max-w-[90%] max-h-[180px] border border-gray-300 rounded"
-                              alt={`Q${qNum} image`}
-                              loading="eager"
-                            />
+
+                {/* Two-column question grid */}
+                <div
+                  className="gap-x-[6mm]"
+                  style={{
+                    columnCount: 2,
+                    columnGap: "6mm",
+                    columnRule: "1px solid #d1d5db",
+                  }}
+                >
+                  {sectionQs.map((q, i) => {
+                    const qNum = group.startIdx + i + 1;
+                    const options = (q.options as string[]) || [];
+                    const images = (q.images as string[]) || [];
+                    const content = q.raw_html || q.question_text;
+                    return (
+                      <div
+                        key={q.id}
+                        className="mb-2 pb-2 border-b border-gray-200"
+                        style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+                      >
+                        <div className="mb-0.5 text-[9.5pt] leading-snug">
+                          <span className="font-black mr-1" style={{ color: "#1a1a6e" }}>Q.{qNum}.</span>
+                          <span dangerouslySetInnerHTML={{ __html: content }} />
+                        </div>
+                        {images.length > 0 && (
+                          <div className="my-1">
+                            {images.map((src, ii) => (
+                              <img
+                                key={ii}
+                                src={src}
+                                className="max-w-full max-h-[140px] border border-gray-300 rounded"
+                                alt={`Q${qNum} image`}
+                                loading="eager"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0 text-[9pt]">
+                          {options.map((opt, oi) => (
+                            <div key={oi} className="flex gap-1 items-baseline leading-tight py-0.5">
+                              <span className="font-bold min-w-[18px]">({labels[oi]})</span>
+                              <span dangerouslySetInnerHTML={{ __html: opt }} />
+                            </div>
                           ))}
                         </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-x-5 gap-y-0.5 ml-7 mt-1">
-                        {options.map((opt, oi) => (
-                          <div key={oi} className="flex gap-1 items-baseline">
-                            <span className="font-bold min-w-[22px]">({labels[oi]})</span>
-                            <span dangerouslySetInnerHTML={{ __html: opt }} />
-                          </div>
-                        ))}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* ===== OMR SHEET ===== */}
-        <div className="px-[10mm] pt-[10mm]" style={{ pageBreakBefore: "always" }}>
-          <div className="text-center pb-2 mb-2 border-b-[3px] border-red-600">
+        {/* Page footer on question pages */}
+        <div className="px-[10mm] py-2 text-center text-[7pt] text-gray-400 border-t border-gray-200 mx-[10mm]">
+          <div className="flex justify-between">
+            <span>NEETVerse — Infinity Practice</span>
+            <span>neetverse.lovable.app</span>
+          </div>
+        </div>
+
+        {/* ===== OMR SHEET with Alignment Markers ===== */}
+        <div className="px-[8mm] pt-[8mm] relative" style={{ pageBreakBefore: "always" }}>
+          {/* Corner alignment markers */}
+          <div className="absolute top-[5mm] left-[5mm] w-[10mm] h-[10mm]">
+            <div className="w-full h-full border-t-[3px] border-l-[3px] border-black" />
+            <div className="absolute top-[1mm] left-[1mm] w-[4mm] h-[4mm] bg-black" />
+          </div>
+          <div className="absolute top-[5mm] right-[5mm] w-[10mm] h-[10mm]">
+            <div className="w-full h-full border-t-[3px] border-r-[3px] border-black" />
+            <div className="absolute top-[1mm] right-[1mm] w-[4mm] h-[4mm] bg-black" />
+          </div>
+          <div className="absolute bottom-[5mm] left-[5mm] w-[10mm] h-[10mm]">
+            <div className="w-full h-full border-b-[3px] border-l-[3px] border-black" />
+            <div className="absolute bottom-[1mm] left-[1mm] w-[4mm] h-[4mm] bg-black" />
+          </div>
+          <div className="absolute bottom-[5mm] right-[5mm] w-[10mm] h-[10mm]">
+            <div className="w-full h-full border-b-[3px] border-r-[3px] border-black" />
+            <div className="absolute bottom-[1mm] right-[1mm] w-[4mm] h-[4mm] bg-black" />
+          </div>
+
+          {/* OMR Header */}
+          <div className="text-center pb-2 mb-2 border-b-[3px] border-red-600 mx-[6mm]">
             <div className="flex items-center justify-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
               <div>
-                <h2 className="text-2xl font-black tracking-[4px] text-red-600">NEETVerse</h2>
-                <p className="text-sm font-bold text-red-600">OMR Answer Sheet</p>
+                <h2 className="text-2xl font-black tracking-[4px] text-red-600">NEETVERSE</h2>
+                <p className="text-[9pt] font-black text-red-600 tracking-[2px] uppercase">OMR Answer Sheet</p>
               </div>
             </div>
-            <div className="flex justify-between text-[9pt] mt-2 pt-1 border-t border-red-300">
-              <span>Name: _______________________________</span>
-              <span>Date: _______________</span>
-              <span>Roll No: ___________</span>
+            <div className="grid grid-cols-3 gap-2 text-[8pt] mt-2 pt-1 border-t border-red-200">
+              <span className="text-left">Name: ________________________________</span>
+              <span className="text-center">Date: ________________</span>
+              <span className="text-right">Roll No: _____________</span>
             </div>
           </div>
 
-          {/* Subject markers for full mock */}
+          {/* Subject markers */}
           {totalQuestions === 180 && (
-            <div className="flex justify-center gap-6 text-[8pt] font-bold text-red-600 mb-2">
-              <span>Physics: Q.1–45</span>
-              <span>Chemistry: Q.46–90</span>
-              <span>Biology: Q.91–180</span>
+            <div className="flex justify-center gap-6 text-[7.5pt] font-black text-red-600 mb-1 mx-[6mm]">
+              <span>⚛ Physics: Q.1–45</span>
+              <span>🧪 Chemistry: Q.46–90</span>
+              <span>🧬 Biology: Q.91–180</span>
             </div>
           )}
 
-          <div className="flex gap-[3px] flex-nowrap">
+          {/* OMR Grid */}
+          <div className="flex gap-[2px] flex-nowrap mx-[6mm]">
             {Array.from({ length: omrCols }).map((_, c) => {
               const start = c * omrPerCol;
               const end = Math.min(start + omrPerCol, totalQuestions);
@@ -287,7 +663,7 @@ export const OfflinePaperPreview = ({
                         {["Q", "A", "B", "C", "D"].map((h) => (
                           <th
                             key={h}
-                            className="bg-red-600 text-white px-[2px] py-[2px] text-[6.5pt] border border-red-600"
+                            className="bg-red-600 text-white px-[1px] py-[2px] text-[6pt] border border-red-600 font-black"
                           >
                             {h}
                           </th>
@@ -296,16 +672,16 @@ export const OfflinePaperPreview = ({
                     </thead>
                     <tbody>
                       {Array.from({ length: end - start }).map((_, i) => (
-                        <tr key={i}>
-                          <td className="border border-gray-300 px-[2px] py-[1px] text-center font-bold text-[7pt] w-[18px]">
+                        <tr key={i} className={i % 5 === 4 ? "border-b-2 border-red-200" : ""}>
+                          <td className="border border-gray-300 px-[1px] py-[0.5px] text-center font-black text-[6.5pt] w-[16px]" style={{ color: "#1a1a6e" }}>
                             {start + i + 1}
                           </td>
                           {[0, 1, 2, 3].map((b) => (
                             <td
                               key={b}
-                              className="border border-gray-300 px-[2px] py-[1px] text-center text-[8pt] text-gray-400 w-[16px]"
+                              className="border border-gray-300 px-[1px] py-[0.5px] text-center text-[7pt] w-[14px]"
                             >
-                              ◯
+                              <span className="text-gray-400">◯</span>
                             </td>
                           ))}
                         </tr>
@@ -317,10 +693,16 @@ export const OfflinePaperPreview = ({
             })}
           </div>
 
-          <div className="flex justify-between text-[7pt] text-red-600 font-bold mt-2 pt-1 border-t-2 border-red-600">
-            <span>Total Questions: {totalQuestions}</span>
-            <span>Fill the correct bubble completely ●</span>
-            <span>NEETVerse — neetverse.lovable.app</span>
+          {/* OMR Footer */}
+          <div className="mx-[6mm] mt-2 pt-1 border-t-2 border-red-600">
+            <div className="flex justify-between text-[7pt] text-red-600 font-bold">
+              <span>Total Questions: {totalQuestions}</span>
+              <span>Fill ● completely • No overwriting</span>
+              <span>NEETVerse — neetverse.lovable.app</span>
+            </div>
+            <p className="text-center text-[6.5pt] text-gray-400 mt-1">
+              📱 Scan this filled OMR using NEETVerse app to get instant results
+            </p>
           </div>
         </div>
 
@@ -331,7 +713,7 @@ export const OfflinePaperPreview = ({
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
               <div>
                 <h2 className="text-2xl font-black tracking-[4px]" style={{ color: "#1a1a6e" }}>
-                  NEETVerse
+                  NEETVERSE
                 </h2>
                 <p className="text-sm font-bold" style={{ color: "#1a1a6e" }}>
                   Answer Key — {title}
@@ -349,38 +731,18 @@ export const OfflinePaperPreview = ({
                   <table className="w-full border-collapse text-[8pt]">
                     <thead>
                       <tr>
-                        <th
-                          className="text-white px-1 py-[2px] text-[7pt] border"
-                          style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}
-                        >
-                          Q
-                        </th>
-                        <th
-                          className="text-white px-1 py-[2px] text-[7pt] border"
-                          style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}
-                        >
-                          Ans
-                        </th>
+                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}>Q</th>
+                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}>Ans</th>
                       </tr>
                     </thead>
                     <tbody>
                       {Array.from({ length: end - start }).map((_, i) => {
                         const q = questions[start + i];
-                        const ans =
-                          q?.correct_option_index != null
-                            ? labels[q.correct_option_index]
-                            : "—";
+                        const ans = q?.correct_option_index != null ? labels[q.correct_option_index] : "—";
                         return (
                           <tr key={i}>
-                            <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[7.5pt]">
-                              {start + i + 1}
-                            </td>
-                            <td
-                              className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[8pt]"
-                              style={{ color: "#1a1a6e" }}
-                            >
-                              {ans}
-                            </td>
+                            <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[7.5pt]">{start + i + 1}</td>
+                            <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[8pt]" style={{ color: "#1a1a6e" }}>{ans}</td>
                           </tr>
                         );
                       })}
@@ -397,9 +759,13 @@ export const OfflinePaperPreview = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-[8pt] text-gray-400 py-4 border-t border-gray-200 mx-[10mm] mt-4">
-          Generated by NEETVerse — neetverse.lovable.app — All the best! 🎯
+        {/* Final Footer */}
+        <div className="mx-[10mm] mt-4 pt-2 pb-4 border-t">
+          <div className="h-0.5 w-full mb-2" style={{ background: "linear-gradient(90deg, #1a1a6e, #3b82f6, #1a1a6e)" }} />
+          <div className="text-center text-[8pt] text-gray-400">
+            <p className="font-semibold">Generated by NEETVerse — Infinity Practice</p>
+            <p>neetverse.lovable.app — All the best! 🎯</p>
+          </div>
         </div>
       </div>
     </div>
