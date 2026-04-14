@@ -12,31 +12,73 @@ export function PerformanceOverview() {
     queryFn: async () => {
       if (!user) return null;
 
+      // Get subjects
+      const { data: subjects } = await supabase.from('subjects').select('id, name');
+      const subjectMap = new Map(subjects?.map(s => [s.id, s.name]) || []);
+
       const { data: attempts } = await supabase
         .from('attempts')
         .select(`
           id,
           attempt_answers (
             is_correct,
-            chosen_option_index
+            chosen_option_index,
+            question_id
           )
         `)
         .eq('user_id', user.id);
 
       if (!attempts) return { correct: 0, incorrect: 0, skipped: 0, total: 0 };
 
+      // Collect question IDs for subject lookup
+      const allQuestionIds: string[] = [];
+      attempts.forEach(a => {
+        a.attempt_answers?.forEach(ans => {
+          if (ans.question_id && !allQuestionIds.includes(ans.question_id)) {
+            allQuestionIds.push(ans.question_id);
+          }
+        });
+      });
+
+      const questionSubjectMap = new Map<string, string>();
+      const batchSize = 500;
+      for (let i = 0; i < allQuestionIds.length; i += batchSize) {
+        const batch = allQuestionIds.slice(i, i + batchSize);
+        const { data: questions } = await supabase
+          .from('questions')
+          .select('id, subject_id')
+          .in('id', batch);
+        questions?.forEach(q => questionSubjectMap.set(q.id, q.subject_id));
+      }
+
       let correct = 0;
       let incorrect = 0;
       let skipped = 0;
 
+      // Per-subject breakdown
+      const subjectData = new Map<string, { correct: number; incorrect: number; skipped: number }>();
+
       attempts.forEach(attempt => {
         attempt.attempt_answers?.forEach(answer => {
-          if (answer.chosen_option_index === null || answer.chosen_option_index === undefined) {
-            skipped++;
-          } else if (answer.is_correct) {
-            correct++;
-          } else {
-            incorrect++;
+          const subjectId = questionSubjectMap.get(answer.question_id);
+          const subjectName = subjectId ? subjectMap.get(subjectId) : 'Unknown';
+          
+          if (subjectName) {
+            if (!subjectData.has(subjectName)) {
+              subjectData.set(subjectName, { correct: 0, incorrect: 0, skipped: 0 });
+            }
+            const sd = subjectData.get(subjectName)!;
+
+            if (answer.chosen_option_index === null || answer.chosen_option_index === undefined) {
+              skipped++;
+              sd.skipped++;
+            } else if (answer.is_correct) {
+              correct++;
+              sd.correct++;
+            } else {
+              incorrect++;
+              sd.incorrect++;
+            }
           }
         });
       });
@@ -86,7 +128,6 @@ export function PerformanceOverview() {
                 strokeDasharray={`${accuracy * 3.267} 326.7`}
                 strokeLinecap="round"
               />
-              {/* Red segment for incorrect */}
               {stats && stats.incorrect > 0 && (
                 <circle
                   cx="64"
