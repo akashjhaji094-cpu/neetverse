@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Loader2, Download, Camera } from "lucide-react";
 import { Question } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 
 interface SubjectGroup {
@@ -33,11 +34,45 @@ export const OfflinePaperPreview = ({
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
+  const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
+  const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const labels = ["A", "B", "C", "D"];
+
+  // Fetch chapter & subject names for "Topics covered" section
+  useEffect(() => {
+    const fetchMeta = async () => {
+      const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
+      const subjectIds = Array.from(new Set(questions.map(q => q.subject_id).filter(Boolean)));
+      if (chapterIds.length === 0) return;
+      const [chRes, subRes] = await Promise.all([
+        supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds),
+        supabase.from("subjects").select("id, name").in("id", subjectIds),
+      ]);
+      const cm: Record<string, { name: string; subjectId: string }> = {};
+      (chRes.data || []).forEach(c => { cm[c.id] = { name: c.name, subjectId: c.subject_id }; });
+      const sm: Record<string, string> = {};
+      (subRes.data || []).forEach(s => { sm[s.id] = s.name; });
+      setChapterMap(cm);
+      setSubjectMap(sm);
+    };
+    fetchMeta();
+  }, [questions]);
+
+  // Build "Topics covered" grouped by subject -> unique chapter list
+  const topicsBySubject: Record<string, string[]> = {};
+  questions.forEach(q => {
+    const subj = subjectMap[q.subject_id] || "General";
+    const chap = chapterMap[q.chapter_id]?.name;
+    if (!chap) return;
+    if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+    if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
+  });
+
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   useEffect(() => {
     let cancelled = false;
