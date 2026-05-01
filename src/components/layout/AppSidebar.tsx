@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { 
   Home, 
-  MessageCircle, 
   Target, 
   BarChart3, 
   User, 
@@ -11,7 +10,8 @@ import {
   ChevronRight,
   LogOut,
   Shield,
-  ClipboardList
+  ClipboardList,
+  Trophy
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,6 @@ const navGroups: NavGroup[] = [
     title: "",
     items: [
       { icon: Home, label: "Dashboard", path: "/" },
-      { icon: MessageCircle, label: "AI Chat", path: "/chat" },
     ],
   },
   {
@@ -55,6 +54,7 @@ const navGroups: NavGroup[] = [
     title: "ANALYSIS",
     items: [
       { icon: BarChart3, label: "Reports", path: "/progress" },
+      { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
     ],
   },
 ];
