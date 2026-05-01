@@ -13,9 +13,9 @@ import Notes from "./pages/Notes";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
 import Progress from "./pages/Progress";
-import Chat from "./pages/Chat";
 import Account from "./pages/Account";
 import Settings from "./pages/Settings";
+import Leaderboard from "./pages/Leaderboard";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +35,7 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/progress" element={<Progress />} />
-            <Route path="/chat" element={<Chat />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/account" element={<Account />} />
             <Route path="/settings" element={<Settings />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

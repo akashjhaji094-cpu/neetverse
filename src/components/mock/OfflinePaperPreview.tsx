@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Loader2, Download, Camera } from "lucide-react";
 import { Question } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 
 interface SubjectGroup {
@@ -33,11 +34,45 @@ export const OfflinePaperPreview = ({
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
+  const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
+  const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const labels = ["A", "B", "C", "D"];
+
+  // Fetch chapter & subject names for "Topics covered" section
+  useEffect(() => {
+    const fetchMeta = async () => {
+      const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
+      const subjectIds = Array.from(new Set(questions.map(q => q.subject_id).filter(Boolean)));
+      if (chapterIds.length === 0) return;
+      const [chRes, subRes] = await Promise.all([
+        supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds),
+        supabase.from("subjects").select("id, name").in("id", subjectIds),
+      ]);
+      const cm: Record<string, { name: string; subjectId: string }> = {};
+      (chRes.data || []).forEach(c => { cm[c.id] = { name: c.name, subjectId: c.subject_id }; });
+      const sm: Record<string, string> = {};
+      (subRes.data || []).forEach(s => { sm[s.id] = s.name; });
+      setChapterMap(cm);
+      setSubjectMap(sm);
+    };
+    fetchMeta();
+  }, [questions]);
+
+  // Build "Topics covered" grouped by subject -> unique chapter list
+  const topicsBySubject: Record<string, string[]> = {};
+  questions.forEach(q => {
+    const subj = subjectMap[q.subject_id] || "General";
+    const chap = chapterMap[q.chapter_id]?.name;
+    if (!chap) return;
+    if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+    if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
+  });
+
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   useEffect(() => {
     let cancelled = false;
@@ -450,108 +485,93 @@ export const OfflinePaperPreview = ({
       <div
         ref={containerRef}
         className="max-w-[210mm] mx-auto bg-white shadow-xl my-4 print:my-0 print:shadow-none"
-        style={{ fontFamily: "'Times New Roman', Georgia, serif" }}
+        style={{ fontFamily: "'Times New Roman', Georgia, serif", color: "#111" }}
       >
-        {/* ===== PREMIUM HEADER ===== */}
-        <div className="px-[12mm] pt-[10mm]">
-          {/* Top decorative line */}
-          <div className="h-1 w-full mb-2" style={{ background: "linear-gradient(90deg, #1a1a6e, #3b82f6, #1a1a6e)" }} />
-          
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <img src={neetverseLogo} alt="NEETVerse" className="w-14 h-14 rounded-xl print:w-12 print:h-12 shadow-md" />
-              <div>
-                <h1 className="text-3xl font-black tracking-[6px] leading-none" style={{ color: "#1a1a6e" }}>
-                  NEETVERSE
-                </h1>
-                <p className="text-[8pt] tracking-[3px] uppercase font-semibold mt-0.5" style={{ color: "#3b82f6" }}>
-                  Infinity Practice • Your Universe of NEET Preparation
+        {/* ===== HEADER (clean, exam-style) ===== */}
+        <div className="px-[15mm] pt-[12mm]">
+          {/* Brand wordmark */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-md" />
+              <h1 className="text-3xl font-black tracking-[3px]" style={{ color: "#dc2626" }}>
+                NEETVERSE
+              </h1>
+            </div>
+            <p className="text-[8pt] text-gray-500 italic">neetverse.lovable.app</p>
+          </div>
+          <div className="h-[2px] w-full mb-3" style={{ background: "#dc2626" }} />
+
+          {/* Paper title */}
+          <h2 className="text-center text-[16pt] font-bold mb-1" style={{ color: "#111" }}>
+            {title}
+          </h2>
+
+          {/* Date / Time / Marks row */}
+          <div className="grid grid-cols-3 text-[10pt] mb-3">
+            <span><b>Date:</b> {today}</span>
+            <span className="text-center"><b>Time:</b> {duration}</span>
+            <span className="text-right"><b>Total Marks:</b> {totalQuestions} × 4 = {totalMarks}</span>
+          </div>
+
+          {/* Topics covered */}
+          {Object.keys(topicsBySubject).length > 0 && (
+            <div className="mb-3 text-[9.5pt]">
+              <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#dc2626" }}>Topics covered</h3>
+              {Object.entries(topicsBySubject).map(([subj, chapters]) => (
+                <p key={subj} className="leading-snug mb-0.5">
+                  <b>{subj}</b> — {chapters.join(", ")}
                 </p>
-              </div>
+              ))}
             </div>
-            <div className="text-right">
-              <p className="text-[8pt] text-gray-500">neetverse.lovable.app</p>
-              <p className="text-[8pt] text-gray-400">Question Paper</p>
-            </div>
+          )}
+
+          {/* Subject / Question count table */}
+          <table className="w-full border-collapse text-[10pt] mb-3">
+            <tbody>
+              {subjectGroups.map((g) => (
+                <tr key={g.name}>
+                  <td className="border border-gray-700 px-2 py-1 font-bold" style={{ background: "#fef2f2" }}>
+                    Subject: {g.name}
+                  </td>
+                  <td className="border border-gray-700 px-2 py-1 font-bold text-right" style={{ background: "#fef2f2" }}>
+                    No. of Questions: {g.endIdx - g.startIdx}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Student info bar */}
+          <div className="grid grid-cols-3 gap-3 mb-3 text-[9.5pt]">
+            <div className="border-b border-gray-700 pb-0.5"><b>Name:</b></div>
+            <div className="border-b border-gray-700 pb-0.5"><b>Roll No:</b></div>
+            <div className="border-b border-gray-700 pb-0.5"><b>Batch:</b></div>
           </div>
 
-          {/* Title bar */}
-          <div className="text-center py-2 my-2 rounded-lg" style={{ background: "#1a1a6e" }}>
-            <h2 className="text-white text-lg font-black uppercase tracking-[4px]">{title}</h2>
-          </div>
-
-          {/* Info strip */}
-          <div className="grid grid-cols-3 gap-2 text-center text-[9pt] font-bold mb-3">
-            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
-              Total Questions: {totalQuestions}
-            </div>
-            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
-              Maximum Marks: {totalMarks}
-            </div>
-            <div className="border-2 rounded-lg py-1.5" style={{ borderColor: "#1a1a6e", color: "#1a1a6e" }}>
-              Duration: {duration}
-            </div>
-          </div>
-
-          {/* Student info */}
-          <div className="grid grid-cols-3 gap-3 mb-3 text-[10pt]">
-            <div className="border-b-2 border-gray-400 pb-1">
-              <span className="font-bold">Student Name:</span>
-            </div>
-            <div className="border-b-2 border-gray-400 pb-1">
-              <span className="font-bold">Date:</span>
-            </div>
-            <div className="border-b-2 border-gray-400 pb-1">
-              <span className="font-bold">Roll No:</span>
-            </div>
-          </div>
-
-          {/* Instructions */}
-          <div className="border-2 rounded-lg p-3 mb-3 text-[9pt]" style={{ borderColor: "#1a1a6e", background: "#f8f9ff" }}>
-            <h4 className="text-[10pt] font-black uppercase tracking-wider mb-1" style={{ color: "#1a1a6e" }}>
-              📋 General Instructions
-            </h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-              <p>• This paper contains <b>{totalQuestions}</b> questions.</p>
-              <p>• Each correct answer: <b>+4 marks</b></p>
-              <p>• Each wrong answer: <b>−1 mark</b></p>
-              <p>• Unattempted: <b>0 marks</b></p>
-              <p>• Use OMR sheet at the end to mark answers.</p>
-              <p>• Duration: <b>{duration}</b></p>
-            </div>
-          </div>
-
-          {/* Decorative line */}
-          <div className="h-0.5 w-full" style={{ background: "linear-gradient(90deg, transparent, #1a1a6e, transparent)" }} />
+          <div className="h-[1px] w-full bg-gray-400 mb-2" />
         </div>
 
-        {/* ===== QUESTIONS - Two Column Layout ===== */}
-        <div className="px-[10mm] pt-2">
+        {/* ===== QUESTIONS — single column, exam-paper style ===== */}
+        <div className="px-[15mm]">
           {subjectGroups.map((group) => {
             const sectionQs = questions.slice(group.startIdx, group.endIdx);
             return (
-              <div key={group.name} className="mb-2">
-                {/* Subject header */}
+              <div key={group.name} className="mb-3">
+                {/* Section divider */}
                 <div
-                  className="text-center font-black text-[11pt] uppercase tracking-[3px] py-2 my-2 rounded"
+                  className="text-center font-bold text-[11pt] py-1 my-3 border-y-2"
                   style={{
-                    background: "#1a1a6e",
-                    color: "white",
+                    borderColor: "#dc2626",
+                    color: "#dc2626",
+                    background: "#fef2f2",
                     pageBreakAfter: "avoid",
                   }}
                 >
-                  SECTION — {group.name} &nbsp;&nbsp;(Q.{group.startIdx + 1} – Q.{group.endIdx})
+                  SECTION — {group.name.toUpperCase()} &nbsp;(Q. {group.startIdx + 1} – {group.endIdx})
                 </div>
 
-                {/* Two-column question grid */}
-                <div
-                  className="gap-x-[6mm]"
-                  style={{
-                    columnCount: 2,
-                    columnGap: "6mm",
-                    columnRule: "1px solid #d1d5db",
-                  }}
-                >
+                {/* Single-column questions */}
+                <div>
                   {sectionQs.map((q, i) => {
                     const qNum = group.startIdx + i + 1;
                     const options = (q.options as string[]) || [];
@@ -560,30 +580,30 @@ export const OfflinePaperPreview = ({
                     return (
                       <div
                         key={q.id}
-                        className="mb-2 pb-2 border-b border-gray-200"
+                        className="mb-3"
                         style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
                       >
-                        <div className="mb-0.5 text-[9.5pt] leading-snug">
-                          <span className="font-black mr-1" style={{ color: "#1a1a6e" }}>Q.{qNum}.</span>
+                        <div className="text-[10.5pt] leading-relaxed">
+                          <span className="font-bold mr-1">{qNum}.</span>
                           <span dangerouslySetInnerHTML={{ __html: content }} />
                         </div>
                         {images.length > 0 && (
-                          <div className="my-1">
+                          <div className="my-1.5 ml-5">
                             {images.map((src, ii) => (
                               <img
                                 key={ii}
                                 src={src}
-                                className="max-w-full max-h-[140px] border border-gray-300 rounded"
+                                className="max-w-[80%] max-h-[180px] border border-gray-300"
                                 alt={`Q${qNum} image`}
                                 loading="eager"
                               />
                             ))}
                           </div>
                         )}
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-0 text-[9pt]">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[10pt] ml-5 mt-0.5">
                           {options.map((opt, oi) => (
-                            <div key={oi} className="flex gap-1 items-baseline leading-tight py-0.5">
-                              <span className="font-bold min-w-[18px]">({labels[oi]})</span>
+                            <div key={oi} className="flex gap-1.5 items-baseline leading-snug py-[1px]">
+                              <span className="font-semibold whitespace-nowrap">({oi + 1})</span>
                               <span dangerouslySetInnerHTML={{ __html: opt }} />
                             </div>
                           ))}
@@ -598,9 +618,9 @@ export const OfflinePaperPreview = ({
         </div>
 
         {/* Page footer on question pages */}
-        <div className="px-[10mm] py-2 text-center text-[7pt] text-gray-400 border-t border-gray-200 mx-[10mm]">
+        <div className="px-[15mm] py-2 mt-3 text-[8pt] text-gray-500 border-t border-gray-300 mx-[10mm]">
           <div className="flex justify-between">
-            <span>NEETVerse — Infinity Practice</span>
+            <span><b style={{ color: "#dc2626" }}>NEETVerse</b> — Your Universe of NEET Preparation</span>
             <span>neetverse.lovable.app</span>
           </div>
         </div>
