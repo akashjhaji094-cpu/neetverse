@@ -591,7 +591,7 @@ export const OfflinePaperPreview = ({
                         style={{
                           breakInside: "avoid",
                           pageBreakInside: "avoid",
-                          WebkitColumnBreakInside: "avoid",
+                          ["WebkitColumnBreakInside" as any]: "avoid",
                           display: "inline-block",
                           width: "100%",
                         }}
