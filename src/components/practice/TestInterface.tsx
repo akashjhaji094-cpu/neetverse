@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Question } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { useMathJax } from "@/hooks/useMathJax";
+import { formatQuestionHtml } from "@/lib/questionFormatter";
 
 interface TestInterfaceProps {
   questions: Question[];
@@ -83,7 +84,10 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
               <div className="flex items-start gap-2">
                 <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
                 <div className="flex-1">
-                  <div className="text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: currentQuestion.question_text }} />
+                  <div
+                    className="text-base leading-relaxed neet-question"
+                    dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.question_text) }}
+                  />
                   {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
                     <div className="mt-4 space-y-2">
                       {currentQuestion.images.map((url, idx) => (
