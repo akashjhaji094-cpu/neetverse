@@ -4,6 +4,7 @@ import { ArrowLeft, Printer, Loader2, Download, Camera } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
+import { formatQuestionHtml } from "@/lib/questionFormatter";
 
 interface SubjectGroup {
   name: string;
@@ -570,37 +571,49 @@ export const OfflinePaperPreview = ({
                   SECTION — {group.name.toUpperCase()} &nbsp;(Q. {group.startIdx + 1} – {group.endIdx})
                 </div>
 
-                {/* Single-column questions */}
-                <div>
+                {/* TWO-COLUMN questions with center divider */}
+                <div
+                  style={{
+                    columnCount: 2,
+                    columnGap: "8mm",
+                    columnRule: "1px solid #999",
+                  }}
+                >
                   {sectionQs.map((q, i) => {
                     const qNum = group.startIdx + i + 1;
                     const options = (q.options as string[]) || [];
                     const images = (q.images as string[]) || [];
-                    const content = q.raw_html || q.question_text;
+                    const content = formatQuestionHtml(q.raw_html || q.question_text);
                     return (
                       <div
                         key={q.id}
-                        className="mb-3"
-                        style={{ breakInside: "avoid", pageBreakInside: "avoid" }}
+                        className="mb-3 neet-question-block"
+                        style={{
+                          breakInside: "avoid",
+                          pageBreakInside: "avoid",
+                          ["WebkitColumnBreakInside" as any]: "avoid",
+                          display: "inline-block",
+                          width: "100%",
+                        }}
                       >
-                        <div className="text-[10.5pt] leading-relaxed">
+                        <div className="text-[10pt] leading-snug">
                           <span className="font-bold mr-1">{qNum}.</span>
                           <span dangerouslySetInnerHTML={{ __html: content }} />
                         </div>
                         {images.length > 0 && (
-                          <div className="my-1.5 ml-5">
+                          <div className="my-1.5 ml-4">
                             {images.map((src, ii) => (
                               <img
                                 key={ii}
                                 src={src}
-                                className="max-w-[80%] max-h-[180px] border border-gray-300"
+                                className="max-w-full max-h-[140px] border border-gray-300"
                                 alt={`Q${qNum} image`}
                                 loading="eager"
                               />
                             ))}
                           </div>
                         )}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-[10pt] ml-5 mt-0.5">
+                        <div className="grid grid-cols-1 gap-y-0 text-[9.5pt] ml-4 mt-0.5">
                           {options.map((opt, oi) => (
                             <div key={oi} className="flex gap-1.5 items-baseline leading-snug py-[1px]">
                               <span className="font-semibold whitespace-nowrap">({oi + 1})</span>

@@ -11,7 +11,8 @@ import {
   LogOut,
   Shield,
   ClipboardList,
-  Trophy
+  Trophy,
+  Bell
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ const navGroups: NavGroup[] = [
     items: [
       { icon: BarChart3, label: "Reports", path: "/progress" },
       { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
+      { icon: Bell, label: "Notifications", path: "/notifications" },
     ],
   },
 ];

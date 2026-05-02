@@ -44,7 +44,12 @@ const Dashboard = () => {
               Let's Continue Your Preparation.
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => navigate('/notifications')}
+          >
             <Bell className="h-5 w-5" />
           </Button>
         </div>

@@ -4,8 +4,9 @@ import { HtmlUpload } from "@/components/admin/HtmlUpload";
 import { ResourceUpload } from "@/components/admin/ResourceUpload";
 import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
+import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -45,7 +46,7 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-3xl grid-cols-4">
+            <TabsList className="grid w-full max-w-3xl grid-cols-5">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span className="hidden sm:inline">AI Import</span>
@@ -65,6 +66,11 @@ const Admin = () => {
                 <Sparkles className="h-4 w-4" />
                 <span className="hidden sm:inline">Clean DB</span>
                 <span className="sm:hidden">Clean</span>
+              </TabsTrigger>
+              <TabsTrigger value="broadcast" className="flex items-center gap-2">
+                <Megaphone className="h-4 w-4" />
+                <span className="hidden sm:inline">Broadcast</span>
+                <span className="sm:hidden">Msg</span>
               </TabsTrigger>
             </TabsList>
 
@@ -104,6 +110,10 @@ const Admin = () => {
 
               <TabsContent value="cleaner" className="m-0">
                 <QuestionCleaner />
+              </TabsContent>
+
+              <TabsContent value="broadcast" className="m-0">
+                <BroadcastManager />
               </TabsContent>
             </div>
           </Tabs>
