@@ -9,6 +9,7 @@ import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview"
 import { useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate as _unused } from "react-router-dom";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -44,7 +45,12 @@ const Dashboard = () => {
               Let's Continue Your Preparation.
             </p>
           </div>
-          <Button variant="ghost" size="icon" className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => navigate('/notifications')}
+          >
             <Bell className="h-5 w-5" />
           </Button>
         </div>
