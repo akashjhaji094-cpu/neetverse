@@ -9,7 +9,6 @@ import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview"
 import { useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate as _unused } from "react-router-dom";
 
 const Dashboard = () => {
   const navigate = useNavigate();
