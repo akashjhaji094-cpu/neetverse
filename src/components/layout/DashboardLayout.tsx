@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { cn } from "@/lib/utils";
+import { BroadcastOverlay } from "@/components/BroadcastOverlay";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       )}>
         {children}
       </main>
+      <BroadcastOverlay />
     </div>
   );
 }
