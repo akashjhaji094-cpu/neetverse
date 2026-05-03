@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { neetSubjects } from "@/data/neetChapters";
+import { neetPlanner } from "@/data/neetPlanner";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { parseHtmlFile, type ParsedQuestion } from "@/lib/htmlQuestionParser";
@@ -45,6 +46,7 @@ const typesetMath = (el: HTMLElement | null) => {
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
   const [chapterId, setChapterId] = useState<string>("");
+  const [topicId, setTopicId] = useState<string>("");
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -60,7 +62,13 @@ export const HtmlUpload = () => {
   const previewRef = useRef<HTMLDivElement>(null);
 
   const selectedSubject =
-    neetSubjects.find((s) => s.id === subjectId) || neetSubjects[0];
+    neetPlanner.find((s) => s.id === subjectId) || neetPlanner[0];
+  const selectedChapter = selectedSubject.chapters.find((c) => c.id === chapterId);
+  // Group chapters by section (Physical/Organic/Inorganic, Botany/Zoology)
+  const chaptersBySection = selectedSubject.chapters.reduce<Record<string, typeof selectedSubject.chapters>>(
+    (acc, c) => { (acc[c.section] ||= []).push(c); return acc; },
+    {}
+  );
 
   // Load MathJax on mount, typeset when questions change
   useEffect(() => { loadMathJax(); }, []);
@@ -166,7 +174,7 @@ export const HtmlUpload = () => {
           difficulty: "auto_medium",
           subject_id: subjectId,
           chapter_id: chapterId,
-          source_file: fileNames.join(", "),
+          source_file: (topicId ? `topic:${topicId}|` : "") + fileNames.join(", "),
           raw_html: q.question_html,
         };
       });
@@ -189,7 +197,7 @@ export const HtmlUpload = () => {
 
       setUploadProgress(100);
       toast.success(
-        `Saved ${questionsToSave.length} questions to ${selectedSubject.name} - ${selectedSubject.chapters.find((c) => c.id === chapterId)?.name}`
+        `Saved ${questionsToSave.length} questions to ${selectedSubject.name} → ${selectedChapter?.name}${topicId ? " → " + selectedChapter?.topics.find(t=>t.id===topicId)?.name : ""}`
       );
 
       setQuestions([]);
@@ -266,10 +274,11 @@ export const HtmlUpload = () => {
                 onChange={(e) => {
                   setSubjectId(e.target.value);
                   setChapterId("");
+                  setTopicId("");
                 }}
                 disabled={uploading}
               >
-                {neetSubjects.map((subject) => (
+                {neetPlanner.map((subject) => (
                   <option key={subject.id} value={subject.id}>
                     {subject.name}
                   </option>
@@ -282,17 +291,36 @@ export const HtmlUpload = () => {
               <select
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={chapterId}
-                onChange={(e) => setChapterId(e.target.value)}
+                onChange={(e) => { setChapterId(e.target.value); setTopicId(""); }}
                 disabled={uploading}
               >
                 <option value="">Select chapter</option>
-                {selectedSubject.chapters.map((chapter) => (
-                  <option key={chapter.id} value={chapter.id}>
-                    {chapter.name}
-                  </option>
+                {Object.entries(chaptersBySection).map(([section, chs]) => (
+                  <optgroup key={section} label={section}>
+                    {chs.map((chapter) => (
+                      <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
+
+            {selectedChapter && selectedChapter.topics.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Topic (optional)</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={topicId}
+                  onChange={(e) => setTopicId(e.target.value)}
+                  disabled={uploading}
+                >
+                  <option value="">— Whole chapter —</option>
+                  {selectedChapter.topics.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
