@@ -486,7 +486,7 @@ export const OfflinePaperPreview = ({
       <div
         ref={containerRef}
         className="max-w-[210mm] mx-auto bg-white shadow-xl my-4 print:my-0 print:shadow-none"
-        style={{ fontFamily: "'Times New Roman', Georgia, serif", color: "#111" }}
+        style={{ fontFamily: "'Times New Roman', Georgia, serif", color: "#1a1a1a" }}
       >
         {/* ===== HEADER (clean, exam-style) ===== */}
         <div className="px-[15mm] pt-[12mm]">
@@ -494,16 +494,16 @@ export const OfflinePaperPreview = ({
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-md" />
-              <h1 className="text-3xl font-black tracking-[3px]" style={{ color: "#dc2626" }}>
+              <h1 className="text-3xl font-black tracking-[3px]" style={{ color: "#000" }}>
                 NEETVERSE
               </h1>
             </div>
             <p className="text-[8pt] text-gray-500 italic">neetverse.lovable.app</p>
           </div>
-          <div className="h-[2px] w-full mb-3" style={{ background: "#dc2626" }} />
+          <div className="h-[2px] w-full mb-3" style={{ background: "#000" }} />
 
           {/* Paper title */}
-          <h2 className="text-center text-[16pt] font-bold mb-1" style={{ color: "#111" }}>
+          <h2 className="text-center text-[16pt] font-bold mb-1" style={{ color: "#1a1a1a" }}>
             {title}
           </h2>
 
@@ -517,7 +517,7 @@ export const OfflinePaperPreview = ({
           {/* Topics covered */}
           {Object.keys(topicsBySubject).length > 0 && (
             <div className="mb-3 text-[9.5pt]">
-              <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#dc2626" }}>Topics covered</h3>
+              <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#000" }}>Topics covered</h3>
               {Object.entries(topicsBySubject).map(([subj, chapters]) => (
                 <p key={subj} className="leading-snug mb-0.5">
                   <b>{subj}</b> — {chapters.join(", ")}
@@ -531,10 +531,10 @@ export const OfflinePaperPreview = ({
             <tbody>
               {subjectGroups.map((g) => (
                 <tr key={g.name}>
-                  <td className="border border-gray-700 px-2 py-1 font-bold" style={{ background: "#fef2f2" }}>
+                  <td className="border border-black px-2 py-1 font-bold" style={{ background: "#ececec" }}>
                     Subject: {g.name}
                   </td>
-                  <td className="border border-gray-700 px-2 py-1 font-bold text-right" style={{ background: "#fef2f2" }}>
+                  <td className="border border-black px-2 py-1 font-bold text-right" style={{ background: "#ececec" }}>
                     No. of Questions: {g.endIdx - g.startIdx}
                   </td>
                 </tr>
@@ -562,9 +562,9 @@ export const OfflinePaperPreview = ({
                 <div
                   className="text-center font-bold text-[11pt] py-1 my-3 border-y-2"
                   style={{
-                    borderColor: "#dc2626",
-                    color: "#dc2626",
-                    background: "#fef2f2",
+                    borderColor: "#000",
+                    color: "#000",
+                    background: "#e8e8e8",
                     pageBreakAfter: "avoid",
                   }}
                 >
@@ -633,7 +633,7 @@ export const OfflinePaperPreview = ({
         {/* Page footer on question pages */}
         <div className="px-[15mm] py-2 mt-3 text-[8pt] text-gray-500 border-t border-gray-300 mx-[10mm]">
           <div className="flex justify-between">
-            <span><b style={{ color: "#dc2626" }}>NEETVerse</b> — Your Universe of NEET Preparation</span>
+            <span><b style={{ color: "#000" }}>NEETVerse</b> — Your Universe of NEET Preparation</span>
             <span>neetverse.lovable.app</span>
           </div>
         </div>
@@ -659,15 +659,15 @@ export const OfflinePaperPreview = ({
           </div>
 
           {/* OMR Header */}
-          <div className="text-center pb-2 mb-2 border-b-[3px] border-red-600 mx-[6mm]">
+          <div className="text-center pb-2 mb-2 border-b-[3px] border-black mx-[6mm]">
             <div className="flex items-center justify-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
               <div>
-                <h2 className="text-2xl font-black tracking-[4px] text-red-600">NEETVERSE</h2>
-                <p className="text-[9pt] font-black text-red-600 tracking-[2px] uppercase">OMR Answer Sheet</p>
+                <h2 className="text-2xl font-black tracking-[4px] text-black">NEETVERSE</h2>
+                <p className="text-[9pt] font-black text-black tracking-[2px] uppercase">OMR Answer Sheet</p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-[8pt] mt-2 pt-1 border-t border-red-200">
+            <div className="grid grid-cols-3 gap-2 text-[8pt] mt-2 pt-1 border-t border-gray-400">
               <span className="text-left">Name: ________________________________</span>
               <span className="text-center">Date: ________________</span>
               <span className="text-right">Roll No: _____________</span>
@@ -676,7 +676,7 @@ export const OfflinePaperPreview = ({
 
           {/* Subject markers */}
           {totalQuestions === 180 && (
-            <div className="flex justify-center gap-6 text-[7.5pt] font-black text-red-600 mb-1 mx-[6mm]">
+            <div className="flex justify-center gap-6 text-[7.5pt] font-black text-black mb-1 mx-[6mm]">
               <span>⚛ Physics: Q.1–45</span>
               <span>🧪 Chemistry: Q.46–90</span>
               <span>🧬 Biology: Q.91–180</span>
@@ -696,7 +696,7 @@ export const OfflinePaperPreview = ({
                         {["Q", "A", "B", "C", "D"].map((h) => (
                           <th
                             key={h}
-                            className="bg-red-600 text-white px-[1px] py-[2px] text-[6pt] border border-red-600 font-black"
+                            className="bg-black text-white px-[1px] py-[2px] text-[6pt] border border-black font-black"
                           >
                             {h}
                           </th>
@@ -705,14 +705,14 @@ export const OfflinePaperPreview = ({
                     </thead>
                     <tbody>
                       {Array.from({ length: end - start }).map((_, i) => (
-                        <tr key={i} className={i % 5 === 4 ? "border-b-2 border-red-200" : ""}>
-                          <td className="border border-gray-300 px-[1px] py-[0.5px] text-center font-black text-[6.5pt] w-[16px]" style={{ color: "#1a1a6e" }}>
+                        <tr key={i} className={i % 5 === 4 ? "border-b-2 border-gray-400" : ""}>
+                          <td className="border border-gray-400 px-[1px] py-[0.5px] text-center font-black text-[6.5pt] w-[16px]" style={{ color: "#000" }}>
                             {start + i + 1}
                           </td>
                           {[0, 1, 2, 3].map((b) => (
                             <td
                               key={b}
-                              className="border border-gray-300 px-[1px] py-[0.5px] text-center text-[7pt] w-[14px]"
+                              className="border border-gray-400 px-[1px] py-[0.5px] text-center text-[7pt] w-[14px]"
                             >
                               <span className="text-gray-400">◯</span>
                             </td>
@@ -727,8 +727,8 @@ export const OfflinePaperPreview = ({
           </div>
 
           {/* OMR Footer */}
-          <div className="mx-[6mm] mt-2 pt-1 border-t-2 border-red-600">
-            <div className="flex justify-between text-[7pt] text-red-600 font-bold">
+          <div className="mx-[6mm] mt-2 pt-1 border-t-2 border-black">
+            <div className="flex justify-between text-[7pt] text-black font-bold">
               <span>Total Questions: {totalQuestions}</span>
               <span>Fill ● completely • No overwriting</span>
               <span>NEETVerse — neetverse.lovable.app</span>
@@ -741,14 +741,14 @@ export const OfflinePaperPreview = ({
 
         {/* ===== ANSWER KEY ===== */}
         <div className="px-[10mm] pt-[10mm]" style={{ pageBreakBefore: "always" }}>
-          <div className="text-center pb-2 mb-3 border-b-[3px]" style={{ borderColor: "#1a1a6e" }}>
+          <div className="text-center pb-2 mb-3 border-b-[3px]" style={{ borderColor: "#000" }}>
             <div className="flex items-center justify-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
               <div>
-                <h2 className="text-2xl font-black tracking-[4px]" style={{ color: "#1a1a6e" }}>
+                <h2 className="text-2xl font-black tracking-[4px]" style={{ color: "#000" }}>
                   NEETVERSE
                 </h2>
-                <p className="text-sm font-bold" style={{ color: "#1a1a6e" }}>
+                <p className="text-sm font-bold" style={{ color: "#000" }}>
                   Answer Key — {title}
                 </p>
               </div>
@@ -764,8 +764,8 @@ export const OfflinePaperPreview = ({
                   <table className="w-full border-collapse text-[8pt]">
                     <thead>
                       <tr>
-                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}>Q</th>
-                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#1a1a6e", borderColor: "#1a1a6e" }}>Ans</th>
+                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#000", borderColor: "#000" }}>Q</th>
+                        <th className="text-white px-1 py-[2px] text-[7pt] border" style={{ background: "#000", borderColor: "#000" }}>Ans</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -775,7 +775,7 @@ export const OfflinePaperPreview = ({
                         return (
                           <tr key={i}>
                             <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[7.5pt]">{start + i + 1}</td>
-                            <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[8pt]" style={{ color: "#1a1a6e" }}>{ans}</td>
+                            <td className="border border-gray-300 px-1 py-[1px] text-center font-bold text-[8pt]" style={{ color: "#000" }}>{ans}</td>
                           </tr>
                         );
                       })}
@@ -786,7 +786,7 @@ export const OfflinePaperPreview = ({
             })}
           </div>
 
-          <div className="flex justify-between text-[7pt] font-bold mt-2 pt-1 border-t-2" style={{ color: "#1a1a6e", borderColor: "#1a1a6e" }}>
+          <div className="flex justify-between text-[7pt] font-bold mt-2 pt-1 border-t-2" style={{ color: "#000", borderColor: "#000" }}>
             <span>+4 for correct, −1 for incorrect</span>
             <span>NEETVerse — neetverse.lovable.app</span>
           </div>
@@ -794,7 +794,7 @@ export const OfflinePaperPreview = ({
 
         {/* Final Footer */}
         <div className="mx-[10mm] mt-4 pt-2 pb-4 border-t">
-          <div className="h-0.5 w-full mb-2" style={{ background: "linear-gradient(90deg, #1a1a6e, #3b82f6, #1a1a6e)" }} />
+          <div className="h-0.5 w-full mb-2" style={{ background: "linear-gradient(90deg, #000, #555, #000)" }} />
           <div className="text-center text-[8pt] text-gray-400">
             <p className="font-semibold">Generated by NEETVerse — Infinity Practice</p>
             <p>neetverse.lovable.app — All the best! 🎯</p>

@@ -9,10 +9,10 @@
  */
 
 const BOX_BASE =
-  "display:block;border:1px solid #444;background:#fafafa;padding:6px 10px;margin:4px 0;border-radius:4px;font-size:inherit;line-height:1.45;";
+  "display:block;border-left:3px solid #000;background:#f3f3f3;padding:6px 10px;margin:6px 0;border-radius:2px;font-size:inherit;line-height:1.5;";
 
 const STEM_BASE =
-  "display:block;margin-bottom:6px;font-weight:500;";
+  "display:block;margin-bottom:8px;font-weight:500;";
 
 /** Normalize bullets / breaks so we can split reliably */
 function normalize(html: string): string {
@@ -26,16 +26,22 @@ function normalize(html: string): string {
  * each in its own box.
  */
 function formatStatementBlocks(html: string): string {
-  // Match either Statement-N or Assertion/Reason markers and split there.
-  const re =
-    /(<(?:p|div|span)[^>]*>\s*)?\b(Statement[\s-]*(?:I{1,3}|IV|[1-4])|Assertion(?:\s*\([A-Z]\))?|Reason(?:\s*\([A-Z]\))?)\s*[:.\)-]/gi;
+  // Match Statement-N / Assertion / Reason markers.
+  const labeledRe =
+    /\b(Statement[\s-]*(?:I{1,3}|IV|[1-4])|Assertion(?:\s*\([A-Z]\))?|Reason(?:\s*\([A-Z]\))?)\s*[:.\)-]/i;
 
-  if (!re.test(html)) return html;
+  // Fallback: bare roman-numeral list "I." "II." "III." (≥2 occurrences)
+  // Often appears when a question mentions "the following statements:" then I./II./III.
+  const bareRomanRe = /(^|[\s>.])(I{1,3}|IV)\s*[\.\)]\s+/g;
+  const bareMatches = html.match(bareRomanRe);
+
+  if (!labeledRe.test(html) && (!bareMatches || bareMatches.length < 2)) return html;
 
   // Split keeping the markers
-  const parts = html.split(
-    /(\bStatement[\s-]*(?:I{1,3}|IV|[1-4])\b|\bAssertion(?:\s*\([A-Z]\))?|\bReason(?:\s*\([A-Z]\))?)/i
-  );
+  const splitRe = labeledRe.test(html)
+    ? /(\bStatement[\s-]*(?:I{1,3}|IV|[1-4])\b|\bAssertion(?:\s*\([A-Z]\))?|\bReason(?:\s*\([A-Z]\))?)/i
+    : /(?:^|(?<=[\s>.]))((?:I{1,3}|IV)\s*[\.\)])\s+/;
+  const parts = html.split(splitRe);
 
   if (parts.length < 3) return html;
 
@@ -48,12 +54,15 @@ function formatStatementBlocks(html: string): string {
     : "";
 
   for (let i = 1; i < parts.length; i += 2) {
-    const label = parts[i];
+    let label = parts[i];
     let body = (parts[i + 1] || "").trim();
     // remove leading colon / dot
     body = body.replace(/^\s*[:.\)-]\s*/, "");
     if (!label) continue;
-    out += `<div style="${BOX_BASE}"><b>${label}:</b> ${body}</div>`;
+    // Normalise bare roman labels like "I." → "Statement I"
+    const bareRoman = /^\s*(I{1,3}|IV)\s*[\.\)]?\s*$/i.exec(label);
+    if (bareRoman) label = `Statement ${bareRoman[1].toUpperCase()}`;
+    out += `<div style="${BOX_BASE}"><b>${label.trim()}:</b> ${body}</div>`;
   }
   return out;
 }
