@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { neetSubjects } from "@/data/neetChapters";
+import { neetPlanner as neetSubjects } from "@/data/neetPlanner";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { TestConfig } from "@/components/practice/TestConfig";
