@@ -46,7 +46,6 @@ const typesetMath = (el: HTMLElement | null) => {
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
   const [chapterId, setChapterId] = useState<string>("");
-  const [topicId, setTopicId] = useState<string>("");
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -174,7 +173,7 @@ export const HtmlUpload = () => {
           difficulty: "auto_medium",
           subject_id: subjectId,
           chapter_id: chapterId,
-          source_file: (topicId ? `topic:${topicId}|` : "") + fileNames.join(", "),
+          source_file: fileNames.join(", "),
           raw_html: q.question_html,
         };
       });
@@ -197,7 +196,7 @@ export const HtmlUpload = () => {
 
       setUploadProgress(100);
       toast.success(
-        `Saved ${questionsToSave.length} questions to ${selectedSubject.name} → ${selectedChapter?.name}${topicId ? " → " + selectedChapter?.topics.find(t=>t.id===topicId)?.name : ""}`
+        `Saved ${questionsToSave.length} questions to ${selectedSubject.name} → ${selectedChapter?.name}`
       );
 
       setQuestions([]);
@@ -274,7 +273,6 @@ export const HtmlUpload = () => {
                 onChange={(e) => {
                   setSubjectId(e.target.value);
                   setChapterId("");
-                  setTopicId("");
                 }}
                 disabled={uploading}
               >
@@ -291,7 +289,7 @@ export const HtmlUpload = () => {
               <select
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={chapterId}
-                onChange={(e) => { setChapterId(e.target.value); setTopicId(""); }}
+                onChange={(e) => setChapterId(e.target.value)}
                 disabled={uploading}
               >
                 <option value="">Select chapter</option>
@@ -304,23 +302,6 @@ export const HtmlUpload = () => {
                 ))}
               </select>
             </div>
-
-            {selectedChapter && selectedChapter.topics.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Topic (optional)</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={topicId}
-                  onChange={(e) => setTopicId(e.target.value)}
-                  disabled={uploading}
-                >
-                  <option value="">— Whole chapter —</option>
-                  {selectedChapter.topics.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             <div className="space-y-2">
               <label className="text-sm font-medium">

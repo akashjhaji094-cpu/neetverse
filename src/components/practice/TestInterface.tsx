@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Question } from "@/lib/supabase";
-import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, Bookmark } from "lucide-react";
 import { useMathJax } from "@/hooks/useMathJax";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
 
@@ -16,6 +16,12 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [marked, setMarked] = useState<Record<string, boolean>>({});
+  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
+
+  useEffect(() => {
+    setVisited(prev => ({ ...prev, [currentIndex]: true }));
+  }, [currentIndex]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -59,6 +65,25 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   const answeredCount = Object.keys(answers).length;
   const mathRef = useMathJax([currentIndex]);
 
+  const getStatus = (idx: number) => {
+    const q = questions[idx];
+    const ans = answers[q.id];
+    const isMarked = marked[q.id];
+    if (ans !== undefined && ans !== null && isMarked) return "answeredMarked";
+    if (isMarked) return "marked";
+    if (ans !== undefined && ans !== null) return "answered";
+    if (visited[idx]) return "notAnswered";
+    return "notVisited";
+  };
+
+  const statusClass: Record<string, string> = {
+    answered: "bg-green-600 text-white border-green-600",
+    notAnswered: "bg-red-500 text-white border-red-500",
+    marked: "bg-purple-600 text-white border-purple-600",
+    answeredMarked: "bg-purple-600 text-white border-green-400 ring-2 ring-green-400",
+    notVisited: "bg-background text-foreground border-border",
+  };
+
   return (
     <div className="min-h-screen bg-background" ref={mathRef}>
       <div className="sticky top-0 z-10 bg-background border-b">
@@ -77,7 +102,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
         </div>
       </div>
 
-      <div className="container-custom py-6">
+      <div className="container-custom py-6 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
         <Card>
           <CardContent className="pt-6 space-y-6">
             <div className="space-y-4">
@@ -142,6 +167,13 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
               <div className="flex gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => setMarked(prev => ({ ...prev, [currentQuestion.id]: !prev[currentQuestion.id] }))}
+                >
+                  <Bookmark className={`h-4 w-4 mr-1 ${marked[currentQuestion.id] ? "fill-current" : ""}`} />
+                  {marked[currentQuestion.id] ? "Unmark" : "Mark"}
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setAnswers(prev => ({ ...prev, [currentQuestion.id]: null }))}
                 >
                   <Flag className="h-4 w-4 mr-1" />
@@ -159,6 +191,36 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                   </Button>
                 )}
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Question Palette */}
+        <Card className="lg:sticky lg:top-32 self-start max-h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
+          <CardContent className="pt-4 pb-4 flex flex-col h-full">
+            <h3 className="text-sm font-semibold mb-3">Question Palette</h3>
+            <div className="grid grid-cols-6 lg:grid-cols-5 gap-1.5 overflow-y-auto pr-1 flex-1">
+              {questions.map((_, idx) => {
+                const s = getStatus(idx);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentIndex(idx)}
+                    className={`h-8 w-8 rounded text-xs font-semibold border transition-all ${statusClass[s]} ${
+                      idx === currentIndex ? "ring-2 ring-primary ring-offset-1" : ""
+                    }`}
+                    title={`Q${idx + 1} • ${s}`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-3 border-t space-y-1.5 text-[11px]">
+              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-green-600" /> Answered</div>
+              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-red-500" /> Not Answered</div>
+              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded bg-purple-600" /> Marked</div>
+              <div className="flex items-center gap-2"><span className="h-3 w-3 rounded border border-border bg-background" /> Not Visited</div>
             </div>
           </CardContent>
         </Card>
