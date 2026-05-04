@@ -517,7 +517,7 @@ export const OfflinePaperPreview = ({
           {/* Topics covered */}
           {Object.keys(topicsBySubject).length > 0 && (
             <div className="mb-3 text-[9.5pt]">
-              <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#000" }}>Topics covered</h3>
+              <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#000" }}>Chapters covered</h3>
               {Object.entries(topicsBySubject).map(([subj, chapters]) => (
                 <p key={subj} className="leading-snug mb-0.5">
                   <b>{subj}</b> — {chapters.join(", ")}
