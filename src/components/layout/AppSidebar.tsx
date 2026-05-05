@@ -12,7 +12,8 @@ import {
   Shield,
   ClipboardList,
   Trophy,
-  Bell
+  Bell,
+  RotateCcw
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ const navGroups: NavGroup[] = [
     title: "PRACTICE",
     items: [
       { icon: Target, label: "Practice Questions", path: "/practice" },
+      { icon: RotateCcw, label: "Revision", path: "/revision", badge: "NEW" },
       { icon: BookOpen, label: "Notes & PDFs", path: "/notes" },
       { icon: ClipboardList, label: "Mock Tests", path: "/test" },
     ],

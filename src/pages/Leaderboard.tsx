@@ -20,25 +20,26 @@ const Leaderboard = () => {
   const { user } = useAuth();
 
   const { data: leaders, isLoading } = useQuery({
-    queryKey: ["leaderboard-mock"],
+    queryKey: ["leaderboard-all-v2"],
     queryFn: async () => {
-      // Pull all completed mock attempts
+      // Pull all finished attempts (practice + mock)
       const { data: attempts } = await supabase
         .from("attempts")
-        .select("user_id, score, type, finished_at")
-        .eq("type", "mock")
-        .not("finished_at", "is", null)
-        .not("score", "is", null);
+        .select("id, user_id, type, finished_at, details")
+        .not("finished_at", "is", null);
 
       if (!attempts || attempts.length === 0) return [];
 
-      // Group by user
+      // Score with +1 / -0.25 across ALL attempts using stored details
       const byUser = new Map<string, { total: number; count: number; best: number }>();
-      attempts.forEach((a) => {
+      attempts.forEach((a: any) => {
+        const correct = Number(a.details?.correctCount ?? 0);
+        const wrong = Number(a.details?.wrongCount ?? 0);
+        const score = correct * 1 - wrong * 0.25;
         const cur = byUser.get(a.user_id) || { total: 0, count: 0, best: -Infinity };
-        cur.total += a.score || 0;
+        cur.total += score;
         cur.count += 1;
-        cur.best = Math.max(cur.best, a.score || 0);
+        cur.best = Math.max(cur.best, score);
         byUser.set(a.user_id, cur);
       });
 
@@ -58,10 +59,10 @@ const Leaderboard = () => {
         return {
           user_id: uid,
           name: profileMap.get(uid) || "Aspirant",
-          totalScore: stats.total,
+          totalScore: Math.round(stats.total * 100) / 100,
           testsTaken: stats.count,
-          avgScore: Math.round(stats.total / stats.count),
-          bestScore: stats.best,
+          avgScore: Math.round((stats.total / stats.count) * 100) / 100,
+          bestScore: Math.round(stats.best * 100) / 100,
         };
       });
 
@@ -137,7 +138,7 @@ const Leaderboard = () => {
           </div>
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold">Leaderboard</h1>
-            <p className="text-muted-foreground">All-India NEETVerse mock test rankings</p>
+            <p className="text-muted-foreground">All sessions • Practice + Mock • +1 correct / -0.25 wrong</p>
           </div>
         </div>
 
