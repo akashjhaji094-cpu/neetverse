@@ -6,6 +6,7 @@ import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TestSeriesWidget } from "@/components/dashboard/TestSeriesWidget";
 import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview";
+import { NeetCountdown } from "@/components/dashboard/NeetCountdown";
 import { useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        <NeetCountdown />
         <PerformanceOverview />
         <TestSeriesWidget />
 
