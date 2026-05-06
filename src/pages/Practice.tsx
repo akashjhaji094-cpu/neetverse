@@ -78,7 +78,6 @@ const Practice = () => {
         const j = randomValues[i] % (i + 1);
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
-      await new Promise(resolve => setTimeout(resolve, 1000));
       return shuffled.slice(0, count) as Question[];
     },
     onSuccess: (questions) => { setTestQuestions(questions); setShowTest(true); setSelectedChapter(null); },

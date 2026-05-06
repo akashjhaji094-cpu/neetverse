@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2, Download, Camera } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, Download, Camera, CheckCircle2, AlertCircle } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { useToast } from "@/hooks/use-toast";
 
 interface SubjectGroup {
   name: string;
@@ -35,11 +36,17 @@ export const OfflinePaperPreview = ({
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [detectedAnswers, setDetectedAnswers] = useState<(number | null)[]>([]);
+  const [showReview, setShowReview] = useState(false);
+  const [confidenceMap, setConfidenceMap] = useState<number[]>([]);
   const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
   const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { toast } = useToast();
 
   const labels = ["A", "B", "C", "D"];
 
@@ -135,100 +142,275 @@ export const OfflinePaperPreview = ({
 
   const handlePrint = useCallback(() => { window.print(); }, []);
 
-  // OMR Scanner Logic
+  // ============= OMR SCANNER =============
+  // Strategy:
+  //  1. Load image to canvas (downscale large images for speed).
+  //  2. Convert to grayscale + locate the four corner alignment markers
+  //     (solid black squares printed at the OMR sheet corners).
+  //  3. Use the marker bounding box to crop & align the OMR grid region.
+  //  4. For each question row, sample the 4 bubble centers and pick the
+  //     darkest one IF it is significantly darker than the row's median
+  //     (relative threshold) — avoids false positives.
+  //  5. Show a review/edit screen so the user can correct misreads before
+  //     generating the final scored report.
+
   const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (e.target) e.target.value = ""; // allow re-uploading same file
+
+    setScanning(true);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        try {
+          const canvas = canvasRef.current;
+          if (!canvas) { setScanning(false); return; }
 
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+          // Downscale to max 1600px on long edge for performance/consistency
+          const MAX_DIM = 1600;
+          const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { setScanning(false); return; }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Process OMR - detect filled bubbles
-        const detectedAnswers = processOMR(imageData, canvas.width, canvas.height, totalQuestions);
-        
-        // Generate report
-        const report = generateReport(detectedAnswers, questions, subjectGroups);
-        setScanResult(report);
-        setShowScanner(true);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const gray = toGrayscale(imageData);
+
+          // Detect corner markers
+          const markers = findCornerMarkers(gray, canvas.width, canvas.height);
+
+          // Define OMR region from markers OR fall back to proportional estimate
+          const region = markers
+            ? {
+                left: markers.tl.x + (markers.tr.x - markers.tl.x) * 0.04,
+                right: markers.tr.x - (markers.tr.x - markers.tl.x) * 0.04,
+                // Skip header area (~22% from top of marker box for the OMR header)
+                top: markers.tl.y + (markers.bl.y - markers.tl.y) * 0.22,
+                bottom: markers.bl.y - (markers.bl.y - markers.tl.y) * 0.05,
+              }
+            : {
+                left: canvas.width * 0.05,
+                right: canvas.width * 0.95,
+                top: canvas.height * 0.18,
+                bottom: canvas.height * 0.93,
+              };
+
+          const { answers, confidence } = detectBubbles(
+            gray,
+            canvas.width,
+            canvas.height,
+            region,
+            totalQuestions
+          );
+
+          // Draw debug overlay on canvas for preview
+          drawOverlay(ctx, region, totalQuestions, answers);
+
+          setPreviewImage(canvas.toDataURL("image/jpeg", 0.7));
+          setDetectedAnswers(answers);
+          setConfidenceMap(confidence);
+          setShowReview(true);
+          setScanning(false);
+
+          if (!markers) {
+            toast({
+              title: "Alignment markers not detected",
+              description: "Used estimated grid position. Please review answers carefully.",
+            });
+          }
+        } catch (err) {
+          console.error("OMR scan error", err);
+          toast({ title: "Scan failed", description: "Try a clearer photo.", variant: "destructive" });
+          setScanning(false);
+        }
+      };
+      img.onerror = () => {
+        toast({ title: "Could not read image", variant: "destructive" });
+        setScanning(false);
       };
       img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
-  }, [questions, totalQuestions, subjectGroups]);
+  }, [totalQuestions, toast]);
 
-  // OMR Processing - detect dark bubbles in grid positions
-  const processOMR = (imageData: ImageData, w: number, h: number, totalQ: number): (number | null)[] => {
-    const data = imageData.data;
-    const answers: (number | null)[] = [];
+  // Convert to grayscale Uint8Array
+  const toGrayscale = (imageData: ImageData): Uint8ClampedArray => {
+    const { data, width, height } = imageData;
+    const out = new Uint8ClampedArray(width * height);
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      out[j] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) | 0;
+    }
+    return out;
+  };
 
-    // OMR grid parameters - estimate positions based on A4 proportions
+  // Find darkest blob center inside a region — used for corner markers.
+  const findDarkestBlob = (
+    gray: Uint8ClampedArray, w: number, h: number,
+    x0: number, y0: number, x1: number, y1: number
+  ): { x: number; y: number } | null => {
+    // Threshold using min in region
+    let min = 255;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const v = gray[y * w + x];
+        if (v < min) min = v;
+      }
+    }
+    const thresh = Math.min(80, min + 40);
+    let sx = 0, sy = 0, n = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        if (gray[y * w + x] < thresh) {
+          sx += x; sy += y; n++;
+        }
+      }
+    }
+    if (n < 30) return null;
+    return { x: sx / n, y: sy / n };
+  };
+
+  const findCornerMarkers = (gray: Uint8ClampedArray, w: number, h: number) => {
+    // Search in corner quadrants (~25% of page)
+    const qw = Math.floor(w * 0.25);
+    const qh = Math.floor(h * 0.25);
+    const tl = findDarkestBlob(gray, w, h, 0, 0, qw, qh);
+    const tr = findDarkestBlob(gray, w, h, w - qw, 0, w, qh);
+    const bl = findDarkestBlob(gray, w, h, 0, h - qh, qw, h);
+    const br = findDarkestBlob(gray, w, h, w - qw, h - qh, w, h);
+    if (!tl || !tr || !bl || !br) return null;
+    return { tl, tr, bl, br };
+  };
+
+  const detectBubbles = (
+    gray: Uint8ClampedArray, w: number, h: number,
+    region: { left: number; right: number; top: number; bottom: number },
+    totalQ: number
+  ): { answers: (number | null)[]; confidence: number[] } => {
     const cols = totalQ <= 90 ? 6 : 9;
     const perCol = Math.ceil(totalQ / cols);
-    
-    // OMR area roughly in lower 70% of page, after header
-    const omrTop = h * 0.15;
-    const omrBottom = h * 0.92;
-    const omrLeft = w * 0.03;
-    const omrRight = w * 0.97;
-    
-    const colWidth = (omrRight - omrLeft) / cols;
-    const rowHeight = (omrBottom - omrTop) / perCol;
+
+    const omrW = region.right - region.left;
+    const omrH = region.bottom - region.top;
+    const colWidth = omrW / cols;
+    const rowHeight = omrH / perCol;
+
+    const answers: (number | null)[] = [];
+    const confidence: number[] = [];
 
     for (let q = 0; q < totalQ; q++) {
       const col = Math.floor(q / perCol);
       const row = q % perCol;
-      
-      const cellLeft = omrLeft + col * colWidth;
-      const cellTop = omrTop + row * rowHeight;
-      
-      // Each cell has 5 columns: Q, A, B, C, D
-      const bubbleWidth = colWidth / 5;
-      
-      let darkest = -1;
-      let darkestValue = 255;
 
+      const cellLeft = region.left + col * colWidth;
+      const cellTop = region.top + row * rowHeight;
+      const bubbleWidth = colWidth / 5; // [Q, A, B, C, D]
+
+      const darknesses: number[] = [];
       for (let opt = 0; opt < 4; opt++) {
-        const bx = cellLeft + (opt + 1) * bubbleWidth + bubbleWidth * 0.2;
-        const by = cellTop + rowHeight * 0.2;
-        const bw = bubbleWidth * 0.6;
-        const bh = rowHeight * 0.6;
+        // Center of each option bubble
+        const cx = cellLeft + (opt + 1.5) * bubbleWidth;
+        const cy = cellTop + rowHeight * 0.5;
+        const r = Math.min(bubbleWidth, rowHeight) * 0.3;
 
-        // Sample darkness in bubble region
-        let totalDarkness = 0;
-        let pixelCount = 0;
-
-        for (let y = Math.floor(by); y < Math.min(Math.floor(by + bh), h); y++) {
-          for (let x = Math.floor(bx); x < Math.min(Math.floor(bx + bw), w); x++) {
-            const idx = (y * w + x) * 4;
-            const gray = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
-            totalDarkness += gray;
-            pixelCount++;
+        let total = 0, count = 0;
+        const x0 = Math.max(0, Math.floor(cx - r));
+        const x1 = Math.min(w, Math.floor(cx + r));
+        const y0 = Math.max(0, Math.floor(cy - r));
+        const y1 = Math.min(h, Math.floor(cy + r));
+        for (let y = y0; y < y1; y++) {
+          for (let x = x0; x < x1; x++) {
+            const dx = x - cx, dy = y - cy;
+            if (dx * dx + dy * dy <= r * r) {
+              total += gray[y * w + x];
+              count++;
+            }
           }
         }
-
-        const avgBrightness = pixelCount > 0 ? totalDarkness / pixelCount : 255;
-        if (avgBrightness < darkestValue && avgBrightness < 160) {
-          darkestValue = avgBrightness;
-          darkest = opt;
-        }
+        // "darkness" — higher = darker (filled)
+        const avg = count > 0 ? total / count : 255;
+        darknesses.push(255 - avg);
       }
 
-      answers.push(darkest >= 0 ? darkest : null);
+      // Find darkest with relative threshold
+      let maxIdx = 0, maxVal = darknesses[0];
+      let secondVal = -Infinity;
+      for (let i = 1; i < 4; i++) {
+        if (darknesses[i] > maxVal) { secondVal = maxVal; maxVal = darknesses[i]; maxIdx = i; }
+        else if (darknesses[i] > secondVal) secondVal = darknesses[i];
+      }
+      const sorted = [...darknesses].sort((a, b) => a - b);
+      const minVal = sorted[0];
+
+      // Only accept if darkness is meaningful AND clearly darker than runner-up
+      const filledEnough = maxVal > 60; // 0..255 range
+      const decisive = (maxVal - secondVal) > 18 && (maxVal - minVal) > 25;
+
+      if (filledEnough && decisive) {
+        answers.push(maxIdx);
+        confidence.push(Math.min(1, (maxVal - secondVal) / 60));
+      } else {
+        answers.push(null);
+        confidence.push(0);
+      }
     }
 
-    return answers;
+    return { answers, confidence };
+  };
+
+  const drawOverlay = (
+    ctx: CanvasRenderingContext2D,
+    region: { left: number; right: number; top: number; bottom: number },
+    totalQ: number,
+    answers: (number | null)[]
+  ) => {
+    const cols = totalQ <= 90 ? 6 : 9;
+    const perCol = Math.ceil(totalQ / cols);
+    const omrW = region.right - region.left;
+    const omrH = region.bottom - region.top;
+    const colWidth = omrW / cols;
+    const rowHeight = omrH / perCol;
+
+    ctx.strokeStyle = "rgba(59,130,246,0.6)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(region.left, region.top, omrW, omrH);
+
+    for (let q = 0; q < totalQ; q++) {
+      const col = Math.floor(q / perCol);
+      const row = q % perCol;
+      const ans = answers[q];
+      if (ans === null) continue;
+      const cellLeft = region.left + col * colWidth;
+      const cellTop = region.top + row * rowHeight;
+      const bubbleWidth = colWidth / 5;
+      const cx = cellLeft + (ans + 1.5) * bubbleWidth;
+      const cy = cellTop + rowHeight * 0.5;
+      const r = Math.min(bubbleWidth, rowHeight) * 0.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(34,197,94,0.95)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  };
+
+  const updateAnswer = (qIdx: number, optIdx: number | null) => {
+    setDetectedAnswers((prev) => {
+      const next = [...prev];
+      next[qIdx] = optIdx;
+      return next;
+    });
+  };
+
+  const finalizeReport = () => {
+    const report = generateReport(detectedAnswers, questions, subjectGroups);
+    setScanResult(report);
+    setShowScanner(true);
+    setShowReview(false);
   };
 
   // Generate detailed report
@@ -297,6 +479,103 @@ export const OfflinePaperPreview = ({
   // OMR columns
   const omrCols = totalQuestions <= 90 ? 6 : 9;
   const omrPerCol = Math.ceil(totalQuestions / omrCols);
+
+  // ===== Review screen =====
+  if (showReview) {
+    const detectedCount = detectedAnswers.filter((a) => a !== null).length;
+    const lowConfCount = confidenceMap.filter((c, i) => detectedAnswers[i] !== null && c < 0.4).length;
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="sticky top-0 z-50 bg-white border-b shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <Button variant="ghost" onClick={() => { setShowReview(false); setPreviewImage(null); }} size="sm">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
+            </Button>
+            <div className="text-xs text-muted-foreground hidden sm:block">
+              Detected: <b>{detectedCount}</b> / {totalQuestions}
+              {lowConfCount > 0 && <span className="text-amber-600 ml-2">⚠ {lowConfCount} low confidence</span>}
+            </div>
+            <Button onClick={finalizeReport} size="sm" className="gap-2">
+              <CheckCircle2 className="h-4 w-4" /> Confirm & Score
+            </Button>
+          </div>
+        </div>
+
+        <div className="max-w-5xl mx-auto p-4 space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-blue-900">Review your detected answers</p>
+              <p className="text-blue-700 text-xs mt-0.5">
+                Tap any cell to change it. Yellow = low confidence (please verify). Then tap <b>Confirm & Score</b>.
+              </p>
+            </div>
+          </div>
+
+          {previewImage && (
+            <div className="bg-white rounded-xl border overflow-hidden">
+              <p className="text-xs font-semibold text-gray-500 px-3 py-2 border-b uppercase tracking-wider">Scanned image (green = detected)</p>
+              <div className="max-h-[300px] overflow-auto bg-gray-100 p-2">
+                <img src={previewImage} alt="OMR preview" className="max-w-full mx-auto" />
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-xl border p-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Detected Answers — tap to edit</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              {detectedAnswers.map((ans, i) => {
+                const conf = confidenceMap[i] || 0;
+                const isLow = ans !== null && conf < 0.4;
+                return (
+                  <div
+                    key={i}
+                    className={`rounded-lg border p-2 ${isLow ? "border-amber-400 bg-amber-50" : ans === null ? "border-gray-200 bg-gray-50" : "border-green-300 bg-green-50"}`}
+                  >
+                    <div className="text-[10px] font-bold text-gray-500 mb-1">Q{i + 1}</div>
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3].map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => updateAnswer(i, ans === opt ? null : opt)}
+                          className={`flex-1 h-7 rounded text-xs font-bold border transition-all ${
+                            ans === opt
+                              ? "bg-blue-600 text-white border-blue-700"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                          }`}
+                        >
+                          {labels[opt]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end pb-8">
+            <Button onClick={finalizeReport} size="lg" className="gap-2">
+              <CheckCircle2 className="h-4 w-4" /> Confirm & Score
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Full-screen scanning loader
+  if (scanning) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+          <h3 className="text-lg font-bold">Analyzing OMR sheet...</h3>
+          <p className="text-sm text-muted-foreground">Detecting alignment markers and bubbles</p>
+        </div>
+      </div>
+    );
+  }
 
   // Scan Result View
   if (showScanner && scanResult) {
