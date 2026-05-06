@@ -9,7 +9,7 @@ import { TestConfig } from "@/components/practice/TestConfig";
 import { TestInterface } from "@/components/practice/TestInterface";
 import { TestResults } from "@/components/practice/TestResults";
 import { QuestionReview } from "@/components/practice/QuestionReview";
-import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
+import { PracticeLoading } from "@/components/practice/PracticeLoading";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -126,7 +126,15 @@ const Practice = () => {
   const handleCloseResults = () => { setTestResults(null); setTestQuestions([]); setTestAnswers({}); setShowReview(false); };
   const handleReview = () => setShowReview(true);
 
-  if (startTestMutation.isPending) return <LoadingQuestions totalQuestions={50} />;
+  if (startTestMutation.isPending) {
+    const variables = startTestMutation.variables as { count?: number } | undefined;
+    return (
+      <PracticeLoading
+        totalQuestions={variables?.count || 30}
+        chapterName={selectedChapter?.name}
+      />
+    );
+  }
   if (showReview && testQuestions.length > 0) return <QuestionReview questions={testQuestions} answers={testAnswers} onClose={() => setShowReview(false)} />;
   if (testResults) return <TestResults score={testResults.score} totalQuestions={testQuestions.length} correctCount={testResults.correctCount} wrongCount={testResults.wrongCount} unattemptedCount={testResults.unattemptedCount} onClose={handleCloseResults} onReview={handleReview} />;
   if (showTest) return <TestInterface questions={testQuestions} onSubmit={handleSubmitTest} />;
