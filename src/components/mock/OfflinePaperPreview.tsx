@@ -166,9 +166,9 @@ export const OfflinePaperPreview = ({
       const img = new Image();
       img.onload = () => {
         try {
-          const canvas = canvasRef.current;
-          if (!canvas) { setScanning(false); return; }
-
+          // Use an in-memory canvas — the on-DOM canvasRef is unmounted while
+          // the scanning loader is rendered, so we can't rely on it.
+          const canvas = document.createElement("canvas");
           // Downscale to max 1600px on long edge for performance/consistency
           const MAX_DIM = 1600;
           const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
