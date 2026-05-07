@@ -50,7 +50,7 @@ const Practice = () => {
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [showReview, setShowReview] = useState(false);
 
-  const { data: questionCounts } = useQuery({
+  const { data: questionCounts, isLoading: countsLoading } = useQuery({
     queryKey: ['question-counts'],
     queryFn: async () => {
       const { data: subjects } = await supabase.from('subjects').select('id, slug');
@@ -131,6 +131,17 @@ const Practice = () => {
       <PracticeLoading
         totalQuestions={variables?.count || 30}
         chapterName={selectedChapter?.name}
+      />
+    );
+  }
+  // Show loading screen while initial chapter/question counts are fetched
+  // so users see a progress UI as soon as they click "Practice" in the sidebar.
+  if (countsLoading || !questionCounts) {
+    const expected = neetSubjects.reduce((s, sub) => s + sub.chapters.length, 0);
+    return (
+      <PracticeLoading
+        totalQuestions={expected}
+        chapterName="Loading chapter library..."
       />
     );
   }
