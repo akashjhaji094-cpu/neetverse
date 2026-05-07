@@ -43,15 +43,12 @@ export function BroadcastOverlay() {
 
       if (cancelled || !bc) return;
 
-      // Has the user already read it?
-      const { data: read } = await supabase
-        .from("user_broadcast_reads")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("broadcast_id", bc.id)
-        .maybeSingle();
+      // Show on every refresh until user explicitly confirms (this tab session).
+      // We intentionally do NOT check user_broadcast_reads so that the announcement
+      // re-appears after every page reload until "Got it" is clicked in that session.
+      const dismissedKey = `broadcast_dismissed_${bc.id}`;
+      if (sessionStorage.getItem(dismissedKey)) return;
 
-      if (cancelled || read) return;
       setActive(bc);
       setOpen(true);
     };
@@ -64,10 +61,14 @@ export function BroadcastOverlay() {
 
   const handleDismiss = async () => {
     if (!user || !active) return;
-    await supabase.from("user_broadcast_reads").insert({
-      user_id: user.id,
-      broadcast_id: active.id,
-    });
+    // Mark dismissed for this tab session only — next refresh will show it again
+    // unless the admin deactivates the broadcast.
+    sessionStorage.setItem(`broadcast_dismissed_${active.id}`, "1");
+    // Also record in DB for analytics (best-effort, ignore errors)
+    supabase
+      .from("user_broadcast_reads")
+      .insert({ user_id: user.id, broadcast_id: active.id })
+      .then(() => {});
     setOpen(false);
   };
 
