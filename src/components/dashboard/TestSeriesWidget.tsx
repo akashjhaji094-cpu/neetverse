@@ -26,10 +26,16 @@ export function TestSeriesWidget() {
         .from('questions')
         .select('*', { count: 'exact', head: true });
 
+      // Mock test combinations: with N questions and 180-question mocks,
+      // unique combinations explode quickly. Display as "1L+" once we have
+      // enough question pool to generate it.
+      const qPool = totalQuestions || 0;
+      const hasFullPool = qPool >= 180;
+
       return {
         attempted: totalAttempts || 0,
-        available: Math.floor((totalQuestions || 0) / 90),
-        total: Math.floor((totalQuestions || 0) / 90),
+        available: hasFullPool ? '1L+' : String(Math.floor(qPool / 90)),
+        total: hasFullPool ? '1L+' : String(Math.floor(qPool / 90)),
       };
     },
     enabled: !!user,
