@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { getChapterWeight, largestRemainder, SubjectKey } from "@/data/neet2026Weights";
 
 interface SubjectAnalytics {
   subject: string;
@@ -62,98 +63,134 @@ const Test = () => {
       const { data: subjects } = await supabase.from('subjects').select('id, name, slug');
       if (!subjects) throw new Error('No subjects found');
 
-      if (params.type === 'full-bio') {
-        // Full NEET Mock: 45 Phy + 45 Chem + 90 Bio, ordered Phy → Chem → Bio
-        const subjectRequirements = [
-          { name: 'Physics', count: 45 },
-          { name: 'Chemistry', count: 45 },
-          { name: 'Biology', count: 90 },
-        ];
+      const subjectRequirements = [
+        { name: 'Physics', count: 45 },
+        { name: 'Chemistry', count: 45 },
+        { name: 'Biology', count: 90 },
+      ];
 
-        const allQuestions: Question[] = [];
-
-        for (const req of subjectRequirements) {
-          const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
-          if (!subject) throw new Error(`${req.name} subject not found`);
-
-          const { data: subjectQuestions } = await supabase
-            .from('questions')
-            .select('*')
-            .eq('subject_id', subject.id);
-
-          if (!subjectQuestions || subjectQuestions.length < req.count) {
-            throw new Error(`Not enough ${req.name} questions. Found ${subjectQuestions?.length || 0}, need ${req.count}`);
-          }
-
-          // Fisher-Yates shuffle
-          const shuffled = [...subjectQuestions];
-          const randomValues = new Uint32Array(shuffled.length);
-          crypto.getRandomValues(randomValues);
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = randomValues[i] % (i + 1);
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
-
-          allQuestions.push(...(shuffled.slice(0, req.count) as Question[]));
-        }
-
-        // Questions are already in order: Physics(0-44), Chemistry(45-89), Biology(90-179)
-        return allQuestions;
-      } else {
-        // Custom mock: 45 Phy + 45 Chem + 90 Bio from selected chapters, ordered Phy → Chem → Bio
+      // Resolve which chapters belong to which subject
+      let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
+      if (params.type === 'custom') {
         const { data: allChapters } = await supabase
           .from('chapters')
-          .select('id, subject_id')
+          .select('id, name, subject_id')
           .in('id', params.chapterIds || []);
-
         if (!allChapters || allChapters.length === 0) throw new Error('No valid chapters selected');
-
-        const chaptersBySubject = new Map<string, string[]>();
         allChapters.forEach(ch => {
-          const existing = chaptersBySubject.get(ch.subject_id) || [];
-          existing.push(ch.id);
-          chaptersBySubject.set(ch.subject_id, existing);
+          const arr = chaptersBySubject.get(ch.subject_id) || [];
+          arr.push({ id: ch.id, name: ch.name });
+          chaptersBySubject.set(ch.subject_id, arr);
         });
+      } else {
+        // full-bio === full mock: use every chapter in DB
+        const { data: allChapters } = await supabase.from('chapters').select('id, name, subject_id');
+        (allChapters || []).forEach(ch => {
+          const arr = chaptersBySubject.get(ch.subject_id) || [];
+          arr.push({ id: ch.id, name: ch.name });
+          chaptersBySubject.set(ch.subject_id, arr);
+        });
+      }
 
-        const subjectRequirements = [
-          { name: 'Physics', count: 45 },
-          { name: 'Chemistry', count: 45 },
-          { name: 'Biology', count: 90 },
-        ];
+      const allQuestions: Question[] = [];
 
-        const allQuestions: Question[] = [];
+      for (const req of subjectRequirements) {
+        const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
+        if (!subject) throw new Error(`${req.name} subject not found`);
 
-        for (const req of subjectRequirements) {
-          const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
-          if (!subject) throw new Error(`${req.name} subject not found`);
-
-          const selectedChapters = chaptersBySubject.get(subject.id) || [];
-          if (selectedChapters.length === 0) {
-            throw new Error(`No chapters selected for ${req.name}. Please select at least one chapter from each subject.`);
-          }
-
-          const { data: subjectQuestions } = await supabase
-            .from('questions')
-            .select('*')
-            .in('chapter_id', selectedChapters);
-
-          if (!subjectQuestions || subjectQuestions.length < req.count) {
-            throw new Error(`Not enough ${req.name} questions. Found ${subjectQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
-          }
-
-          const shuffled = [...subjectQuestions];
-          const randomValues = new Uint32Array(shuffled.length);
-          crypto.getRandomValues(randomValues);
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = randomValues[i] % (i + 1);
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
-
-          allQuestions.push(...(shuffled.slice(0, req.count) as Question[]));
+        const subjChapters = chaptersBySubject.get(subject.id) || [];
+        if (subjChapters.length === 0) {
+          throw new Error(`No chapters selected for ${req.name}.`);
         }
 
-        return allQuestions;
+        const subjKey = subject.slug.toLowerCase() as SubjectKey;
+
+        // Fetch ALL questions for selected chapters in one go
+        const { data: subjQuestions } = await supabase
+          .from('questions')
+          .select('*')
+          .in('chapter_id', subjChapters.map(c => c.id));
+
+        if (!subjQuestions || subjQuestions.length < req.count) {
+          throw new Error(`Not enough ${req.name} questions. Found ${subjQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
+        }
+
+        // Group questions by chapter and compute available counts
+        const byChapter = new Map<string, Question[]>();
+        (subjQuestions as Question[]).forEach(q => {
+          const arr = byChapter.get(q.chapter_id) || [];
+          arr.push(q);
+          byChapter.set(q.chapter_id, arr);
+        });
+
+        // Build weight list (only chapters that actually have questions)
+        const weighted = subjChapters
+          .filter(c => (byChapter.get(c.id) || []).length > 0)
+          .map(c => ({
+            id: c.id,
+            weight: getChapterWeight(subjKey, c.name),
+            available: (byChapter.get(c.id) || []).length,
+          }));
+
+        // Compute target allocation via largest remainder
+        let allocation = largestRemainder(weighted, req.count);
+
+        // Redistribute shortfall to high-weight chapters with surplus capacity
+        const overflow: string[] = [];
+        for (const c of weighted) {
+          const want = allocation[c.id] || 0;
+          if (want > c.available) {
+            const excess = want - c.available;
+            allocation[c.id] = c.available;
+            for (let k = 0; k < excess; k++) overflow.push('_');
+          }
+        }
+        if (overflow.length > 0) {
+          // Distribute overflow by weight to chapters with remaining capacity
+          const candidates = weighted
+            .filter(c => (allocation[c.id] || 0) < c.available)
+            .sort((a, b) => b.weight - a.weight);
+          let idx = 0;
+          while (overflow.length > 0 && candidates.length > 0) {
+            const c = candidates[idx % candidates.length];
+            if ((allocation[c.id] || 0) < c.available) {
+              allocation[c.id] = (allocation[c.id] || 0) + 1;
+              overflow.pop();
+            }
+            idx++;
+            // remove saturated candidates
+            if ((allocation[c.id] || 0) >= c.available) {
+              candidates.splice(candidates.indexOf(c), 1);
+              idx = 0;
+            }
+          }
+        }
+
+        // Pick random N from each chapter per allocation
+        const cryptoShuffle = <X,>(arr: X[]): X[] => {
+          const a = [...arr];
+          const rv = new Uint32Array(a.length);
+          crypto.getRandomValues(rv);
+          for (let i = a.length - 1; i > 0; i--) {
+            const j = rv[i] % (i + 1);
+            [a[i], a[j]] = [a[j], a[i]];
+          }
+          return a;
+        };
+
+        const picked: Question[] = [];
+        for (const c of weighted) {
+          const n = allocation[c.id] || 0;
+          if (n === 0) continue;
+          const pool = byChapter.get(c.id) || [];
+          picked.push(...cryptoShuffle(pool).slice(0, n));
+        }
+
+        // Final shuffle so chapter blocks aren't contiguous within subject
+        allQuestions.push(...cryptoShuffle(picked).slice(0, req.count));
       }
+
+      return allQuestions;
     },
     onSuccess: (data) => {
       setQuestions(data);
