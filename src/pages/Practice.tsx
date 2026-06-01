@@ -13,7 +13,7 @@ import { PracticeLoading } from "@/components/practice/PracticeLoading";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Target, Zap, CheckCircle, ChevronRight, Dna, Atom, FlaskConical, Sparkles } from "lucide-react";
+import { Zap, CheckCircle, ChevronRight, Dna, Atom, FlaskConical, Sparkles, Loader2 } from "lucide-react";
 
 const subjectConfig: Record<string, { 
   icon: React.ElementType; 
@@ -68,10 +68,26 @@ const Practice = () => {
 
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data: allQuestions, error } = await supabase.from('questions').select('*').eq('chapter_id', chapterId).eq('subject_id', subjectId);
       if (error) throw error;
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
-      const shuffled = [...allQuestions];
+
+      // Exclude questions the user has already answered correctly
+      let pool = allQuestions;
+      if (user) {
+        const { data: correctAnswers } = await supabase
+          .from('attempt_answers')
+          .select('question_id, attempts!inner(user_id)')
+          .eq('is_correct', true)
+          .eq('attempts.user_id', user.id);
+        const correctIds = new Set((correctAnswers || []).map((a: any) => a.question_id));
+        const fresh = allQuestions.filter(q => !correctIds.has(q.id));
+        // If too few fresh remain, fall back to full pool so user can still practice
+        if (fresh.length >= count) pool = fresh;
+      }
+
+      const shuffled = [...pool];
       const randomValues = new Uint32Array(shuffled.length);
       crypto.getRandomValues(randomValues);
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -131,17 +147,6 @@ const Practice = () => {
       <PracticeLoading
         totalQuestions={variables?.count || 30}
         chapterName={selectedChapter?.name}
-      />
-    );
-  }
-  // Show loading screen while initial chapter/question counts are fetched
-  // so users see a progress UI as soon as they click "Practice" in the sidebar.
-  if (countsLoading || !questionCounts) {
-    const expected = neetSubjects.reduce((s, sub) => s + sub.chapters.length, 0);
-    return (
-      <PracticeLoading
-        totalQuestions={expected}
-        chapterName="Loading chapter library..."
       />
     );
   }
