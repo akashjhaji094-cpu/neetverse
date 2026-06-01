@@ -204,24 +204,84 @@ const Test = () => {
   // Bio-only mock from selected chapters
   const fetchBioMockMutation = useMutation({
     mutationFn: async (chapterIds: string[]) => {
+      const { data: chapters } = await supabase
+        .from('chapters')
+        .select('id, name')
+        .in('id', chapterIds);
+      if (!chapters || chapters.length === 0) throw new Error('No chapters selected');
+
       const { data: bioQuestions } = await supabase
         .from('questions')
         .select('*')
         .in('chapter_id', chapterIds);
-
       if (!bioQuestions || bioQuestions.length < 90) {
         throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
       }
 
-      const shuffled = [...bioQuestions];
-      const randomValues = new Uint32Array(shuffled.length);
-      crypto.getRandomValues(randomValues);
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = randomValues[i] % (i + 1);
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const byChapter = new Map<string, Question[]>();
+      (bioQuestions as Question[]).forEach(q => {
+        const arr = byChapter.get(q.chapter_id) || [];
+        arr.push(q);
+        byChapter.set(q.chapter_id, arr);
+      });
+
+      const weighted = chapters
+        .filter(c => (byChapter.get(c.id) || []).length > 0)
+        .map(c => ({
+          id: c.id,
+          weight: getChapterWeight('biology', c.name),
+          available: (byChapter.get(c.id) || []).length,
+        }));
+
+      let allocation = largestRemainder(weighted, 90);
+
+      // Handle overflow
+      const overflow: string[] = [];
+      for (const c of weighted) {
+        if ((allocation[c.id] || 0) > c.available) {
+          const excess = (allocation[c.id] || 0) - c.available;
+          allocation[c.id] = c.available;
+          for (let k = 0; k < excess; k++) overflow.push('_');
+        }
+      }
+      if (overflow.length > 0) {
+        const candidates = weighted
+          .filter(c => (allocation[c.id] || 0) < c.available)
+          .sort((a, b) => b.weight - a.weight);
+        let idx = 0;
+        while (overflow.length > 0 && candidates.length > 0) {
+          const c = candidates[idx % candidates.length];
+          if ((allocation[c.id] || 0) < c.available) {
+            allocation[c.id] = (allocation[c.id] || 0) + 1;
+            overflow.pop();
+          }
+          idx++;
+          if ((allocation[c.id] || 0) >= c.available) {
+            candidates.splice(candidates.indexOf(c), 1);
+            idx = 0;
+          }
+        }
       }
 
-      return shuffled.slice(0, 90) as Question[];
+      const cryptoShuffle = <X,>(arr: X[]): X[] => {
+        const a = [...arr];
+        const rv = new Uint32Array(a.length);
+        crypto.getRandomValues(rv);
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = rv[i] % (i + 1);
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+
+      const picked: Question[] = [];
+      for (const c of weighted) {
+        const n = allocation[c.id] || 0;
+        if (n === 0) continue;
+        picked.push(...cryptoShuffle(byChapter.get(c.id) || []).slice(0, n));
+      }
+
+      return cryptoShuffle(picked).slice(0, 90);
     },
     onSuccess: (data) => {
       setQuestions(data);
