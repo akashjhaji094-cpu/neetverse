@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { getChapterWeight, largestRemainder, SubjectKey } from "@/data/neet2026Weights";
+import { getChapterWeight, allocateWeighted, SubjectKey } from "@/data/neet2026Weights";
 
 interface SubjectAnalytics {
   subject: string;
@@ -132,39 +132,8 @@ const Test = () => {
             available: (byChapter.get(c.id) || []).length,
           }));
 
-        // Compute target allocation via largest remainder
-        let allocation = largestRemainder(weighted, req.count);
-
-        // Redistribute shortfall to high-weight chapters with surplus capacity
-        const overflow: string[] = [];
-        for (const c of weighted) {
-          const want = allocation[c.id] || 0;
-          if (want > c.available) {
-            const excess = want - c.available;
-            allocation[c.id] = c.available;
-            for (let k = 0; k < excess; k++) overflow.push('_');
-          }
-        }
-        if (overflow.length > 0) {
-          // Distribute overflow by weight to chapters with remaining capacity
-          const candidates = weighted
-            .filter(c => (allocation[c.id] || 0) < c.available)
-            .sort((a, b) => b.weight - a.weight);
-          let idx = 0;
-          while (overflow.length > 0 && candidates.length > 0) {
-            const c = candidates[idx % candidates.length];
-            if ((allocation[c.id] || 0) < c.available) {
-              allocation[c.id] = (allocation[c.id] || 0) + 1;
-              overflow.pop();
-            }
-            idx++;
-            // remove saturated candidates
-            if ((allocation[c.id] || 0) >= c.available) {
-              candidates.splice(candidates.indexOf(c), 1);
-              idx = 0;
-            }
-          }
-        }
+        // Min 1 per selected chapter (when feasible), remainder by NEET 2026 weightage.
+        const allocation = allocateWeighted(weighted, req.count, { minPerChapter: 1 });
 
         // Pick random N from each chapter per allocation
         const cryptoShuffle = <X,>(arr: X[]): X[] => {
@@ -233,35 +202,7 @@ const Test = () => {
           available: (byChapter.get(c.id) || []).length,
         }));
 
-      let allocation = largestRemainder(weighted, 90);
-
-      // Handle overflow
-      const overflow: string[] = [];
-      for (const c of weighted) {
-        if ((allocation[c.id] || 0) > c.available) {
-          const excess = (allocation[c.id] || 0) - c.available;
-          allocation[c.id] = c.available;
-          for (let k = 0; k < excess; k++) overflow.push('_');
-        }
-      }
-      if (overflow.length > 0) {
-        const candidates = weighted
-          .filter(c => (allocation[c.id] || 0) < c.available)
-          .sort((a, b) => b.weight - a.weight);
-        let idx = 0;
-        while (overflow.length > 0 && candidates.length > 0) {
-          const c = candidates[idx % candidates.length];
-          if ((allocation[c.id] || 0) < c.available) {
-            allocation[c.id] = (allocation[c.id] || 0) + 1;
-            overflow.pop();
-          }
-          idx++;
-          if ((allocation[c.id] || 0) >= c.available) {
-            candidates.splice(candidates.indexOf(c), 1);
-            idx = 0;
-          }
-        }
-      }
+      const allocation = allocateWeighted(weighted, 90, { minPerChapter: 1 });
 
       const cryptoShuffle = <X,>(arr: X[]): X[] => {
         const a = [...arr];
