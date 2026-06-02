@@ -148,3 +148,61 @@ export function largestRemainder<T extends { id: string; weight: number }>(
   items.forEach(i => { out[i.id] = i.final; });
   return out;
 }
+
+/**
+ * Weighted allocation that guarantees `minPerChapter` (default 1) for every chapter
+ * that has available questions, then distributes the remainder by weight (largest remainder).
+ *
+ * - If totalN < eligible.length: top-(totalN) chapters by weight get 1, rest get 0.
+ * - Otherwise: every eligible chapter gets `minPerChapter`, then remainder is weighted.
+ *
+ * `available` (optional) caps allocation per chapter; uncapped if omitted.
+ */
+export function allocateWeighted<T extends { id: string; weight: number; available?: number }>(
+  chapters: T[],
+  totalN: number,
+  opts: { minPerChapter?: number } = {}
+): Record<string, number> {
+  const min = opts.minPerChapter ?? 1;
+  const out: Record<string, number> = {};
+  if (!chapters.length || totalN <= 0) return out;
+
+  const eligible = chapters.filter(c => (c.available ?? Infinity) > 0);
+  if (!eligible.length) return out;
+
+  // Case A: not enough room for min-per-chapter — pick top-N by weight.
+  if (totalN < eligible.length * min) {
+    const sorted = [...eligible].sort((a, b) => b.weight - a.weight);
+    let left = totalN;
+    for (const c of sorted) {
+      if (left <= 0) break;
+      const give = Math.min(min, left, c.available ?? Infinity);
+      out[c.id] = give;
+      left -= give;
+    }
+    return out;
+  }
+
+  // Case B: seed min for each, then weighted distribute the rest.
+  eligible.forEach(c => { out[c.id] = Math.min(min, c.available ?? Infinity); });
+  let remaining = totalN - eligible.reduce((s, c) => s + out[c.id], 0);
+
+  // Iteratively distribute by weight, respecting capacity.
+  while (remaining > 0) {
+    const candidates = eligible.filter(c => (out[c.id] || 0) < (c.available ?? Infinity));
+    if (!candidates.length) break;
+    const extra = largestRemainder(candidates.map(c => ({ id: c.id, weight: c.weight })), remaining);
+    let progressed = false;
+    for (const c of candidates) {
+      const give = Math.min(extra[c.id] || 0, (c.available ?? Infinity) - (out[c.id] || 0));
+      if (give > 0) {
+        out[c.id] = (out[c.id] || 0) + give;
+        remaining -= give;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+
+  return out;
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,21 +50,65 @@ const Practice = () => {
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [showReview, setShowReview] = useState(false);
 
-  const { data: questionCounts, isLoading: countsLoading } = useQuery({
-    queryKey: ['question-counts'],
-    queryFn: async () => {
-      const { data: subjects } = await supabase.from('subjects').select('id, slug');
-      const counts: Record<string, number> = {};
-      for (const subject of subjects || []) {
-        const { data: chapters } = await supabase.from('chapters').select('id, slug').eq('subject_id', subject.id);
-        for (const chapter of chapters || []) {
-          const { count } = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('subject_id', subject.id).eq('chapter_id', chapter.id);
-          counts[`${subject.slug}-${chapter.slug}`] = count || 0;
+  // Live-progress fetch of the entire question index (one round-trip).
+  // We pre-fetch total count first so the loader can show real X / Y.
+  const [questionCounts, setQuestionCounts] = useState<Record<string, number> | null>(null);
+  const [libTotal, setLibTotal] = useState(0);
+  const [libFetched, setLibFetched] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 1) Get total questions count (fast head request)
+      const { count: totalQ } = await supabase
+        .from('questions')
+        .select('*', { count: 'exact', head: true });
+      if (cancelled) return;
+      const total = totalQ || 0;
+      setLibTotal(total);
+
+      // 2) Fetch subjects + chapters slugs (small)
+      const [{ data: subjects }, { data: chapters }] = await Promise.all([
+        supabase.from('subjects').select('id, slug'),
+        supabase.from('chapters').select('id, slug, subject_id'),
+      ]);
+      if (cancelled) return;
+
+      // 3) Fetch question rows in pages to drive real progress
+      const PAGE = 1000;
+      const counts: Record<string, string> = {}; // chapter_id -> subject_slug
+      const subjSlug = new Map((subjects || []).map(s => [s.id, s.slug] as const));
+      const chapSlug = new Map((chapters || []).map(c => [c.id, c.slug] as const));
+      const chapSubj = new Map((chapters || []).map(c => [c.id, c.subject_id] as const));
+
+      const tally: Record<string, number> = {};
+      let from = 0;
+      while (true) {
+        const { data: rows, error } = await supabase
+          .from('questions')
+          .select('chapter_id')
+          .range(from, from + PAGE - 1);
+        if (error || !rows || rows.length === 0) break;
+        for (const r of rows) {
+          const subjId = chapSubj.get(r.chapter_id);
+          const ss = subjId ? subjSlug.get(subjId) : undefined;
+          const cs = chapSlug.get(r.chapter_id);
+          if (ss && cs) {
+            const key = `${ss}-${cs}`;
+            tally[key] = (tally[key] || 0) + 1;
+          }
         }
+        if (cancelled) return;
+        setLibFetched(f => f + rows.length);
+        if (rows.length < PAGE) break;
+        from += PAGE;
       }
-      return counts;
-    }
-  });
+      if (!cancelled) setQuestionCounts(tally);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const countsLoading = !questionCounts;
 
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
@@ -147,6 +191,18 @@ const Practice = () => {
       <PracticeLoading
         totalQuestions={variables?.count || 30}
         chapterName={selectedChapter?.name}
+      />
+    );
+  }
+
+  // Initial library indexing loader — runs as soon as user lands on Practice.
+  if (countsLoading) {
+    return (
+      <PracticeLoading
+        totalQuestions={libTotal || 1}
+        fetched={libFetched}
+        title="Loading Practice Library"
+        chapterName="Indexing questions across all chapters…"
       />
     );
   }
