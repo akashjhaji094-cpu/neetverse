@@ -81,6 +81,15 @@ export const MockTestConfig = ({ open, onClose, onStart, loading, bioOnly }: Moc
     (selectedChapters[subject.id] || []).length > 0
   );
 
+  const handleSelectFullSyllabus = () => {
+    if (!filteredSubjects || !chaptersBySubject) return;
+    const next: Record<string, string[]> = {};
+    filteredSubjects.forEach(s => {
+      next[s.id] = (chaptersBySubject[s.id] || []).map(c => c.id);
+    });
+    setSelectedChapters(next);
+  };
+
   const handleStartTest = () => {
     const allSelected = Object.values(selectedChapters).flat();
     onStart(allSelected);
@@ -122,10 +131,16 @@ export const MockTestConfig = ({ open, onClose, onStart, loading, bioOnly }: Moc
             <div className="text-sm">
               <p className="font-medium">Select at least one chapter from each subject</p>
               <p className="text-muted-foreground">
-                {totalQuestions} questions will be randomly selected from your chosen chapters
-                {!bioOnly && ' (45 Phy + 45 Chem + 90 Bio)'}
+                {totalQuestions} questions distributed by <b>NEET 2026 weightage</b> across your chosen chapters (every selected chapter gets at least 1 question)
+                {!bioOnly && ' — 45 Phy + 45 Chem + 90 Bio'}
               </p>
             </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="secondary" size="sm" onClick={handleSelectFullSyllabus}>
+              {bioOnly ? 'Select Full Biology Syllabus' : 'Select Full Syllabus (All Chapters)'}
+            </Button>
           </div>
 
           <ScrollArea className="h-[400px] pr-4">
