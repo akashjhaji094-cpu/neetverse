@@ -123,19 +123,21 @@ const Test = () => {
           byChapter.set(q.chapter_id, arr);
         });
 
-        // Build weight list (only chapters that actually have questions)
-        const weighted = subjChapters
-          .filter(c => (byChapter.get(c.id) || []).length > 0)
-          .map(c => ({
-            id: c.id,
-            weight: getChapterWeight(subjKey, c.name),
-            available: (byChapter.get(c.id) || []).length,
-          }));
+        // Build weight list for ALL selected chapters (including empty ones)
+        const allWeighted = subjChapters.map(c => ({
+          id: c.id,
+          weight: getChapterWeight(subjKey, c.name),
+          available: (byChapter.get(c.id) || []).length,
+        }));
 
-        // Min 1 per selected chapter (when feasible), remainder by NEET 2026 weightage.
-        const allocation = allocateWeighted(weighted, req.count, { minPerChapter: 1 });
+        // Ideal allocation: min 1 per selected chapter, remainder by NEET 2026 weightage
+        // (no availability cap here — we'll borrow from other chapters for empty ones)
+        const idealAlloc = allocateWeighted(
+          allWeighted.map(c => ({ id: c.id, weight: c.weight })),
+          req.count,
+          { minPerChapter: 1 }
+        );
 
-        // Pick random N from each chapter per allocation
         const cryptoShuffle = <X,>(arr: X[]): X[] => {
           const a = [...arr];
           const rv = new Uint32Array(a.length);
@@ -147,12 +149,37 @@ const Test = () => {
           return a;
         };
 
+        // Step 1: pick what each chapter can supply (capped by availability)
         const picked: Question[] = [];
-        for (const c of weighted) {
-          const n = allocation[c.id] || 0;
-          if (n === 0) continue;
+        const usedIds = new Set<string>();
+        let deficit = 0;
+        for (const c of allWeighted) {
+          const want = idealAlloc[c.id] || 0;
           const pool = byChapter.get(c.id) || [];
-          picked.push(...cryptoShuffle(pool).slice(0, n));
+          const take = Math.min(want, pool.length);
+          if (take > 0) {
+            const sel = cryptoShuffle(pool).slice(0, take);
+            sel.forEach(q => usedIds.add(q.id));
+            picked.push(...sel);
+          }
+          deficit += want - take;
+        }
+
+        // Step 2: fill deficit by borrowing from chapters with leftover capacity,
+        // prioritised by NEET 2026 weight (highest first)
+        if (deficit > 0) {
+          const donors = [...allWeighted]
+            .filter(c => (byChapter.get(c.id) || []).length > (idealAlloc[c.id] || 0))
+            .sort((a, b) => b.weight - a.weight);
+          for (const d of donors) {
+            if (deficit <= 0) break;
+            const leftover = (byChapter.get(d.id) || []).filter(q => !usedIds.has(q.id));
+            const take = Math.min(deficit, leftover.length);
+            const sel = cryptoShuffle(leftover).slice(0, take);
+            sel.forEach(q => usedIds.add(q.id));
+            picked.push(...sel);
+            deficit -= take;
+          }
         }
 
         // Final shuffle so chapter blocks aren't contiguous within subject
