@@ -55,13 +55,20 @@ export const OfflinePaperPreview = ({
   // Fetch chapter & subject names for "Topics covered" section
   useEffect(() => {
     const fetchMeta = async () => {
-      const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
-      const subjectIds = Array.from(new Set(questions.map(q => q.subject_id).filter(Boolean)));
-      if (chapterIds.length === 0) return;
-      const [chRes, subRes] = await Promise.all([
-        supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds),
-        supabase.from("subjects").select("id, name").in("id", subjectIds),
-      ]);
+      // If parent told us which chapters were SELECTED (full syllabus or custom),
+      // list ALL of them — not just those that contributed questions.
+      let chRes: any;
+      if (selectedChapterIds === 'all') {
+        chRes = await supabase.from("chapters").select("id, name, subject_id");
+      } else if (Array.isArray(selectedChapterIds) && selectedChapterIds.length > 0) {
+        chRes = await supabase.from("chapters").select("id, name, subject_id").in("id", selectedChapterIds);
+      } else {
+        const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
+        if (chapterIds.length === 0) return;
+        chRes = await supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds);
+      }
+      const subjectIds = Array.from(new Set((chRes.data || []).map((c: any) => c.subject_id).filter(Boolean)));
+      const subRes = await supabase.from("subjects").select("id, name").in("id", subjectIds);
       const cm: Record<string, { name: string; subjectId: string }> = {};
       (chRes.data || []).forEach(c => { cm[c.id] = { name: c.name, subjectId: c.subject_id }; });
       const sm: Record<string, string> = {};
@@ -70,7 +77,7 @@ export const OfflinePaperPreview = ({
       setSubjectMap(sm);
     };
     fetchMeta();
-  }, [questions]);
+  }, [questions, selectedChapterIds]);
 
   // Build "Topics covered" grouped by subject -> unique chapter list
   const topicsBySubject: Record<string, string[]> = {};
