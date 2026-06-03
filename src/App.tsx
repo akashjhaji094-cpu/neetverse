@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Practice from "./pages/Practice";
 import Revision from "./pages/Revision";
+import Pyqs from "./pages/Pyqs";
 import Test from "./pages/Test";
 import Notes from "./pages/Notes";
 import Admin from "./pages/Admin";
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/practice" element={<Practice />} />
             <Route path="/revision" element={<Revision />} />
+            <Route path="/pyqs" element={<Pyqs />} />
             <Route path="/test" element={<Test />} />
             <Route path="/notes" element={<Notes />} />
             <Route path="/admin" element={<Admin />} />
