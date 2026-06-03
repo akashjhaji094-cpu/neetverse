@@ -212,8 +212,9 @@ const Test = () => {
 
       const { data: bioQuestions } = await supabase
         .from('questions')
-        .select('*')
-        .in('chapter_id', chapterIds);
+        .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+        .in('chapter_id', chapterIds)
+        .limit(50000);
       if (!bioQuestions || bioQuestions.length < 90) {
         throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
       }
