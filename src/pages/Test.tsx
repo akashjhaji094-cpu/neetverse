@@ -95,22 +95,25 @@ const Test = () => {
 
       const allQuestions: Question[] = [];
 
-      for (const req of subjectRequirements) {
+      // Run all subject fetches in PARALLEL (3x speedup vs sequential)
+      const subjectFetches = subjectRequirements.map(async (req) => {
         const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
         if (!subject) throw new Error(`${req.name} subject not found`);
-
         const subjChapters = chaptersBySubject.get(subject.id) || [];
-        if (subjChapters.length === 0) {
-          throw new Error(`No chapters selected for ${req.name}.`);
-        }
-
+        if (subjChapters.length === 0) throw new Error(`No chapters selected for ${req.name}.`);
         const subjKey = subject.slug.toLowerCase() as SubjectKey;
 
-        // Fetch ALL questions for selected chapters in one go
+        // Slim column list (skip raw_html — large + unused in test view)
         const { data: subjQuestions } = await supabase
           .from('questions')
-          .select('*')
-          .in('chapter_id', subjChapters.map(c => c.id));
+          .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+          .in('chapter_id', subjChapters.map(c => c.id))
+          .limit(50000);
+        return { req, subject, subjChapters, subjKey, subjQuestions };
+      });
+      const fetched = await Promise.all(subjectFetches);
+
+      for (const { req, subjChapters, subjKey, subjQuestions } of fetched) {
 
         if (!subjQuestions || subjQuestions.length < req.count) {
           throw new Error(`Not enough ${req.name} questions. Found ${subjQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
