@@ -67,7 +67,9 @@ export const OfflinePaperPreview = ({
         if (chapterIds.length === 0) return;
         chRes = await supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds);
       }
-      const subjectIds = Array.from(new Set((chRes.data || []).map((c: any) => c.subject_id).filter(Boolean)));
+      const subjectIds = Array.from(
+        new Set((chRes.data || []).map((c: any) => c.subject_id).filter(Boolean))
+      ) as string[];
       const subRes = await supabase.from("subjects").select("id, name").in("id", subjectIds);
       const cm: Record<string, { name: string; subjectId: string }> = {};
       (chRes.data || []).forEach(c => { cm[c.id] = { name: c.name, subjectId: c.subject_id }; });
