@@ -383,6 +383,7 @@ const Test = () => {
         onClose={handleReset}
         onStart={(chapterIds) => {
           setTestType('custom');
+          setSelectedChapterIds(chapterIds);
           fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
         }}
         loading={fetchQuestionsMutation.isPending}
@@ -397,6 +398,7 @@ const Test = () => {
         onClose={handleReset}
         onStart={(chapterIds) => {
           setTestType('full-bio');
+          setSelectedChapterIds(chapterIds);
           fetchBioMockMutation.mutate(chapterIds);
         }}
         loading={fetchBioMockMutation.isPending}
