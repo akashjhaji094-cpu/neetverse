@@ -653,6 +653,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_question_counts_per_chapter: {
+        Args: never
+        Returns: {
+          chapter_id: string
+          total: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
