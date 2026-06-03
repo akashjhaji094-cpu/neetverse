@@ -32,6 +32,7 @@ const Test = () => {
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedChapterIds, setSelectedChapterIds] = useState<string[] | 'all'>('all');
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [results, setResults] = useState<{
     score: number;
