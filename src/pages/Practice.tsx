@@ -94,7 +94,12 @@ const Practice = () => {
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: allQuestions, error } = await supabase.from('questions').select('*').eq('chapter_id', chapterId).eq('subject_id', subjectId);
+      const { data: allQuestions, error } = await supabase
+        .from('questions')
+        .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+        .eq('chapter_id', chapterId)
+        .eq('subject_id', subjectId)
+        .limit(50000);
       if (error) throw error;
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
 
