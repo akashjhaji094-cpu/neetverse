@@ -550,6 +550,7 @@ const Test = () => {
                   className="h-12 text-base font-semibold"
                   onClick={() => {
                     setTestType('full-bio');
+                    setSelectedChapterIds('all');
                     fetchQuestionsMutation.mutate({ type: 'full-bio' });
                   }}
                   disabled={fetchQuestionsMutation.isPending}
