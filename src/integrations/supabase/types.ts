@@ -405,6 +405,77 @@ export type Database = {
         }
         Relationships: []
       }
+      pyq_papers: {
+        Row: {
+          chapter_id: string
+          created_at: string
+          id: string
+          subject_id: string | null
+          title: string
+          total_questions: number
+          uploaded_by: string
+        }
+        Insert: {
+          chapter_id: string
+          created_at?: string
+          id?: string
+          subject_id?: string | null
+          title: string
+          total_questions?: number
+          uploaded_by: string
+        }
+        Update: {
+          chapter_id?: string
+          created_at?: string
+          id?: string
+          subject_id?: string | null
+          title?: string
+          total_questions?: number
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
+      pyq_questions: {
+        Row: {
+          chapter_id: string
+          correct_option_index: number
+          created_at: string
+          id: string
+          image_url: string
+          page_number: number
+          paper_id: string
+          subject_id: string | null
+        }
+        Insert: {
+          chapter_id: string
+          correct_option_index: number
+          created_at?: string
+          id?: string
+          image_url: string
+          page_number: number
+          paper_id: string
+          subject_id?: string | null
+        }
+        Update: {
+          chapter_id?: string
+          correct_option_index?: number
+          created_at?: string
+          id?: string
+          image_url?: string
+          page_number?: number
+          paper_id?: string
+          subject_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pyq_questions_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "pyq_papers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       questions: {
         Row: {
           chapter_id: string
@@ -582,6 +653,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_question_counts_per_chapter: {
+        Args: never
+        Returns: {
+          chapter_id: string
+          total: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

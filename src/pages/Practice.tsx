@@ -59,51 +59,32 @@ const Practice = () => {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // 1) Get total questions count (fast head request)
-      const { count: totalQ } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true });
-      if (cancelled) return;
-      const total = totalQ || 0;
-      setLibTotal(total);
-
-      // 2) Fetch subjects + chapters slugs (small)
-      const [{ data: subjects }, { data: chapters }] = await Promise.all([
+      // SINGLE round-trip: aggregate counts per chapter via RPC + tiny subjects/chapters lookup in parallel
+      const [countsRes, subjectsRes, chaptersRes] = await Promise.all([
+        supabase.rpc('get_question_counts_per_chapter'),
         supabase.from('subjects').select('id, slug'),
         supabase.from('chapters').select('id, slug, subject_id'),
       ]);
       if (cancelled) return;
 
-      // 3) Fetch question rows in pages to drive real progress
-      const PAGE = 1000;
-      const counts: Record<string, string> = {}; // chapter_id -> subject_slug
-      const subjSlug = new Map((subjects || []).map(s => [s.id, s.slug] as const));
-      const chapSlug = new Map((chapters || []).map(c => [c.id, c.slug] as const));
-      const chapSubj = new Map((chapters || []).map(c => [c.id, c.subject_id] as const));
+      const subjSlug = new Map((subjectsRes.data || []).map(s => [s.id, s.slug] as const));
+      const chapSlug = new Map((chaptersRes.data || []).map(c => [c.id, c.slug] as const));
+      const chapSubj = new Map((chaptersRes.data || []).map(c => [c.id, c.subject_id] as const));
 
       const tally: Record<string, number> = {};
-      let from = 0;
-      while (true) {
-        const { data: rows, error } = await supabase
-          .from('questions')
-          .select('chapter_id')
-          .range(from, from + PAGE - 1);
-        if (error || !rows || rows.length === 0) break;
-        for (const r of rows) {
-          const subjId = chapSubj.get(r.chapter_id);
-          const ss = subjId ? subjSlug.get(subjId) : undefined;
-          const cs = chapSlug.get(r.chapter_id);
-          if (ss && cs) {
-            const key = `${ss}-${cs}`;
-            tally[key] = (tally[key] || 0) + 1;
-          }
-        }
-        if (cancelled) return;
-        setLibFetched(f => f + rows.length);
-        if (rows.length < PAGE) break;
-        from += PAGE;
+      let total = 0;
+      for (const row of (countsRes.data || []) as { chapter_id: string; total: number }[]) {
+        const subjId = chapSubj.get(row.chapter_id);
+        const ss = subjId ? subjSlug.get(subjId) : undefined;
+        const cs = chapSlug.get(row.chapter_id);
+        const n = Number(row.total) || 0;
+        total += n;
+        if (ss && cs) tally[`${ss}-${cs}`] = n;
       }
-      if (!cancelled) setQuestionCounts(tally);
+      if (cancelled) return;
+      setLibTotal(total);
+      setLibFetched(total); // RPC returned everything in one shot
+      setQuestionCounts(tally);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -113,7 +94,12 @@ const Practice = () => {
   const startTestMutation = useMutation({
     mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: allQuestions, error } = await supabase.from('questions').select('*').eq('chapter_id', chapterId).eq('subject_id', subjectId);
+      const { data: allQuestions, error } = await supabase
+        .from('questions')
+        .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+        .eq('chapter_id', chapterId)
+        .eq('subject_id', subjectId)
+        .limit(50000);
       if (error) throw error;
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
 

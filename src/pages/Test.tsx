@@ -32,6 +32,7 @@ const Test = () => {
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedChapterIds, setSelectedChapterIds] = useState<string[] | 'all'>('all');
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [results, setResults] = useState<{
     score: number;
@@ -94,22 +95,25 @@ const Test = () => {
 
       const allQuestions: Question[] = [];
 
-      for (const req of subjectRequirements) {
+      // Run all subject fetches in PARALLEL (3x speedup vs sequential)
+      const subjectFetches = subjectRequirements.map(async (req) => {
         const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
         if (!subject) throw new Error(`${req.name} subject not found`);
-
         const subjChapters = chaptersBySubject.get(subject.id) || [];
-        if (subjChapters.length === 0) {
-          throw new Error(`No chapters selected for ${req.name}.`);
-        }
-
+        if (subjChapters.length === 0) throw new Error(`No chapters selected for ${req.name}.`);
         const subjKey = subject.slug.toLowerCase() as SubjectKey;
 
-        // Fetch ALL questions for selected chapters in one go
+        // Slim column list (skip raw_html — large + unused in test view)
         const { data: subjQuestions } = await supabase
           .from('questions')
-          .select('*')
-          .in('chapter_id', subjChapters.map(c => c.id));
+          .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+          .in('chapter_id', subjChapters.map(c => c.id))
+          .limit(50000);
+        return { req, subject, subjChapters, subjKey, subjQuestions };
+      });
+      const fetched = await Promise.all(subjectFetches);
+
+      for (const { req, subjChapters, subjKey, subjQuestions } of fetched) {
 
         if (!subjQuestions || subjQuestions.length < req.count) {
           throw new Error(`Not enough ${req.name} questions. Found ${subjQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
@@ -208,8 +212,9 @@ const Test = () => {
 
       const { data: bioQuestions } = await supabase
         .from('questions')
-        .select('*')
-        .in('chapter_id', chapterIds);
+        .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+        .in('chapter_id', chapterIds)
+        .limit(50000);
       if (!bioQuestions || bioQuestions.length < 90) {
         throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
       }
@@ -382,6 +387,7 @@ const Test = () => {
         onClose={handleReset}
         onStart={(chapterIds) => {
           setTestType('custom');
+          setSelectedChapterIds(chapterIds);
           fetchQuestionsMutation.mutate({ type: 'custom', chapterIds });
         }}
         loading={fetchQuestionsMutation.isPending}
@@ -396,6 +402,7 @@ const Test = () => {
         onClose={handleReset}
         onStart={(chapterIds) => {
           setTestType('full-bio');
+          setSelectedChapterIds(chapterIds);
           fetchBioMockMutation.mutate(chapterIds);
         }}
         loading={fetchBioMockMutation.isPending}
@@ -446,6 +453,7 @@ const Test = () => {
         totalMarks={totalMarks}
         duration={dur}
         subjectGroups={subjectGroups}
+        selectedChapterIds={selectedChapterIds}
         onBack={() => setTestMode('choose-mode')}
       />
     );
@@ -547,6 +555,7 @@ const Test = () => {
                   className="h-12 text-base font-semibold"
                   onClick={() => {
                     setTestType('full-bio');
+                    setSelectedChapterIds('all');
                     fetchQuestionsMutation.mutate({ type: 'full-bio' });
                   }}
                   disabled={fetchQuestionsMutation.isPending}

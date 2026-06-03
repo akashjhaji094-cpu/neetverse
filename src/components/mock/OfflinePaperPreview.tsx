@@ -20,6 +20,7 @@ interface OfflinePaperPreviewProps {
   totalMarks: number;
   duration: string;
   subjectGroups: SubjectGroup[];
+  selectedChapterIds?: string[] | 'all';
   onBack: () => void;
 }
 
@@ -30,6 +31,7 @@ export const OfflinePaperPreview = ({
   totalMarks,
   duration,
   subjectGroups,
+  selectedChapterIds,
   onBack,
 }: OfflinePaperPreviewProps) => {
   const [ready, setReady] = useState(false);
@@ -53,13 +55,22 @@ export const OfflinePaperPreview = ({
   // Fetch chapter & subject names for "Topics covered" section
   useEffect(() => {
     const fetchMeta = async () => {
-      const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
-      const subjectIds = Array.from(new Set(questions.map(q => q.subject_id).filter(Boolean)));
-      if (chapterIds.length === 0) return;
-      const [chRes, subRes] = await Promise.all([
-        supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds),
-        supabase.from("subjects").select("id, name").in("id", subjectIds),
-      ]);
+      // If parent told us which chapters were SELECTED (full syllabus or custom),
+      // list ALL of them — not just those that contributed questions.
+      let chRes: any;
+      if (selectedChapterIds === 'all') {
+        chRes = await supabase.from("chapters").select("id, name, subject_id");
+      } else if (Array.isArray(selectedChapterIds) && selectedChapterIds.length > 0) {
+        chRes = await supabase.from("chapters").select("id, name, subject_id").in("id", selectedChapterIds);
+      } else {
+        const chapterIds = Array.from(new Set(questions.map(q => q.chapter_id).filter(Boolean)));
+        if (chapterIds.length === 0) return;
+        chRes = await supabase.from("chapters").select("id, name, subject_id").in("id", chapterIds);
+      }
+      const subjectIds = Array.from(
+        new Set((chRes.data || []).map((c: any) => c.subject_id).filter(Boolean))
+      ) as string[];
+      const subRes = await supabase.from("subjects").select("id, name").in("id", subjectIds);
       const cm: Record<string, { name: string; subjectId: string }> = {};
       (chRes.data || []).forEach(c => { cm[c.id] = { name: c.name, subjectId: c.subject_id }; });
       const sm: Record<string, string> = {};
@@ -68,17 +79,30 @@ export const OfflinePaperPreview = ({
       setSubjectMap(sm);
     };
     fetchMeta();
-  }, [questions]);
+  }, [questions, selectedChapterIds]);
 
   // Build "Topics covered" grouped by subject -> unique chapter list
   const topicsBySubject: Record<string, string[]> = {};
-  questions.forEach(q => {
-    const subj = subjectMap[q.subject_id] || "General";
-    const chap = chapterMap[q.chapter_id]?.name;
-    if (!chap) return;
-    if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
-    if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
-  });
+  // When parent passed selectedChapterIds, list EVERY selected chapter (even if no Qs).
+  // Otherwise fall back to chapters that actually contributed questions.
+  const hasSelection = selectedChapterIds === 'all' || (Array.isArray(selectedChapterIds) && selectedChapterIds.length > 0);
+  if (hasSelection) {
+    Object.values(chapterMap).forEach(({ name, subjectId }) => {
+      const subj = subjectMap[subjectId] || "General";
+      if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+      if (!topicsBySubject[subj].includes(name)) topicsBySubject[subj].push(name);
+    });
+  } else {
+    questions.forEach(q => {
+      const subj = subjectMap[q.subject_id] || "General";
+      const chap = chapterMap[q.chapter_id]?.name;
+      if (!chap) return;
+      if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+      if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
+    });
+  }
+  // Sort alphabetically within each subject for stable order
+  Object.keys(topicsBySubject).forEach(k => topicsBySubject[k].sort((a, b) => a.localeCompare(b)));
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 

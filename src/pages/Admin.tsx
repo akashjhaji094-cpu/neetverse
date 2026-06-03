@@ -5,8 +5,9 @@ import { ResourceUpload } from "@/components/admin/ResourceUpload";
 import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
+import { PyqsUpload } from "@/components/admin/PyqsUpload";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -46,7 +47,7 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-3xl grid-cols-5">
+            <TabsList className="grid w-full max-w-3xl grid-cols-6">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span className="hidden sm:inline">AI Import</span>
@@ -71,6 +72,11 @@ const Admin = () => {
                 <Megaphone className="h-4 w-4" />
                 <span className="hidden sm:inline">Broadcast</span>
                 <span className="sm:hidden">Msg</span>
+              </TabsTrigger>
+              <TabsTrigger value="pyqs" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">PYQS</span>
+                <span className="sm:hidden">PYQ</span>
               </TabsTrigger>
             </TabsList>
 
@@ -114,6 +120,10 @@ const Admin = () => {
 
               <TabsContent value="broadcast" className="m-0">
                 <BroadcastManager />
+              </TabsContent>
+
+              <TabsContent value="pyqs" className="m-0">
+                <PyqsUpload />
               </TabsContent>
             </div>
           </Tabs>
