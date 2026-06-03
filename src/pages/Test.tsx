@@ -449,6 +449,7 @@ const Test = () => {
         totalMarks={totalMarks}
         duration={dur}
         subjectGroups={subjectGroups}
+        selectedChapterIds={selectedChapterIds}
         onBack={() => setTestMode('choose-mode')}
       />
     );
