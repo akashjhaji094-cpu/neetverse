@@ -83,13 +83,26 @@ export const OfflinePaperPreview = ({
 
   // Build "Topics covered" grouped by subject -> unique chapter list
   const topicsBySubject: Record<string, string[]> = {};
-  questions.forEach(q => {
-    const subj = subjectMap[q.subject_id] || "General";
-    const chap = chapterMap[q.chapter_id]?.name;
-    if (!chap) return;
-    if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
-    if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
-  });
+  // When parent passed selectedChapterIds, list EVERY selected chapter (even if no Qs).
+  // Otherwise fall back to chapters that actually contributed questions.
+  const hasSelection = selectedChapterIds === 'all' || (Array.isArray(selectedChapterIds) && selectedChapterIds.length > 0);
+  if (hasSelection) {
+    Object.values(chapterMap).forEach(({ name, subjectId }) => {
+      const subj = subjectMap[subjectId] || "General";
+      if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+      if (!topicsBySubject[subj].includes(name)) topicsBySubject[subj].push(name);
+    });
+  } else {
+    questions.forEach(q => {
+      const subj = subjectMap[q.subject_id] || "General";
+      const chap = chapterMap[q.chapter_id]?.name;
+      if (!chap) return;
+      if (!topicsBySubject[subj]) topicsBySubject[subj] = [];
+      if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
+    });
+  }
+  // Sort alphabetically within each subject for stable order
+  Object.keys(topicsBySubject).forEach(k => topicsBySubject[k].sort((a, b) => a.localeCompare(b)));
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
