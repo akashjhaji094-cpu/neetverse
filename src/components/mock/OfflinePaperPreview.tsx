@@ -20,6 +20,7 @@ interface OfflinePaperPreviewProps {
   totalMarks: number;
   duration: string;
   subjectGroups: SubjectGroup[];
+  selectedChapterIds?: string[] | 'all';
   onBack: () => void;
 }
 
@@ -30,6 +31,7 @@ export const OfflinePaperPreview = ({
   totalMarks,
   duration,
   subjectGroups,
+  selectedChapterIds,
   onBack,
 }: OfflinePaperPreviewProps) => {
   const [ready, setReady] = useState(false);
