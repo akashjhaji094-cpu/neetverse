@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   FileText, ChevronLeft, ChevronRight, Loader2, ArrowLeft,
-  CheckCircle2, XCircle, MinusCircle, Sparkles,
+  CheckCircle2, XCircle, MinusCircle, Sparkles, Download, RotateCcw,
 } from "lucide-react";
 
 interface ChapterCount { chapter_id: string; chapter_name: string; subject_name: string; total: number; }
@@ -15,6 +16,11 @@ interface PyqRow {
   id: string; image_url: string; correct_option_index: number;
   paper_id: string; page_number: number;
 }
+interface PyqAttempt {
+  score: number; correct_count: number; wrong_count: number;
+  unattempted_count: number; total_questions: number; updated_at: string;
+}
+interface PaperPdfs { paper_pdf_url: string | null; solution_pdf_url: string | null; title: string; }
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -31,6 +37,7 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default function Pyqs() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [chapters, setChapters] = useState<ChapterCount[]>([]);
   const [loadingChapters, setLoadingChapters] = useState(true);
 
@@ -40,6 +47,9 @@ export default function Pyqs() {
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [idx, setIdx] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [priorAttempt, setPriorAttempt] = useState<PyqAttempt | null>(null);
+  const [chapterPdfs, setChapterPdfs] = useState<PaperPdfs[]>([]);
+  const [checkingPrior, setCheckingPrior] = useState(false);
 
   // 1) Load chapter list (one trip per chapter aggregation via group query)
   useEffect(() => {
@@ -69,8 +79,41 @@ export default function Pyqs() {
     })();
   }, []);
 
+  // Open chapter: check for an existing attempt first → if found show scorecard
+  const openChapter = async (ch: ChapterCount) => {
+    setActiveChapter(ch);
+    setCheckingPrior(true);
+    setSubmitted(false);
+    setQuestions([]);
+    setAnswers({});
+    setIdx(0);
+
+    // fetch prior attempt + paper PDFs in parallel
+    const [attemptRes, papersRes] = await Promise.all([
+      user
+        ? (supabase as any).from("pyq_attempts")
+            .select("score, correct_count, wrong_count, unattempted_count, total_questions, updated_at")
+            .eq("user_id", user.id)
+            .eq("chapter_id", ch.chapter_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      (supabase as any).from("pyq_papers")
+        .select("title, paper_pdf_url, solution_pdf_url")
+        .eq("chapter_id", ch.chapter_id),
+    ]);
+    setChapterPdfs(((papersRes as any).data || []) as PaperPdfs[]);
+    setCheckingPrior(false);
+    if ((attemptRes as any).data) {
+      setPriorAttempt((attemptRes as any).data as PyqAttempt);
+    } else {
+      setPriorAttempt(null);
+      void startChapter(ch);
+    }
+  };
+
   const startChapter = async (ch: ChapterCount) => {
     setActiveChapter(ch);
+    setPriorAttempt(null);
     setLoadingQs(true);
     setAnswers({});
     setIdx(0);
@@ -91,11 +134,129 @@ export default function Pyqs() {
     setLoadingQs(false);
   };
 
+  const exitChapter = () => {
+    setActiveChapter(null); setQuestions([]); setAnswers({});
+    setSubmitted(false); setPriorAttempt(null); setChapterPdfs([]);
+  };
+
+  // Persist attempt (upsert by user+chapter)
+  const saveAttempt = async (p: { correct: number; wrong: number; unattempted: number; score: number; total: number }) => {
+    if (!user || !activeChapter) return;
+    await (supabase as any).from("pyq_attempts").upsert({
+      user_id: user.id,
+      chapter_id: activeChapter.chapter_id,
+      score: p.score,
+      correct_count: p.correct,
+      wrong_count: p.wrong,
+      unattempted_count: p.unattempted,
+      total_questions: p.total,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,chapter_id" });
+  };
+
   const groupedChapters = useMemo(() => {
     const g: Record<string, ChapterCount[]> = {};
     chapters.forEach(c => { (g[c.subject_name] = g[c.subject_name] || []).push(c); });
     return g;
   }, [chapters]);
+
+  // Reusable PDF download buttons block
+  const PdfButtons = () => {
+    const papers = chapterPdfs.filter(p => p.paper_pdf_url || p.solution_pdf_url);
+    if (papers.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Downloads</p>
+        <div className="space-y-2">
+          {papers.map((p, i) => (
+            <div key={i} className="rounded-lg border p-3 space-y-2">
+              <p className="text-sm font-medium truncate">{p.title}</p>
+              <div className="flex flex-wrap gap-2">
+                {p.paper_pdf_url && (
+                  <Button asChild size="sm" variant="outline">
+                    <a href={p.paper_pdf_url} target="_blank" rel="noreferrer">
+                      <Download className="h-3.5 w-3.5 mr-1.5" /> Question Paper
+                    </a>
+                  </Button>
+                )}
+                {p.solution_pdf_url && (
+                  <Button asChild size="sm" variant="outline">
+                    <a href={p.solution_pdf_url} target="_blank" rel="noreferrer">
+                      <Download className="h-3.5 w-3.5 mr-1.5" /> Solutions
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ---------- Prior attempt scorecard (shown before user re-attempts) ----------
+  if (activeChapter && priorAttempt && !submitted && questions.length === 0 && !loadingQs) {
+    const a = priorAttempt;
+    return (
+      <DashboardLayout>
+        <div className="p-4 lg:p-6 max-w-3xl mx-auto space-y-5">
+          <Button variant="ghost" size="sm" onClick={exitChapter}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to chapters
+          </Button>
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">Your Last Attempt</p>
+                <h2 className="text-2xl font-bold">{activeChapter.chapter_name}</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Attempted on {new Date(a.updated_at).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="rounded-xl bg-green-50 dark:bg-green-950/40 p-4">
+                  <CheckCircle2 className="h-6 w-6 mx-auto text-green-600 mb-1" />
+                  <p className="text-2xl font-bold">{a.correct_count}</p>
+                  <p className="text-xs text-muted-foreground">Correct</p>
+                </div>
+                <div className="rounded-xl bg-red-50 dark:bg-red-950/40 p-4">
+                  <XCircle className="h-6 w-6 mx-auto text-red-600 mb-1" />
+                  <p className="text-2xl font-bold">{a.wrong_count}</p>
+                  <p className="text-xs text-muted-foreground">Wrong</p>
+                </div>
+                <div className="rounded-xl bg-muted p-4">
+                  <MinusCircle className="h-6 w-6 mx-auto text-muted-foreground mb-1" />
+                  <p className="text-2xl font-bold">{a.unattempted_count}</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                </div>
+              </div>
+              <div className="rounded-xl bg-primary/5 border border-primary/30 p-4 text-center">
+                <p className="text-xs uppercase tracking-wider text-primary font-semibold">Score</p>
+                <p className="text-3xl font-bold">
+                  {a.score} <span className="text-base font-normal text-muted-foreground">/ {a.total_questions * 4}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">+4 correct • -1 wrong</p>
+              </div>
+              <Button className="w-full h-12 text-base font-semibold" onClick={() => startChapter(activeChapter)}>
+                <RotateCcw className="h-4 w-4 mr-2" /> Reattempt
+              </Button>
+              <PdfButtons />
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // checking-for-prior-attempt loader
+  if (activeChapter && checkingPrior) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 flex items-center justify-center h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // ---------- Results state ----------
   if (submitted && activeChapter) {
@@ -140,13 +301,14 @@ export default function Pyqs() {
                 <p className="text-xs text-muted-foreground mt-1">+4 correct • -1 wrong</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => { setActiveChapter(null); setQuestions([]); }}>
+                <Button variant="outline" className="flex-1" onClick={exitChapter}>
                   Back to chapters
                 </Button>
                 <Button className="flex-1" onClick={() => startChapter(activeChapter)}>
                   Retry
                 </Button>
               </div>
+              <PdfButtons />
             </CardContent>
           </Card>
         </div>
@@ -200,12 +362,12 @@ export default function Pyqs() {
 
           {/* Question image */}
           <Card>
-            <CardContent className="p-2 sm:p-4">
+            <CardContent className="p-1 sm:p-3">
               <img
                 src={q.image_url}
                 alt={`Question ${idx + 1}`}
                 loading="eager"
-                className="w-full h-auto rounded-lg border bg-white"
+                className="block w-full h-auto rounded-lg border bg-white min-h-[55vh] object-contain"
               />
             </CardContent>
           </Card>
@@ -237,7 +399,17 @@ export default function Pyqs() {
               <ChevronLeft className="h-4 w-4 mr-1" /> Prev
             </Button>
             {idx === questions.length - 1 ? (
-              <Button onClick={() => setSubmitted(true)}>Finish</Button>
+              <Button onClick={() => {
+                let correct = 0, wrong = 0, unattempted = 0;
+                questions.forEach(qq => {
+                  const ans = answers[qq.id];
+                  if (ans === undefined || ans === null) unattempted++;
+                  else if (ans === qq.correct_option_index) correct++;
+                  else wrong++;
+                });
+                void saveAttempt({ correct, wrong, unattempted, score: correct * 4 - wrong, total: questions.length });
+                setSubmitted(true);
+              }}>Finish</Button>
             ) : (
               <Button onClick={() => setIdx(i => Math.min(questions.length - 1, i + 1))}>
                 Next <ChevronRight className="h-4 w-4 ml-1" />
@@ -314,7 +486,7 @@ export default function Pyqs() {
                 {items.map(ch => (
                   <button
                     key={ch.chapter_id}
-                    onClick={() => startChapter(ch)}
+                    onClick={() => openChapter(ch)}
                     className="text-left rounded-xl border border-border bg-card hover:border-primary hover:shadow-md transition p-4 group"
                   >
                     <div className="flex items-start justify-between gap-2">
