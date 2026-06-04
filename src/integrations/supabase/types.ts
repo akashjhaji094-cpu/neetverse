@@ -405,11 +405,60 @@ export type Database = {
         }
         Relationships: []
       }
+      pyq_attempts: {
+        Row: {
+          chapter_id: string
+          correct_count: number
+          created_at: string
+          id: string
+          score: number
+          total_questions: number
+          unattempted_count: number
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          chapter_id: string
+          correct_count?: number
+          created_at?: string
+          id?: string
+          score?: number
+          total_questions?: number
+          unattempted_count?: number
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          chapter_id?: string
+          correct_count?: number
+          created_at?: string
+          id?: string
+          score?: number
+          total_questions?: number
+          unattempted_count?: number
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pyq_attempts_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pyq_papers: {
         Row: {
           chapter_id: string
           created_at: string
           id: string
+          paper_pdf_url: string | null
+          solution_pdf_url: string | null
           subject_id: string | null
           title: string
           total_questions: number
@@ -419,6 +468,8 @@ export type Database = {
           chapter_id: string
           created_at?: string
           id?: string
+          paper_pdf_url?: string | null
+          solution_pdf_url?: string | null
           subject_id?: string | null
           title: string
           total_questions?: number
@@ -428,6 +479,8 @@ export type Database = {
           chapter_id?: string
           created_at?: string
           id?: string
+          paper_pdf_url?: string | null
+          solution_pdf_url?: string | null
           subject_id?: string | null
           title?: string
           total_questions?: number
