@@ -60,6 +60,7 @@ export function PyqsUpload() {
   const [chapterId, setChapterId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [solutionFile, setSolutionFile] = useState<File | null>(null);
   const [answerKey, setAnswerKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; phase: string }>({
@@ -108,9 +109,28 @@ export function PyqsUpload() {
       const questionPages = Math.max(0, totalPages - 1);
       if (questionPages === 0) throw new Error("PDF needs at least 2 pages (1 intro + questions).");
 
-      // 2) Create paper row
-      setProgress({ done: 0, total: questionPages, phase: "Creating paper..." });
+      // 2) Upload original question paper PDF + (optional) solution PDF to storage
+      setProgress({ done: 0, total: questionPages, phase: "Uploading PDFs..." });
       const paperId = crypto.randomUUID();
+      const paperPdfPath = `pyqs/${paperId}/paper.pdf`;
+      const { error: paperUpErr } = await supabase.storage
+        .from("question-images")
+        .upload(paperPdfPath, file, { contentType: "application/pdf", upsert: true });
+      if (paperUpErr) throw paperUpErr;
+      const paperPdfUrl = supabase.storage.from("question-images").getPublicUrl(paperPdfPath).data.publicUrl;
+
+      let solutionPdfUrl: string | null = null;
+      if (solutionFile) {
+        const solPath = `pyqs/${paperId}/solutions.pdf`;
+        const { error: solErr } = await supabase.storage
+          .from("question-images")
+          .upload(solPath, solutionFile, { contentType: "application/pdf", upsert: true });
+        if (solErr) throw solErr;
+        solutionPdfUrl = supabase.storage.from("question-images").getPublicUrl(solPath).data.publicUrl;
+      }
+
+      // 3) Create paper row
+      setProgress({ done: 0, total: questionPages, phase: "Creating paper..." });
       const { error: pErr } = await supabase.from("pyq_papers").insert({
         id: paperId,
         chapter_id: chapter.id,
@@ -118,10 +138,12 @@ export function PyqsUpload() {
         title: title.trim(),
         total_questions: questionPages,
         uploaded_by: user.id,
-      });
+        paper_pdf_url: paperPdfUrl,
+        solution_pdf_url: solutionPdfUrl,
+      } as any);
       if (pErr) throw pErr;
 
-      // 3) Render each page (skip 1) + upload + insert row
+      // 4) Render each page (skip 1) + upload + insert row
       const rowsToInsert: any[] = [];
       for (let p = 2; p <= totalPages; p++) {
         const qn = p - 1; // question number = page - 1
@@ -148,7 +170,7 @@ export function PyqsUpload() {
         });
       }
 
-      // 4) Bulk insert questions in chunks
+      // 5) Bulk insert questions in chunks
       setProgress({ done: questionPages, total: questionPages, phase: "Saving questions..." });
       for (let i = 0; i < rowsToInsert.length; i += 200) {
         const { error: qErr } = await supabase.from("pyq_questions").insert(rowsToInsert.slice(i, i + 200));
@@ -156,7 +178,7 @@ export function PyqsUpload() {
       }
 
       toast({ title: "PYQ uploaded!", description: `${questionPages} questions added to ${chapter.name}.` });
-      setFile(null); setTitle(""); setAnswerKey(""); setChapterId("");
+      setFile(null); setSolutionFile(null); setTitle(""); setAnswerKey(""); setChapterId("");
     } catch (e: any) {
       console.error(e);
       toast({ title: "Upload failed", description: e.message || "Unknown error", variant: "destructive" });
@@ -224,6 +246,20 @@ export function PyqsUpload() {
             {file && <FileText className="h-4 w-4 text-primary" />}
           </div>
           <p className="text-xs text-muted-foreground">Page 1 ko intro maan ke skip karenge. Q1 = page 2.</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Solutions PDF <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="file"
+              accept="application/pdf"
+              onChange={e => setSolutionFile(e.target.files?.[0] || null)}
+              disabled={busy}
+            />
+            {solutionFile && <FileText className="h-4 w-4 text-primary" />}
+          </div>
+          <p className="text-xs text-muted-foreground">Users will be able to download this from their result screen.</p>
         </div>
 
         <div className="space-y-2">
