@@ -210,11 +210,8 @@ const Test = () => {
         available: (byChapter.get(c.id) || []).length,
       }));
 
-      const idealAlloc = allocateWeighted(
-        allWeighted.map(c => ({ id: c.id, weight: c.weight })),
-        90,
-        { minPerChapter: 1 }
-      );
+      // Pass `available` so allocator caps + redistributes by weight fairly
+      const idealAlloc = allocateWeighted(allWeighted, 90, { minPerChapter: 1 });
 
       const cryptoShuffle = <X,>(arr: X[]): X[] => {
         const a = [...arr];
@@ -228,33 +225,12 @@ const Test = () => {
       };
 
       const picked: Question[] = [];
-      const usedIds = new Set<string>();
-      let deficit = 0;
       for (const c of allWeighted) {
         const want = idealAlloc[c.id] || 0;
+        if (want <= 0) continue;
         const pool = byChapter.get(c.id) || [];
-        const take = Math.min(want, pool.length);
-        if (take > 0) {
-          const sel = cryptoShuffle(pool).slice(0, take);
-          sel.forEach(q => usedIds.add(q.id));
-          picked.push(...sel);
-        }
-        deficit += want - take;
-      }
-
-      if (deficit > 0) {
-        const donors = [...allWeighted]
-          .filter(c => (byChapter.get(c.id) || []).length > (idealAlloc[c.id] || 0))
-          .sort((a, b) => b.weight - a.weight);
-        for (const d of donors) {
-          if (deficit <= 0) break;
-          const leftover = (byChapter.get(d.id) || []).filter(q => !usedIds.has(q.id));
-          const take = Math.min(deficit, leftover.length);
-          const sel = cryptoShuffle(leftover).slice(0, take);
-          sel.forEach(q => usedIds.add(q.id));
-          picked.push(...sel);
-          deficit -= take;
-        }
+        if (pool.length === 0) continue;
+        picked.push(...cryptoShuffle(pool).slice(0, want));
       }
 
       return cryptoShuffle(picked).slice(0, 90);
