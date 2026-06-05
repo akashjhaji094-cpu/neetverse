@@ -407,11 +407,15 @@ export type Database = {
       }
       pyq_attempts: {
         Row: {
+          answers: Json
           chapter_id: string
           correct_count: number
           created_at: string
           id: string
+          paper_id: string | null
           score: number
+          subject_id: string | null
+          time_taken_seconds: number | null
           total_questions: number
           unattempted_count: number
           updated_at: string
@@ -419,11 +423,15 @@ export type Database = {
           wrong_count: number
         }
         Insert: {
+          answers?: Json
           chapter_id: string
           correct_count?: number
           created_at?: string
           id?: string
+          paper_id?: string | null
           score?: number
+          subject_id?: string | null
+          time_taken_seconds?: number | null
           total_questions?: number
           unattempted_count?: number
           updated_at?: string
@@ -431,11 +439,15 @@ export type Database = {
           wrong_count?: number
         }
         Update: {
+          answers?: Json
           chapter_id?: string
           correct_count?: number
           created_at?: string
           id?: string
+          paper_id?: string | null
           score?: number
+          subject_id?: string | null
+          time_taken_seconds?: number | null
           total_questions?: number
           unattempted_count?: number
           updated_at?: string
@@ -448,6 +460,20 @@ export type Database = {
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pyq_attempts_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "pyq_papers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pyq_attempts_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
         ]
