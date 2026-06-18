@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -14,15 +14,16 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
 
   // Redirect if already logged in
+  useEffect(() => {
   if (user) {
-    navigate('/');
-    return null;
+    navigate('/dashboard');
   }
+}, [user, navigate]);
 
-  const handleSkipSignup = () => {
-    setGuestMode();
-    navigate('/');
-  };
+const handleSkipSignup = () => {
+  setGuestMode();
+  navigate('/dashboard');
+};
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,7 +35,7 @@ const Auth = () => {
 
     const { error } = await signUp(email, password, name);
     if (!error) {
-      navigate('/');
+  navigate('/dashboard');
     }
     setLoading(false);
   };
@@ -48,7 +49,7 @@ const Auth = () => {
 
     const { error } = await signIn(email, password);
     if (!error) {
-      navigate('/');
+  navigate('/');
     }
     setLoading(false);
   };
