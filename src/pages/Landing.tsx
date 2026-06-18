@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Brain, Target, Trophy, BookOpen, BarChart3, Zap,
   CheckCircle, XCircle, ArrowRight, Star, Users,
@@ -171,6 +172,14 @@ function DashboardMockup() {
    MAIN LANDING PAGE
 ═══════════════════════════════════════════════════════════ */
 export default function Landing() {
+  const { user, loading, isGuest } = useAuth();
+
+  if (loading) return null;
+
+  if (user && !isGuest) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
