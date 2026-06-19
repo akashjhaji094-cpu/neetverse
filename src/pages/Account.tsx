@@ -9,6 +9,7 @@ import { User, Mail, Calendar, Crown, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { ReferralCard } from "@/components/account/ReferralCard";
 
 const Account = () => {
   const { user } = useAuth();
@@ -29,19 +30,30 @@ const Account = () => {
     enabled: !!user,
   });
 
+  // FIX: was .single() — throws if a user ever has 2+ active rows
+  // (e.g. one admin-granted key + one referral-granted key). Now we
+  // fetch all active rows and just show whichever expires furthest out.
   const { data: premiumAccess } = useQuery({
     queryKey: ['user-premium', user?.id],
     queryFn: async () => {
       if (!user) return null;
-      
+
       const { data } = await supabase
         .from('premium_access_keys')
         .select('*')
         .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
-      
-      return data;
+        .eq('is_active', true);
+
+      const rows = data || [];
+      const validRows = rows.filter(r => !r.expires_at || new Date(r.expires_at) > new Date());
+      if (validRows.length === 0) return null;
+
+      // Prefer the one with no expiry, else the one expiring furthest in the future
+      const noExpiry = validRows.find(r => !r.expires_at);
+      if (noExpiry) return noExpiry;
+      return validRows.sort(
+        (a, b) => new Date(b.expires_at!).getTime() - new Date(a.expires_at!).getTime()
+      )[0];
     },
     enabled: !!user,
   });
@@ -172,6 +184,9 @@ const Account = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Referral Card */}
+        <ReferralCard />
       </div>
     </DashboardLayout>
   );
