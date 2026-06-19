@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useMockLimits } from "@/hooks/useMockLimits";
+import { tryCompleteReferral } from "@/hooks/useReferral";
 import { TestInterface } from "@/components/practice/TestInterface";
 import { MockTestConfig } from "@/components/mock/MockTestConfig";
 import { MockTestAnalytics } from "@/components/mock/MockTestAnalytics";
@@ -12,10 +14,11 @@ import { QuestionReview } from "@/components/practice/QuestionReview";
 import { AttemptModeSelector } from "@/components/mock/AttemptModeSelector";
 import { OfflinePaperPreview } from "@/components/mock/OfflinePaperPreview";
 import { toast } from "sonner";
-import { ListChecks, Loader2, GraduationCap, Dna, Atom } from "lucide-react";
+import { ListChecks, Loader2, GraduationCap, Dna, Atom, Crown, Monitor, FileText } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { getChapterWeight, allocateWeighted, SubjectKey } from "@/data/neet2026Weights";
+import { Link } from "react-router-dom";
 
 interface SubjectAnalytics {
   subject: string;
@@ -29,11 +32,13 @@ interface SubjectAnalytics {
 
 const Test = () => {
   const { user } = useAuth();
+  const { limits, refetch: refetchLimits } = useMockLimits();
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedChapterIds, setSelectedChapterIds] = useState<string[] | 'all'>('all');
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
+  const [loggingOffline, setLoggingOffline] = useState(false);
   const [results, setResults] = useState<{
     score: number;
     correctCount: number;
@@ -71,7 +76,7 @@ const Test = () => {
       ];
 
       // Resolve which chapters belong to which subject
-      let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
+    let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
       if (params.type === 'custom') {
         const { data: allChapters } = await supabase
           .from('chapters')
@@ -195,9 +200,9 @@ const Test = () => {
         .limit(50000);
       if (!bioQuestions || bioQuestions.length < 90) {
         throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
-      }
+        }
 
-      const byChapter = new Map<string, Question[]>();
+        const byChapter = new Map<string, Question[]>();
       (bioQuestions as Question[]).forEach(q => {
         const arr = byChapter.get(q.chapter_id) || [];
         arr.push(q);
@@ -287,7 +292,9 @@ const Test = () => {
         .insert([{
           user_id: user.id,
           type: 'mock' as const,
-          config: { type: testType, questionCount: questions.length } as any,
+          // `mode: 'online'` is what useMockLimits() reads to count this against
+          // the weekly ONLINE mock quota (3/week free, 6/week premium).
+          config: { type: testType, questionCount: questions.length, mode: 'online' } as any,
           score,
           finished_at: new Date().toISOString(),
           details: { subjectScores, correctCount, wrongCount, unattemptedCount } as any,
@@ -312,6 +319,10 @@ const Test = () => {
       setTestAnswers(data.answers);
       setTestMode('results');
       toast.success('Test submitted successfully!');
+      // Completing a mock fulfils the referral requirement for whoever invited
+      // this user — safe to call even if there's no pending referral.
+      if (user) tryCompleteReferral(user.id);
+      refetchLimits();
     },
     onError: () => { toast.error('Failed to submit test'); },
   });
@@ -327,6 +338,42 @@ const Test = () => {
   const handleTestSubmit = (answers: Record<string, number | null>) => {
     setTestAnswers(answers);
     submitTestMutation.mutate(answers);
+  };
+
+  // Gate ONLINE mode behind the weekly limit, then proceed to the test itself.
+  const handleChooseOnline = () => {
+    if (limits && !limits.canTakeOnline) {
+      toast.error(
+        `Weekly online mock limit reached (${limits.onlineLimit}/week). ` +
+        (limits.plan === 'free' ? 'Upgrade to Premium for 6/week.' : 'Resets on a rolling 7-day basis.')
+      );
+      return;
+    }
+    setTestMode('testing');
+  };
+
+  // Gate OFFLINE mode behind the weekly limit, log a lightweight attempt row
+  // (so it counts against the quota), then show the printable paper.
+  const handleChooseOffline = async () => {
+    if (limits && !limits.canTakeOffline) {
+      toast.error(
+        `Weekly offline paper limit reached (${limits.offlineLimit}/week). ` +
+        (limits.plan === 'free' ? 'Upgrade to Premium for 6/week.' : 'Resets on a rolling 7-day basis.')
+      );
+      return;
+    }
+    if (user) {
+      setLoggingOffline(true);
+      await supabase.from('attempts').insert([{
+        user_id: user.id,
+        type: 'mock' as const,
+        config: { type: testType, questionCount: questions.length, mode: 'offline' } as any,
+      }]);
+      tryCompleteReferral(user.id);
+      refetchLimits();
+      setLoggingOffline(false);
+    }
+    setTestMode('offline-preview');
   };
 
   // Loading states
@@ -374,8 +421,8 @@ const Test = () => {
       <AttemptModeSelector
         totalQuestions={totalQ}
         testLabel={testLabel}
-        onOnline={() => setTestMode('testing')}
-        onOffline={() => setTestMode('offline-preview')}
+        onOnline={handleChooseOnline}
+        onOffline={handleChooseOffline}
         onBack={handleReset}
       />
     );
@@ -425,9 +472,9 @@ const Test = () => {
         onClose={() => setTestMode('results')}
       />
     );
-  }
+          }
 
-  if (testMode === 'results' && results) {
+          if (testMode === 'results' && results) {
     return (
       <MockTestAnalytics
         score={results.score}
@@ -463,6 +510,42 @@ const Test = () => {
               <p className="text-muted-foreground">NEET pattern mock tests — Practice makes perfect</p>
             </div>
           </div>
+
+          {/* Weekly usage card */}
+          {limits && user && (
+            <Card className="border-primary/15">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex gap-6">
+                    <div className="flex items-center gap-2">
+                      <Monitor className="h-4 w-4 text-primary" />
+                      <span className="text-sm">
+                        <span className="font-semibold">{limits.onlineUsed}</span>
+                        <span className="text-muted-foreground">
+                          /{limits.onlineLimit === Infinity ? '∞' : limits.onlineLimit} online this week
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-secondary" />
+                      <span className="text-sm">
+                        <span className="font-semibold">{limits.offlineUsed}</span>
+                        <span className="text-muted-foreground">/{limits.offlineLimit} offline this week</span>
+                      </span>
+                    </div>
+                  </div>
+                  {limits.plan === 'free' && (
+                    <Link to="/account">
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <Crown className="h-3.5 w-3.5 text-warning" />
+                        Upgrade for more
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Full NEET Mock (180Q) */}
           <Card className="overflow-hidden border-0 shadow-lg">
