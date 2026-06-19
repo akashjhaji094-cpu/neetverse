@@ -1,29 +1,42 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { applyReferralCode } from '@/hooks/useReferral';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Gift } from 'lucide-react';
 import neetverseLogo from '@/assets/neetverse-logo.jpg';
 
 const Auth = () => {
   const navigate = useNavigate();
   const { signUp, signIn, user, setGuestMode } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  // Pre-fill from ?ref=CODE in the URL (shared link), but the field stays
+  // EDITABLE and OPTIONAL — someone who got a code via WhatsApp text instead
+  // of a link can type it manually, and anyone can just leave it blank.
+  const [referralInput, setReferralInput] = useState(searchParams.get('ref') || '');
+
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) setReferralInput(ref);
+  }, [searchParams]);
 
   // Redirect if already logged in
   useEffect(() => {
-  if (user) {
-    navigate('/dashboard');
-  }
-}, [user, navigate]);
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
-const handleSkipSignup = () => {
-  setGuestMode();
-  navigate('/dashboard');
-};
+  const handleSkipSignup = () => {
+    setGuestMode();
+    navigate('/dashboard');
+  };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -33,9 +46,14 @@ const handleSkipSignup = () => {
     const password = formData.get('password') as string;
     const name = formData.get('name') as string;
 
-    const { error } = await signUp(email, password, name);
+    const { error, userId } = await signUp(email, password, name);
     if (!error) {
-  navigate('/dashboard');
+      const code = referralInput.trim();
+      if (code && userId) {
+        // fire-and-forget — don't block navigation if this fails
+        applyReferralCode(code, userId);
+      }
+      navigate('/dashboard');
     }
     setLoading(false);
   };
@@ -49,7 +67,7 @@ const handleSkipSignup = () => {
 
     const { error } = await signIn(email, password);
     if (!error) {
-  navigate('/');
+      navigate('/');
     }
     setLoading(false);
   };
@@ -142,6 +160,23 @@ const handleSkipSignup = () => {
                       minLength={6}
                     />
                   </div>
+
+                  {/* Optional, skippable — type a friend's code or leave blank */}
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-referral" className="flex items-center gap-1.5 text-muted-foreground">
+                      <Gift className="h-3.5 w-3.5" />
+                      Referral Code <span className="text-xs">(optional)</span>
+                    </Label>
+                    <Input
+                      id="signup-referral"
+                      name="referralCode"
+                      type="text"
+                      placeholder="e.g. RAHU8X2K — leave blank if none"
+                      value={referralInput}
+                      onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                    />
+                  </div>
+
                   <Button type="submit" className="w-full btn-gradient" disabled={loading}>
                     {loading ? 'Creating account...' : 'Sign Up'}
                   </Button>
