@@ -14,7 +14,10 @@ import {
   Trophy,
   Bell,
   RotateCcw,
-  FileText
+  FileText,
+  Send,
+  BookX,
+  History
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -58,6 +61,9 @@ const navGroups: NavGroup[] = [
   {
     title: "ANALYSIS",
     items: [
+      { icon: BookX, label: "Mistake Book", path: "/mistake-book", badge: "NEW" },
+      { icon: History, label: "Test History", path: "/test-history", badge: "NEW" },
+      { icon: Target, label: "Weak Chapters", path: "/weak-chapters", badge: "NEW" },
       { icon: BarChart3, label: "Reports", path: "/progress" },
       { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
       { icon: Bell, label: "Notifications", path: "/notifications" },
@@ -186,7 +192,7 @@ export function AppSidebar() {
             </div>
           </div>
         ))}
-        
+
         {isAdmin && (
           <div className="mt-4">
             {!collapsed && (
@@ -204,7 +210,35 @@ export function AppSidebar() {
         {bottomNavItems.map((item) => (
           <NavItemComponent key={item.path} item={item} />
         ))}
-        
+
+        {/* Telegram Contact */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <a
+              href="https://t.me/akaxxh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 w-full",
+                "text-muted-foreground hover:text-[#229ED9] hover:bg-[#229ED9]/10"
+              )}
+            >
+              <Send className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && (
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium leading-tight">Contact on Telegram</span>
+                  <span className="text-[10px] text-muted-foreground">@akaxxh — Report issues, suggestions</span>
+                </div>
+              )}
+            </a>
+          </TooltipTrigger>
+          {collapsed && (
+            <TooltipContent side="right" className="font-medium">
+              Contact on Telegram — @akaxxh
+            </TooltipContent>
+          )}
+        </Tooltip>
+
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <button
