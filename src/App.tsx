@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Dashboard from "./pages/Dashboard";
-import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Practice from "./pages/Practice";
@@ -20,6 +19,10 @@ import Account from "./pages/Account";
 import Settings from "./pages/Settings";
 import Leaderboard from "./pages/Leaderboard";
 import Notifications from "./pages/Notifications";
+import Landing from "./pages/Landing";
+import MistakeBook from "./pages/MistakeBook";
+import TestHistory from "./pages/TestHistory";
+import WeakChapters from "./pages/WeakChapters";
 
 const queryClient = new QueryClient();
 
@@ -31,8 +34,8 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/landing" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/practice" element={<Practice />} />
             <Route path="/revision" element={<Revision />} />
@@ -46,6 +49,9 @@ const App = () => (
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/account" element={<Account />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/mistake-book" element={<MistakeBook />} />
+            <Route path="/test-history" element={<TestHistory />} />
+            <Route path="/weak-chapters" element={<WeakChapters />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
