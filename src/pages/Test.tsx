@@ -30,6 +30,104 @@ interface SubjectAnalytics {
   percentage: number;
 }
 
+type QStatus = 'wrong' | 'correct';
+
+const cryptoShuffle = <X,>(arr: X[]): X[] => {
+  const a = [...arr];
+  const rv = new Uint32Array(a.length);
+  crypto.getRandomValues(rv);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rv[i] % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+/**
+ * Fetch every question this user has EVER answered, once, in a single
+ * round-trip. 'correct' always wins over 'wrong' (mirrors Revision.tsx's
+ * "once you get it right, it's done — permanently" rule). Anything NOT
+ * in this map is unseen.
+ */
+async function fetchUserQuestionHistory(userId: string): Promise<Map<string, QStatus>> {
+  const { data: rows } = await supabase
+    .from('attempt_answers')
+    .select('question_id, is_correct, attempts!inner(user_id)')
+    .eq('attempts.user_id', userId);
+
+  const history = new Map<string, QStatus>();
+  (rows || []).forEach((r: any) => {
+    if (r.is_correct === true) {
+      history.set(r.question_id, 'correct');
+    } else if (r.is_correct === false && history.get(r.question_id) !== 'correct') {
+      history.set(r.question_id, 'wrong');
+    }
+  });
+  return history;
+}
+
+/**
+ * Test Generator Randomization — priority order so the same questions
+ * don't keep repeating across mocks:
+ *   70% Unseen Questions   (never attempted before)
+ *   20% Previously Wrong   (got it wrong before, and never later corrected)
+ *   10% Revision Questions (answered correctly before — light reinforcement)
+ *
+ * If a bucket runs short (e.g. a brand-new user has zero "wrong" history,
+ * or a small chapter has very few unseen questions left), the shortfall is
+ * redistributed across whichever buckets still have spare questions, so the
+ * chapter's total allocation (`want`) is always filled when the pool allows.
+ * Guest/new users naturally fall back to ~100% unseen since their history
+ * map is empty — no special-casing needed.
+ */
+function pickWithPriority(pool: Question[], want: number, history: Map<string, QStatus>): Question[] {
+  if (want <= 0 || pool.length === 0) return [];
+
+  const unseen: Question[] = [];
+  const wrong: Question[] = [];
+  const revision: Question[] = [];
+
+  pool.forEach((q) => {
+    const status = history.get(q.id);
+    if (status === 'wrong') wrong.push(q);
+    else if (status === 'correct') revision.push(q);
+    else unseen.push(q);
+  });
+
+  const wantUnseen = Math.round(want * 0.7);
+  const wantWrong = Math.round(want * 0.2);
+  const wantRevision = Math.max(0, want - wantUnseen - wantWrong);
+
+  const picked: Question[] = [];
+  const take = (arr: Question[], n: number) => cryptoShuffle(arr).slice(0, Math.max(0, n));
+
+  const gotUnseen = take(unseen, wantUnseen);
+  picked.push(...gotUnseen);
+  let shortfall = wantUnseen - gotUnseen.length;
+
+  const gotWrong = take(wrong, wantWrong);
+  picked.push(...gotWrong);
+  shortfall += wantWrong - gotWrong.length;
+
+  const gotRevision = take(revision, wantRevision);
+  picked.push(...gotRevision);
+  shortfall += wantRevision - gotRevision.length;
+
+  if (shortfall > 0) {
+    const usedIds = new Set(picked.map((q) => q.id));
+    for (const leftoverPool of [unseen, wrong, revision]) {
+      if (shortfall <= 0) break;
+      const leftover = leftoverPool.filter((q) => !usedIds.has(q.id));
+      const extra = take(leftover, shortfall);
+      picked.push(...extra);
+      extra.forEach((q) => usedIds.add(q.id));
+      shortfall -= extra.length;
+    }
+  }
+
+  return cryptoShuffle(picked).slice(0, want);
+}
+
 const Test = () => {
   const { user } = useAuth();
   const { limits, refetch: refetchLimits } = useMockLimits();
@@ -38,7 +136,6 @@ const Test = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedChapterIds, setSelectedChapterIds] = useState<string[] | 'all'>('all');
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
-  const [loggingOffline, setLoggingOffline] = useState(false);
   const [results, setResults] = useState<{
     score: number;
     correctCount: number;
@@ -74,9 +171,8 @@ const Test = () => {
         { name: 'Chemistry', count: 45 },
         { name: 'Biology', count: 90 },
       ];
-
-      // Resolve which chapters belong to which subject
-    let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
+    
+let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
       if (params.type === 'custom') {
         const { data: allChapters } = await supabase
           .from('chapters')
@@ -89,7 +185,6 @@ const Test = () => {
           chaptersBySubject.set(ch.subject_id, arr);
         });
       } else {
-        // full-bio === full mock: use every chapter in DB
         const { data: allChapters } = await supabase.from('chapters').select('id, name, subject_id');
         (allChapters || []).forEach(ch => {
           const arr = chaptersBySubject.get(ch.subject_id) || [];
@@ -98,9 +193,12 @@ const Test = () => {
         });
       }
 
+      // Fetch the user's question history ONCE, in parallel with the
+      // per-subject question fetches below — doesn't add extra wait time.
+      const historyPromise = user ? fetchUserQuestionHistory(user.id) : Promise.resolve(new Map<string, QStatus>());
+
       const allQuestions: Question[] = [];
 
-      // Run all subject fetches in PARALLEL (3x speedup vs sequential)
       const subjectFetches = subjectRequirements.map(async (req) => {
         const subject = subjects.find(s => s.name.toLowerCase() === req.name.toLowerCase());
         if (!subject) throw new Error(`${req.name} subject not found`);
@@ -108,7 +206,6 @@ const Test = () => {
         if (subjChapters.length === 0) throw new Error(`No chapters selected for ${req.name}.`);
         const subjKey = subject.slug.toLowerCase() as SubjectKey;
 
-        // Slim column list (skip raw_html — large + unused in test view)
         const { data: subjQuestions } = await supabase
           .from('questions')
           .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
@@ -116,7 +213,8 @@ const Test = () => {
           .limit(50000);
         return { req, subject, subjChapters, subjKey, subjQuestions };
       });
-      const fetched = await Promise.all(subjectFetches);
+
+      const [questionHistory, ...fetched] = await Promise.all([historyPromise, ...subjectFetches]);
 
       for (const { req, subjChapters, subjKey, subjQuestions } of fetched) {
 
@@ -124,7 +222,6 @@ const Test = () => {
           throw new Error(`Not enough ${req.name} questions. Found ${subjQuestions?.length || 0}, need ${req.count}. Select more chapters.`);
         }
 
-        // Group questions by chapter and compute available counts
         const byChapter = new Map<string, Question[]>();
         (subjQuestions as Question[]).forEach(q => {
           const arr = byChapter.get(q.chapter_id) || [];
@@ -132,41 +229,28 @@ const Test = () => {
           byChapter.set(q.chapter_id, arr);
         });
 
-        // Build weight list for ALL selected chapters (including empty ones)
         const allWeighted = subjChapters.map(c => ({
           id: c.id,
           weight: getChapterWeight(subjKey, c.name),
           available: (byChapter.get(c.id) || []).length,
         }));
 
-        // Allocate respecting available capacity so deficit is fairly redistributed
-        // by weight across chapters that actually have questions — NOT greedy-dumped
-        // into a single high-weight chapter.
         const idealAlloc = allocateWeighted(
           allWeighted,
           req.count,
           { minPerChapter: 1 }
         );
 
-        const cryptoShuffle = <X,>(arr: X[]): X[] => {
-          const a = [...arr];
-          const rv = new Uint32Array(a.length);
-          crypto.getRandomValues(rv);
-          for (let i = a.length - 1; i > 0; i--) {
-            const j = rv[i] % (i + 1);
-            [a[i], a[j]] = [a[j], a[i]];
-          }
-          return a;
-        };
-
-        // Allocator already respects capacity & redistributes deficit fairly.
+        // Allocator already respects capacity & redistributes deficit fairly
+        // by chapter weight. Within each chapter, pickWithPriority now also
+        // respects the user's 70/20/10 unseen/wrong/revision priority.
         const picked: Question[] = [];
         for (const c of allWeighted) {
           const want = idealAlloc[c.id] || 0;
           if (want <= 0) continue;
           const pool = byChapter.get(c.id) || [];
           if (pool.length === 0) continue;
-          picked.push(...cryptoShuffle(pool).slice(0, want));
+          picked.push(...pickWithPriority(pool, want, questionHistory));
         }
 
         // Final shuffle so chapter blocks aren't contiguous within subject
@@ -193,16 +277,21 @@ const Test = () => {
         .in('id', chapterIds);
       if (!chapters || chapters.length === 0) throw new Error('No chapters selected');
 
-      const { data: bioQuestions } = await supabase
+      const historyPromise = user ? fetchUserQuestionHistory(user.id) : Promise.resolve(new Map<string, QStatus>());
+
+      const bioQuestionsPromise = supabase
         .from('questions')
         .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
         .in('chapter_id', chapterIds)
         .limit(50000);
+
+      const [questionHistory, { data: bioQuestions }] = await Promise.all([historyPromise, bioQuestionsPromise]);
+
       if (!bioQuestions || bioQuestions.length < 90) {
         throw new Error(`Not enough Biology questions. Found ${bioQuestions?.length || 0}, need 90. Select more chapters.`);
-        }
+      }
 
-        const byChapter = new Map<string, Question[]>();
+      const byChapter = new Map<string, Question[]>();
       (bioQuestions as Question[]).forEach(q => {
         const arr = byChapter.get(q.chapter_id) || [];
         arr.push(q);
@@ -215,19 +304,7 @@ const Test = () => {
         available: (byChapter.get(c.id) || []).length,
       }));
 
-      // Pass `available` so allocator caps + redistributes by weight fairly
       const idealAlloc = allocateWeighted(allWeighted, 90, { minPerChapter: 1 });
-
-      const cryptoShuffle = <X,>(arr: X[]): X[] => {
-        const a = [...arr];
-        const rv = new Uint32Array(a.length);
-        crypto.getRandomValues(rv);
-        for (let i = a.length - 1; i > 0; i--) {
-          const j = rv[i] % (i + 1);
-          [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-      };
 
       const picked: Question[] = [];
       for (const c of allWeighted) {
@@ -235,7 +312,7 @@ const Test = () => {
         if (want <= 0) continue;
         const pool = byChapter.get(c.id) || [];
         if (pool.length === 0) continue;
-        picked.push(...cryptoShuffle(pool).slice(0, want));
+        picked.push(...pickWithPriority(pool, want, questionHistory));
       }
 
       return cryptoShuffle(picked).slice(0, 90);
@@ -292,8 +369,8 @@ const Test = () => {
         .insert([{
           user_id: user.id,
           type: 'mock' as const,
-          // `mode: 'online'` is what useMockLimits() reads to count this against
-          // the weekly ONLINE mock quota (3/week free, 6/week premium).
+          // mode: 'online' is what useMockLimits() reads to count this
+          // against the weekly ONLINE mock quota.
           config: { type: testType, questionCount: questions.length, mode: 'online' } as any,
           score,
           finished_at: new Date().toISOString(),
@@ -319,8 +396,6 @@ const Test = () => {
       setTestAnswers(data.answers);
       setTestMode('results');
       toast.success('Test submitted successfully!');
-      // Completing a mock fulfils the referral requirement for whoever invited
-      // this user — safe to call even if there's no pending referral.
       if (user) tryCompleteReferral(user.id);
       refetchLimits();
     },
@@ -340,7 +415,6 @@ const Test = () => {
     submitTestMutation.mutate(answers);
   };
 
-  // Gate ONLINE mode behind the weekly limit, then proceed to the test itself.
   const handleChooseOnline = () => {
     if (limits && !limits.canTakeOnline) {
       toast.error(
@@ -352,8 +426,6 @@ const Test = () => {
     setTestMode('testing');
   };
 
-  // Gate OFFLINE mode behind the weekly limit, log a lightweight attempt row
-  // (so it counts against the quota), then show the printable paper.
   const handleChooseOffline = async () => {
     if (limits && !limits.canTakeOffline) {
       toast.error(
@@ -363,7 +435,6 @@ const Test = () => {
       return;
     }
     if (user) {
-      setLoggingOffline(true);
       await supabase.from('attempts').insert([{
         user_id: user.id,
         type: 'mock' as const,
@@ -371,12 +442,10 @@ const Test = () => {
       }]);
       tryCompleteReferral(user.id);
       refetchLimits();
-      setLoggingOffline(false);
     }
     setTestMode('offline-preview');
   };
 
-  // Loading states
   if ((testType === 'full-bio' && fetchQuestionsMutation.isPending)) {
     return <LoadingQuestions totalQuestions={180} />;
   }
@@ -410,9 +479,9 @@ const Test = () => {
         bioOnly={true}
       />
     );
-  }
+          }
 
-  if (testMode === 'choose-mode' && questions.length > 0) {
+if (testMode === 'choose-mode' && questions.length > 0) {
     const isBioOnly = testType === 'full-bio' && questions.length === 90;
     const testLabel = isBioOnly ? 'Biology Mock Test' : 'Full NEET Mock Test';
     const totalQ = questions.length;
@@ -472,9 +541,9 @@ const Test = () => {
         onClose={() => setTestMode('results')}
       />
     );
-          }
+  }
 
-          if (testMode === 'results' && results) {
+  if (testMode === 'results' && results) {
     return (
       <MockTestAnalytics
         score={results.score}
@@ -500,7 +569,6 @@ const Test = () => {
     <DashboardLayout>
       <div className="p-4 lg:p-6 space-y-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-primary/10 rounded-xl">
               <GraduationCap className="h-7 w-7 text-primary" />
@@ -511,7 +579,6 @@ const Test = () => {
             </div>
           </div>
 
-          {/* Weekly usage card */}
           {limits && user && (
             <Card className="border-primary/15">
               <CardContent className="p-4 sm:p-5">
@@ -547,7 +614,6 @@ const Test = () => {
             </Card>
           )}
 
-          {/* Full NEET Mock (180Q) */}
           <Card className="overflow-hidden border-0 shadow-lg">
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -613,7 +679,6 @@ const Test = () => {
             </CardContent>
           </Card>
 
-          {/* Biology Only Mock (90Q) */}
           <Card className="overflow-hidden border-0 shadow-lg">
             <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 text-white">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -648,7 +713,6 @@ const Test = () => {
             </CardContent>
           </Card>
 
-          {/* Question Bank Stats */}
           {questionCounts && questionCounts.length > 0 && (
             <Card>
               <CardHeader>
@@ -682,4 +746,4 @@ const Test = () => {
   );
 };
 
-export default Test;
+export default Test;          
