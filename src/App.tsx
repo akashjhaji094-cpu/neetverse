@@ -23,6 +23,7 @@ import Landing from "./pages/Landing";
 import MistakeBook from "./pages/MistakeBook";
 import TestHistory from "./pages/TestHistory";
 import WeakChapters from "./pages/WeakChapters";
+import PendingOMR from "./pages/PendingOMR";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/mistake-book" element={<MistakeBook />} />
             <Route path="/test-history" element={<TestHistory />} />
             <Route path="/weak-chapters" element={<WeakChapters />} />
+            <Route path="/pending-omr" element={<PendingOMR />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
