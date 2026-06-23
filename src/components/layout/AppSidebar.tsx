@@ -17,7 +17,8 @@ import {
   FileText,
   Send,
   BookX,
-  History
+  History,
+  Inbox
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ const navGroups: NavGroup[] = [
       { icon: FileText, label: "All PYQS", path: "/pyqs", badge: "NEW" },
       { icon: BookOpen, label: "Notes & PDFs", path: "/notes" },
       { icon: ClipboardList, label: "Mock Tests", path: "/test" },
+      { icon: Inbox, label: "Pending OMR", path: "/pending-omr", badge: "NEW" },
     ],
   },
   {
@@ -192,7 +194,7 @@ export function AppSidebar() {
             </div>
           </div>
         ))}
-
+        
         {isAdmin && (
           <div className="mt-4">
             {!collapsed && (
