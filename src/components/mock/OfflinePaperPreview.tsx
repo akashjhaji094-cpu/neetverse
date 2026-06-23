@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Loader2, Download, Camera, CheckCircle2, AlertCircle } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,16 @@ interface OfflinePaperPreviewProps {
   subjectGroups: SubjectGroup[];
   selectedChapterIds?: string[] | 'all';
   onBack: () => void;
+  /**
+   * The `attempts.id` row this paper belongs to (created when the paper was
+   * generated). When present, scanning + confirming results is PERSISTED to
+   * the database — score, attempt_answers (so Mistake Book / Test History /
+   * Weak Chapters all pick it up automatically), omr_status flips to
+   * 'scored', and the scanned photo is best-effort uploaded. Without it,
+   * the component behaves exactly as before (local-only, nothing saved) —
+   * fully backward compatible.
+   */
+  attemptId?: string;
 }
 
 export const OfflinePaperPreview = ({
@@ -33,30 +44,32 @@ export const OfflinePaperPreview = ({
   subjectGroups,
   selectedChapterIds,
   onBack,
+  attemptId,
 }: OfflinePaperPreviewProps) => {
   const [ready, setReady] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [detectedAnswers, setDetectedAnswers] = useState<(number | null)[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [confidenceMap, setConfidenceMap] = useState<number[]>([]);
   const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
   const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const labels = ["A", "B", "C", "D"];
 
   // Fetch chapter & subject names for "Topics covered" section
   useEffect(() => {
     const fetchMeta = async () => {
-      // If parent told us which chapters were SELECTED (full syllabus or custom),
-      // list ALL of them — not just those that contributed questions.
       let chRes: any;
       if (selectedChapterIds === 'all') {
         chRes = await supabase.from("chapters").select("id, name, subject_id");
@@ -81,10 +94,46 @@ export const OfflinePaperPreview = ({
     fetchMeta();
   }, [questions, selectedChapterIds]);
 
+  // Generate a small QR code encoding this paper's attempt id — printed on
+  // the OMR header purely for visual/manual identification (e.g. if you
+  // print multiple papers, you can tell them apart at a glance). The bubble
+  // scanner does NOT decode this automatically yet — matching is done by
+  // picking the right paper from the Pending OMR Vault instead.
+  useEffect(() => {
+    if (!attemptId) { setQrDataUrl(null); return; }
+    let cancelled = false;
+
+    const loadQR = async () => {
+      if (!(window as any).QRCode) {
+        await new Promise<void>((resolve) => {
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js";
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => resolve();
+          document.head.appendChild(script);
+        });
+      }
+      if (cancelled) return;
+      const QRCodeLib = (window as any).QRCode;
+      if (!QRCodeLib?.toDataURL) return;
+      try {
+        const dataUrl: string = await new Promise((resolve, reject) => {
+          QRCodeLib.toDataURL(`NVOMR:${attemptId}`, { width: 140, margin: 1 }, (err: any, url: string) => {
+            if (err) reject(err); else resolve(url);
+          });
+        });
+        if (!cancelled) setQrDataUrl(dataUrl);
+      } catch {
+        // non-fatal — paper still prints fine without the QR
+      }
+    };
+    loadQR();
+    return () => { cancelled = true; };
+  }, [attemptId]);
+
   // Build "Topics covered" grouped by subject -> unique chapter list
   const topicsBySubject: Record<string, string[]> = {};
-  // When parent passed selectedChapterIds, list EVERY selected chapter (even if no Qs).
-  // Otherwise fall back to chapters that actually contributed questions.
   const hasSelection = selectedChapterIds === 'all' || (Array.isArray(selectedChapterIds) && selectedChapterIds.length > 0);
   if (hasSelection) {
     Object.values(chapterMap).forEach(({ name, subjectId }) => {
@@ -101,7 +150,6 @@ export const OfflinePaperPreview = ({
       if (!topicsBySubject[subj].includes(chap)) topicsBySubject[subj].push(chap);
     });
   }
-  // Sort alphabetically within each subject for stable order
   Object.keys(topicsBySubject).forEach(k => topicsBySubject[k].sort((a, b) => a.localeCompare(b)));
 
   const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -167,21 +215,10 @@ export const OfflinePaperPreview = ({
   const handlePrint = useCallback(() => { window.print(); }, []);
 
   // ============= OMR SCANNER =============
-  // Strategy:
-  //  1. Load image to canvas (downscale large images for speed).
-  //  2. Convert to grayscale + locate the four corner alignment markers
-  //     (solid black squares printed at the OMR sheet corners).
-  //  3. Use the marker bounding box to crop & align the OMR grid region.
-  //  4. For each question row, sample the 4 bubble centers and pick the
-  //     darkest one IF it is significantly darker than the row's median
-  //     (relative threshold) — avoids false positives.
-  //  5. Show a review/edit screen so the user can correct misreads before
-  //     generating the final scored report.
-
   const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (e.target) e.target.value = ""; // allow re-uploading same file
+    if (e.target) e.target.value = "";
 
     setScanning(true);
 
@@ -190,10 +227,7 @@ export const OfflinePaperPreview = ({
       const img = new Image();
       img.onload = () => {
         try {
-          // Use an in-memory canvas — the on-DOM canvasRef is unmounted while
-          // the scanning loader is rendered, so we can't rely on it.
           const canvas = document.createElement("canvas");
-          // Downscale to max 1600px on long edge for performance/consistency
           const MAX_DIM = 1600;
           const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
           canvas.width = Math.round(img.width * scale);
@@ -205,15 +239,12 @@ export const OfflinePaperPreview = ({
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const gray = toGrayscale(imageData);
 
-          // Detect corner markers
           const markers = findCornerMarkers(gray, canvas.width, canvas.height);
 
-          // Define OMR region from markers OR fall back to proportional estimate
           const region = markers
             ? {
                 left: markers.tl.x + (markers.tr.x - markers.tl.x) * 0.04,
                 right: markers.tr.x - (markers.tr.x - markers.tl.x) * 0.04,
-                // Skip header area (~22% from top of marker box for the OMR header)
                 top: markers.tl.y + (markers.bl.y - markers.tl.y) * 0.22,
                 bottom: markers.bl.y - (markers.bl.y - markers.tl.y) * 0.05,
               }
@@ -232,7 +263,6 @@ export const OfflinePaperPreview = ({
             totalQuestions
           );
 
-          // Draw debug overlay on canvas for preview
           drawOverlay(ctx, region, totalQuestions, answers);
 
           setPreviewImage(canvas.toDataURL("image/jpeg", 0.7));
@@ -262,7 +292,6 @@ export const OfflinePaperPreview = ({
     reader.readAsDataURL(file);
   }, [totalQuestions, toast]);
 
-  // Convert to grayscale Uint8Array
   const toGrayscale = (imageData: ImageData): Uint8ClampedArray => {
     const { data, width, height } = imageData;
     const out = new Uint8ClampedArray(width * height);
@@ -272,12 +301,10 @@ export const OfflinePaperPreview = ({
     return out;
   };
 
-  // Find darkest blob center inside a region — used for corner markers.
   const findDarkestBlob = (
     gray: Uint8ClampedArray, w: number, h: number,
     x0: number, y0: number, x1: number, y1: number
   ): { x: number; y: number } | null => {
-    // Threshold using min in region
     let min = 255;
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
@@ -299,7 +326,6 @@ export const OfflinePaperPreview = ({
   };
 
   const findCornerMarkers = (gray: Uint8ClampedArray, w: number, h: number) => {
-    // Search in corner quadrants (~25% of page)
     const qw = Math.floor(w * 0.25);
     const qh = Math.floor(h * 0.25);
     const tl = findDarkestBlob(gray, w, h, 0, 0, qw, qh);
@@ -332,11 +358,10 @@ export const OfflinePaperPreview = ({
 
       const cellLeft = region.left + col * colWidth;
       const cellTop = region.top + row * rowHeight;
-      const bubbleWidth = colWidth / 5; // [Q, A, B, C, D]
+      const bubbleWidth = colWidth / 5;
 
       const darknesses: number[] = [];
       for (let opt = 0; opt < 4; opt++) {
-        // Center of each option bubble
         const cx = cellLeft + (opt + 1.5) * bubbleWidth;
         const cy = cellTop + rowHeight * 0.5;
         const r = Math.min(bubbleWidth, rowHeight) * 0.3;
@@ -355,12 +380,10 @@ export const OfflinePaperPreview = ({
             }
           }
         }
-        // "darkness" — higher = darker (filled)
         const avg = count > 0 ? total / count : 255;
         darknesses.push(255 - avg);
       }
 
-      // Find darkest with relative threshold
       let maxIdx = 0, maxVal = darknesses[0];
       let secondVal = -Infinity;
       for (let i = 1; i < 4; i++) {
@@ -370,8 +393,7 @@ export const OfflinePaperPreview = ({
       const sorted = [...darknesses].sort((a, b) => a - b);
       const minVal = sorted[0];
 
-      // Only accept if darkness is meaningful AND clearly darker than runner-up
-      const filledEnough = maxVal > 60; // 0..255 range
+      const filledEnough = maxVal > 60;
       const decisive = (maxVal - secondVal) > 18 && (maxVal - minVal) > 25;
 
       if (filledEnough && decisive) {
@@ -430,14 +452,91 @@ export const OfflinePaperPreview = ({
     });
   };
 
-  const finalizeReport = () => {
+    /**
+   * Persist the scored result to the database so it shows up permanently —
+   * in Test History, Mistake Book, Weak Chapters, AND survives a page
+   * refresh. Best-effort: if the user is a guest or something fails, the
+   * report still displays locally; we just can't save it.
+   */
+  const persistResult = async (report: any) => {
+    if (!attemptId || !user) return;
+    setSaving(true);
+    try {
+      const subjectScores: Record<string, any> = {};
+      report.subjects.forEach((s: any) => {
+        subjectScores[s.name] = {
+          subject: s.name,
+          correct: s.correct,
+          wrong: s.wrong,
+          unattempted: s.skipped,
+          total: s.correct + s.wrong + s.skipped,
+          score: s.score,
+          percentage: s.percentage,
+        };
+      });
+
+      await supabase
+        .from('attempts')
+        .update({
+          score: report.totalScore,
+          finished_at: new Date().toISOString(),
+          details: {
+            subjectScores,
+            correctCount: report.totalCorrect,
+            wrongCount: report.totalWrong,
+            unattemptedCount: report.totalSkipped,
+          } as any,
+          omr_status: 'scored',
+        } as any)
+        .eq('id', attemptId);
+
+      // Replace any previous answers for this attempt (handles re-scans cleanly)
+      await supabase.from('attempt_answers').delete().eq('attempt_id', attemptId);
+      const answerRecords = questions.map((q, i) => ({
+        attempt_id: attemptId,
+        question_id: q.id,
+        chosen_option_index: detectedAnswers[i] ?? null,
+        is_correct: detectedAnswers[i] === q.correct_option_index,
+      }));
+      await supabase.from('attempt_answers').insert(answerRecords);
+
+      // Best-effort: keep the scanned photo on file too
+      if (previewImage) {
+        try {
+          const blob = await (await fetch(previewImage)).blob();
+          const path = `${user.id}/${attemptId}.jpg`;
+          const { error: uploadErr } = await supabase.storage
+            .from('omr-uploads')
+            .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+          if (!uploadErr) {
+            await supabase.from('attempts').update({ omr_image_path: path } as any).eq('id', attemptId);
+          }
+        } catch {
+          // image upload is a nice-to-have — never block on it
+        }
+      }
+
+      toast({ title: "Saved!", description: "This result now appears in your Test History & Mistake Book." });
+    } catch (err) {
+      console.error("Failed to save OMR result", err);
+      toast({
+        title: "Could not sync to your account",
+        description: "Your score is shown below, but please screenshot it just in case.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const finalizeReport = async () => {
     const report = generateReport(detectedAnswers, questions, subjectGroups);
     setScanResult(report);
     setShowScanner(true);
     setShowReview(false);
+    await persistResult(report);
   };
 
-  // Generate detailed report
   const generateReport = (
     detected: (number | null)[],
     qs: Question[],
@@ -500,7 +599,6 @@ export const OfflinePaperPreview = ({
     };
   };
 
-  // OMR columns
   const omrCols = totalQuestions <= 90 ? 6 : 9;
   const omrPerCol = Math.ceil(totalQuestions / omrCols);
 
@@ -519,8 +617,9 @@ export const OfflinePaperPreview = ({
               Detected: <b>{detectedCount}</b> / {totalQuestions}
               {lowConfCount > 0 && <span className="text-amber-600 ml-2">⚠ {lowConfCount} low confidence</span>}
             </div>
-            <Button onClick={finalizeReport} size="sm" className="gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Confirm & Score
+            <Button onClick={finalizeReport} size="sm" className="gap-2" disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Confirm & Score
             </Button>
           </div>
         </div>
@@ -579,8 +678,9 @@ export const OfflinePaperPreview = ({
           </div>
 
           <div className="flex justify-end pb-8">
-            <Button onClick={finalizeReport} size="lg" className="gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Confirm & Score
+            <Button onClick={finalizeReport} size="lg" className="gap-2" disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Confirm & Score
             </Button>
           </div>
         </div>
@@ -588,7 +688,6 @@ export const OfflinePaperPreview = ({
     );
   }
 
-  // Full-screen scanning loader
   if (scanning) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -601,7 +700,6 @@ export const OfflinePaperPreview = ({
     );
   }
 
-  // Scan Result View
   if (showScanner && scanResult) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -617,7 +715,6 @@ export const OfflinePaperPreview = ({
         </div>
 
         <div className="max-w-4xl mx-auto p-6 space-y-6">
-          {/* Score Card */}
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="p-6 text-center" style={{ background: "linear-gradient(135deg, #1a1a6e, #3b82f6)" }}>
               <img src={neetverseLogo} alt="NEETVerse" className="w-14 h-14 rounded-xl mx-auto mb-2" />
@@ -627,9 +724,13 @@ export const OfflinePaperPreview = ({
                 <p className="text-5xl font-black text-white">{scanResult.totalScore}</p>
                 <p className="text-white/80 text-sm">out of {scanResult.maxScore}</p>
               </div>
+              {attemptId && (
+                <p className="text-white/70 text-xs mt-2">
+                  {saving ? "Saving to your account..." : "✓ Saved to your Test History"}
+                </p>
+              )}
             </div>
 
-            {/* Overall Stats */}
             <div className="grid grid-cols-4 divide-x border-b">
               <div className="p-4 text-center">
                 <p className="text-2xl font-bold text-green-600">{scanResult.totalCorrect}</p>
@@ -649,7 +750,6 @@ export const OfflinePaperPreview = ({
               </div>
             </div>
 
-            {/* Subject-wise breakdown */}
             <div className="p-6 space-y-4">
               <h3 className="font-bold text-lg">Subject-wise Analysis</h3>
               {scanResult.subjects.map((sub: any) => (
@@ -679,7 +779,6 @@ export const OfflinePaperPreview = ({
                     </div>
                   </div>
 
-                  {/* Strength/Weakness */}
                   <div className="mt-3 text-sm">
                     {sub.percentage >= 70 && (
                       <p className="text-green-600 font-semibold">✅ Strong — Keep it up!</p>
@@ -695,7 +794,6 @@ export const OfflinePaperPreview = ({
               ))}
             </div>
 
-            {/* Question-wise details */}
             <div className="p-6 border-t">
               <h3 className="font-bold text-lg mb-4">Question-wise Details</h3>
               {scanResult.subjects.map((sub: any) => (
@@ -734,7 +832,6 @@ export const OfflinePaperPreview = ({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Hidden canvas for OMR processing */}
       <canvas ref={canvasRef} className="hidden" />
       <input
         ref={fileInputRef}
@@ -745,7 +842,6 @@ export const OfflinePaperPreview = ({
         onChange={handleOMRScan}
       />
 
-      {/* Fixed toolbar */}
       <div className="print:hidden sticky top-0 z-50 bg-white border-b shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <Button variant="ghost" onClick={onBack} size="sm">
@@ -785,15 +881,12 @@ export const OfflinePaperPreview = ({
         </div>
       </div>
 
-      {/* Paper content */}
       <div
         ref={containerRef}
         className="max-w-[210mm] mx-auto bg-white shadow-xl my-4 print:my-0 print:shadow-none"
         style={{ fontFamily: "'Times New Roman', Georgia, serif", color: "#1a1a1a" }}
       >
-        {/* ===== HEADER (clean, exam-style) ===== */}
         <div className="px-[15mm] pt-[12mm]">
-          {/* Brand wordmark */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-md" />
@@ -805,19 +898,16 @@ export const OfflinePaperPreview = ({
           </div>
           <div className="h-[2px] w-full mb-3" style={{ background: "#000" }} />
 
-          {/* Paper title */}
           <h2 className="text-center text-[16pt] font-bold mb-1" style={{ color: "#1a1a1a" }}>
             {title}
           </h2>
 
-          {/* Date / Time / Marks row */}
           <div className="grid grid-cols-3 text-[10pt] mb-3">
             <span><b>Date:</b> {today}</span>
             <span className="text-center"><b>Time:</b> {duration}</span>
             <span className="text-right"><b>Total Marks:</b> {totalQuestions} × 4 = {totalMarks}</span>
           </div>
 
-          {/* Topics covered */}
           {Object.keys(topicsBySubject).length > 0 && (
             <div className="mb-3 text-[9.5pt]">
               <h3 className="font-bold text-[10.5pt] mb-1" style={{ color: "#000" }}>Chapters covered</h3>
@@ -829,7 +919,6 @@ export const OfflinePaperPreview = ({
             </div>
           )}
 
-          {/* Subject / Question count table */}
           <table className="w-full border-collapse text-[10pt] mb-3">
             <tbody>
               {subjectGroups.map((g) => (
@@ -845,7 +934,6 @@ export const OfflinePaperPreview = ({
             </tbody>
           </table>
 
-          {/* Student info bar */}
           <div className="grid grid-cols-3 gap-3 mb-3 text-[9.5pt]">
             <div className="border-b border-gray-700 pb-0.5"><b>Name:</b></div>
             <div className="border-b border-gray-700 pb-0.5"><b>Roll No:</b></div>
@@ -855,13 +943,11 @@ export const OfflinePaperPreview = ({
           <div className="h-[1px] w-full bg-gray-400 mb-2" />
         </div>
 
-        {/* ===== QUESTIONS — single column, exam-paper style ===== */}
         <div className="px-[15mm]">
           {subjectGroups.map((group) => {
             const sectionQs = questions.slice(group.startIdx, group.endIdx);
             return (
               <div key={group.name} className="mb-3">
-                {/* Section divider */}
                 <div
                   className="text-center font-bold text-[11pt] py-1 my-3 border-y-2"
                   style={{
@@ -874,7 +960,6 @@ export const OfflinePaperPreview = ({
                   SECTION — {group.name.toUpperCase()} &nbsp;(Q. {group.startIdx + 1} – {group.endIdx})
                 </div>
 
-                {/* TWO-COLUMN questions with center divider */}
                 <div
                   style={{
                     columnCount: 2,
@@ -933,7 +1018,6 @@ export const OfflinePaperPreview = ({
           })}
         </div>
 
-        {/* Page footer on question pages */}
         <div className="px-[15mm] py-2 mt-3 text-[8pt] text-gray-500 border-t border-gray-300 mx-[10mm]">
           <div className="flex justify-between">
             <span><b style={{ color: "#000" }}>NEETVerse</b> — Your Universe of NEET Preparation</span>
@@ -941,9 +1025,7 @@ export const OfflinePaperPreview = ({
           </div>
         </div>
 
-        {/* ===== OMR SHEET with Alignment Markers ===== */}
         <div className="px-[8mm] pt-[8mm] relative" style={{ pageBreakBefore: "always" }}>
-          {/* Corner alignment markers */}
           <div className="absolute top-[5mm] left-[5mm] w-[10mm] h-[10mm]">
             <div className="w-full h-full border-t-[3px] border-l-[3px] border-black" />
             <div className="absolute top-[1mm] left-[1mm] w-[4mm] h-[4mm] bg-black" />
@@ -961,13 +1043,23 @@ export const OfflinePaperPreview = ({
             <div className="absolute bottom-[1mm] right-[1mm] w-[4mm] h-[4mm] bg-black" />
           </div>
 
-          {/* OMR Header */}
           <div className="text-center pb-2 mb-2 border-b-[3px] border-black mx-[6mm]">
-            <div className="flex items-center justify-center gap-2">
-              <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
-              <div>
-                <h2 className="text-2xl font-black tracking-[4px] text-black">NEETVERSE</h2>
-                <p className="text-[9pt] font-black text-black tracking-[2px] uppercase">OMR Answer Sheet</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="w-[16mm] flex-shrink-0" />
+              <div className="flex items-center justify-center gap-2 flex-1">
+                <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
+                <div>
+                  <h2 className="text-2xl font-black tracking-[4px] text-black">NEETVERSE</h2>
+                  <p className="text-[9pt] font-black text-black tracking-[2px] uppercase">OMR Answer Sheet</p>
+                </div>
+              </div>
+              <div className="w-[16mm] flex-shrink-0 text-center">
+                {qrDataUrl && (
+                  <>
+                    <img src={qrDataUrl} alt="Scan ID" className="w-[16mm] h-[16mm] ml-auto" />
+                    <p className="text-[5pt] text-gray-400 leading-none">Scan ID</p>
+                  </>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2 text-[8pt] mt-2 pt-1 border-t border-gray-400">
@@ -977,7 +1069,6 @@ export const OfflinePaperPreview = ({
             </div>
           </div>
 
-          {/* Subject markers */}
           {totalQuestions === 180 && (
             <div className="flex justify-center gap-6 text-[7.5pt] font-black text-black mb-1 mx-[6mm]">
               <span>⚛ Physics: Q.1–45</span>
@@ -986,7 +1077,6 @@ export const OfflinePaperPreview = ({
             </div>
           )}
 
-          {/* OMR Grid */}
           <div className="flex gap-[2px] flex-nowrap mx-[6mm]">
             {Array.from({ length: omrCols }).map((_, c) => {
               const start = c * omrPerCol;
@@ -1029,7 +1119,6 @@ export const OfflinePaperPreview = ({
             })}
           </div>
 
-          {/* OMR Footer */}
           <div className="mx-[6mm] mt-2 pt-1 border-t-2 border-black">
             <div className="flex justify-between text-[7pt] text-black font-bold">
               <span>Total Questions: {totalQuestions}</span>
@@ -1042,7 +1131,6 @@ export const OfflinePaperPreview = ({
           </div>
         </div>
 
-        {/* ===== ANSWER KEY ===== */}
         <div className="px-[10mm] pt-[10mm]" style={{ pageBreakBefore: "always" }}>
           <div className="text-center pb-2 mb-3 border-b-[3px]" style={{ borderColor: "#000" }}>
             <div className="flex items-center justify-center gap-2">
@@ -1089,13 +1177,12 @@ export const OfflinePaperPreview = ({
             })}
           </div>
 
-          <div className="flex justify-between text-[7pt] font-bold mt-2 pt-1 border-t-2" style={{ color: "#000", borderColor: "#000" }}>
+                 <div className="flex justify-between text-[7pt] font-bold mt-2 pt-1 border-t-2" style={{ color: "#000", borderColor: "#000" }}>
             <span>+4 for correct, −1 for incorrect</span>
             <span>NEETVerse — neetverse.lovable.app</span>
           </div>
         </div>
 
-        {/* Final Footer */}
         <div className="mx-[10mm] mt-4 pt-2 pb-4 border-t">
           <div className="h-0.5 w-full mb-2" style={{ background: "linear-gradient(90deg, #000, #555, #000)" }} />
           <div className="text-center text-[8pt] text-gray-400">
