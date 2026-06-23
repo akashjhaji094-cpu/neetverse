@@ -136,6 +136,10 @@ const Test = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedChapterIds, setSelectedChapterIds] = useState<string[] | 'all'>('all');
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
+  // The attempts.id row created when an offline paper is generated — passed
+  // into OfflinePaperPreview so a later scan can be persisted (score,
+  // attempt_answers, omr_status) instead of being lost on page refresh.
+  const [offlineAttemptId, setOfflineAttemptId] = useState<string | null>(null);
   const [results, setResults] = useState<{
     score: number;
     correctCount: number;
@@ -171,8 +175,8 @@ const Test = () => {
         { name: 'Chemistry', count: 45 },
         { name: 'Biology', count: 90 },
       ];
-    
-let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
+
+      let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
       if (params.type === 'custom') {
         const { data: allChapters } = await supabase
           .from('chapters')
@@ -241,7 +245,7 @@ let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
           { minPerChapter: 1 }
         );
 
-        // Allocator already respects capacity & redistributes deficit fairly
+    // Allocator already respects capacity & redistributes deficit fairly
         // by chapter weight. Within each chapter, pickWithPriority now also
         // respects the user's 70/20/10 unseen/wrong/revision priority.
         const picked: Question[] = [];
@@ -408,6 +412,7 @@ let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
     setQuestions([]);
     setResults(null);
     setTestAnswers({});
+    setOfflineAttemptId(null);
   };
 
   const handleTestSubmit = (answers: Record<string, number | null>) => {
@@ -435,11 +440,22 @@ let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
       return;
     }
     if (user) {
-      await supabase.from('attempts').insert([{
-        user_id: user.id,
-        type: 'mock' as const,
-        config: { type: testType, questionCount: questions.length, mode: 'offline' } as any,
-      }]);
+      // Store the EXACT question set so this paper can be re-opened and
+      // scored correctly later from the Pending OMR Vault, even days after
+      // it was generated — without this, that information would be lost
+      // the moment this browser tab closes.
+      const { data: inserted } = await supabase
+        .from('attempts')
+        .insert([{
+          user_id: user.id,
+          type: 'mock' as const,
+          config: { type: testType, questionCount: questions.length, mode: 'offline' } as any,
+          question_ids: questions.map((q) => q.id),
+          omr_status: 'pending',
+        } as any])
+        .select()
+        .single();
+      if (inserted) setOfflineAttemptId(inserted.id);
       tryCompleteReferral(user.id);
       refetchLimits();
     }
@@ -479,9 +495,9 @@ let chaptersBySubject = new Map<string, { id: string; name: string }[]>();
         bioOnly={true}
       />
     );
-          }
+  }
 
-if (testMode === 'choose-mode' && questions.length > 0) {
+  if (testMode === 'choose-mode' && questions.length > 0) {
     const isBioOnly = testType === 'full-bio' && questions.length === 90;
     const testLabel = isBioOnly ? 'Biology Mock Test' : 'Full NEET Mock Test';
     const totalQ = questions.length;
@@ -524,6 +540,7 @@ if (testMode === 'choose-mode' && questions.length > 0) {
         duration={dur}
         subjectGroups={subjectGroups}
         selectedChapterIds={selectedChapterIds}
+        attemptId={offlineAttemptId || undefined}
         onBack={() => setTestMode('choose-mode')}
       />
     );
@@ -746,4 +763,4 @@ if (testMode === 'choose-mode' && questions.length > 0) {
   );
 };
 
-export default Test;          
+export default Test;
