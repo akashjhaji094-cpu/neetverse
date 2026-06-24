@@ -130,7 +130,11 @@ export function usePerformanceData() {
       const weakChapters = Array.from(chapterAgg.values())
         .map((c) => ({
           ...c,
-          accuracyPct: c.total ? Math.round((c.correct / c.total) * 100) : 0,
+          // Accuracy = correct / ATTEMPTED (correct+wrong) — the standard
+          // definition, excludes skipped questions from the denominator.
+          // (Previously this used correct/total, which made chapters with
+          // a lot of skips look artificially weaker than they really were.)
+          accuracyPct: (c.correct + c.wrong) ? Math.round((c.correct / (c.correct + c.wrong)) * 100) : 0,
           wrongPct: c.total ? Math.round((c.wrong / c.total) * 100) : 0,
           skipPct: c.total ? Math.round((c.skipped / c.total) * 100) : 0,
         }))
@@ -167,4 +171,4 @@ export function usePerformanceData() {
     enabled: !!user,
     staleTime: 30_000,
   });
-                           }
+}
