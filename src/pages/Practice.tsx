@@ -50,16 +50,23 @@ const Practice = () => {
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [showReview, setShowReview] = useState(false);
 
-  // Live-progress fetch of the entire question index (one round-trip).
-  // We pre-fetch total count first so the loader can show real X / Y.
   const [questionCounts, setQuestionCounts] = useState<Record<string, number> | null>(null);
   const [libTotal, setLibTotal] = useState(0);
   const [libFetched, setLibFetched] = useState(0);
 
+  // FIXED: previously handleChapterClick re-fetched subject/chapter IDs by
+  // slug with TWO separate network round-trips on EVERY single chapter
+  // click. That data is already fetched right here in this same effect —
+  // we just discarded the id-by-slug maps afterwards. Now we keep them in
+  // state so a chapter click resolves instantly, with zero network calls.
+  const [slugMaps, setSlugMaps] = useState<{
+    subjectIdBySlug: Map<string, string>;
+    chapterIdBySlug: Map<string, string>;
+  } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // SINGLE round-trip: aggregate counts per chapter via RPC + tiny subjects/chapters lookup in parallel
       const [countsRes, subjectsRes, chaptersRes] = await Promise.all([
         supabase.rpc('get_question_counts_per_chapter'),
         supabase.from('subjects').select('id, slug'),
@@ -82,9 +89,15 @@ const Practice = () => {
         if (ss && cs) tally[`${ss}-${cs}`] = n;
       }
       if (cancelled) return;
+
+      // Build the reverse maps (slug -> id) once, reused for every chapter click
+      const subjectIdBySlug = new Map((subjectsRes.data || []).map(s => [s.slug, s.id] as const));
+      const chapterIdBySlug = new Map((chaptersRes.data || []).map(c => [c.slug, c.id] as const));
+
       setLibTotal(total);
-      setLibFetched(total); // RPC returned everything in one shot
+      setLibFetched(total);
       setQuestionCounts(tally);
+      setSlugMaps({ subjectIdBySlug, chapterIdBySlug });
     })();
     return () => { cancelled = true; };
   }, []);
@@ -103,7 +116,6 @@ const Practice = () => {
       if (error) throw error;
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
 
-      // Exclude questions the user has already answered correctly
       let pool = allQuestions;
       if (user) {
         const { data: correctAnswers } = await supabase
@@ -113,7 +125,6 @@ const Practice = () => {
           .eq('attempts.user_id', user.id);
         const correctIds = new Set((correctAnswers || []).map((a: any) => a.question_id));
         const fresh = allQuestions.filter(q => !correctIds.has(q.id));
-        // If too few fresh remain, fall back to full pool so user can still practice
         if (fresh.length >= count) pool = fresh;
       }
 
@@ -154,11 +165,17 @@ const Practice = () => {
     onError: () => { toast({ title: "Error", description: "Failed to submit test.", variant: "destructive" }); }
   });
 
-  const handleChapterClick = async (chapter: { id: string; name: string }, subjectSlug: string) => {
-    const { data: subjects } = await supabase.from('subjects').select('id').eq('slug', subjectSlug).single();
-    const { data: chapters } = await supabase.from('chapters').select('id').eq('slug', chapter.id).single();
-    if (subjects && chapters) {
-      setSelectedChapter({ id: chapters.id, name: chapter.name, subjectId: subjects.id, subjectSlug, chapterSlug: chapter.id });
+  const handleChapterClick = (chapter: { id: string; name: string }, subjectSlug: string) => {
+    if (!slugMaps) return;
+    const subjectId = slugMaps.subjectIdBySlug.get(subjectSlug);
+    const chapterId = slugMaps.chapterIdBySlug.get(chapter.id);
+    if (subjectId && chapterId) {
+      setSelectedChapter({ id: chapterId, name: chapter.name, subjectId, subjectSlug, chapterSlug: chapter.id });
+    } else {
+      // Defensive — only happens if the static chapter list and the live DB
+      // have drifted out of sync (e.g. a chapter was renamed in the admin
+      // panel). Previously this failed completely silently.
+      toast({ title: "Couldn't open this chapter", description: "Please refresh the page and try again.", variant: "destructive" });
     }
   };
 
@@ -181,7 +198,6 @@ const Practice = () => {
     );
   }
 
-  // Initial library indexing loader — runs as soon as user lands on Practice.
   if (countsLoading) {
     return (
       <PracticeLoading
@@ -196,13 +212,11 @@ const Practice = () => {
   if (testResults) return <TestResults score={testResults.score} totalQuestions={testQuestions.length} correctCount={testResults.correctCount} wrongCount={testResults.wrongCount} unattemptedCount={testResults.unattemptedCount} onClose={handleCloseResults} onReview={handleReview} />;
   if (showTest) return <TestInterface questions={testQuestions} onSubmit={handleSubmitTest} />;
 
-  // Get total question count
   const totalQuestions = questionCounts ? Object.values(questionCounts).reduce((sum, c) => sum + c, 0) : 0;
 
   return (
     <DashboardLayout>
       <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
-        {/* Hero Banner - TrackPrep style */}
         <Card className="overflow-hidden border-0 shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
@@ -238,13 +252,11 @@ const Practice = () => {
           </CardContent>
         </Card>
 
-        {/* Select Subject */}
         <div>
           <h2 className="text-base font-semibold mb-1">Select Subject</h2>
           <p className="text-xs text-muted-foreground mb-4">Specialized sessions</p>
         </div>
 
-        {/* Subject Cards - Chalkboard style */}
         <div className="space-y-4">
           {neetSubjects.map((subject) => {
             const config = subjectConfig[subject.id] || subjectConfig.biology;
@@ -256,9 +268,7 @@ const Practice = () => {
                 className="overflow-hidden cursor-pointer group hover:shadow-lg transition-all hover:-translate-y-0.5"
                 onClick={() => {/* Could expand subject */}}
               >
-                {/* Subject hero banner */}
                 <div className={`bg-gradient-to-r ${config.gradient} p-5 text-white relative overflow-hidden`}>
-                  {/* Background pattern */}
                   <div className="absolute inset-0 opacity-10">
                     <div className="absolute top-2 left-10 text-6xl font-bold uppercase tracking-widest opacity-20">{subject.name}</div>
                   </div>
@@ -276,7 +286,6 @@ const Practice = () => {
                   </div>
                 </div>
 
-                {/* Chapter List */}
                 <CardContent className="p-3 space-y-0.5 max-h-[350px] overflow-y-auto">
                   {subject.chapters.map((chapter) => {
                     const count = questionCounts?.[`${subject.id}-${chapter.id}`] || 0;
