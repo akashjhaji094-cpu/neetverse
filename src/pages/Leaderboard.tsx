@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,26 +17,43 @@ interface LeaderRow {
   bestScore: number;
 }
 
+type Period = "week" | "month" | "all";
+
+function periodCutoffISO(period: Period): string | null {
+  if (period === "all") return null;
+  const days = period === "week" ? 7 : 30;
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 const Leaderboard = () => {
   const { user } = useAuth();
+  const [period, setPeriod] = useState<Period>("all");
 
   const { data: leaders, isLoading } = useQuery({
-    queryKey: ["leaderboard-all-v2"],
+    queryKey: ["leaderboard-all-v3", period],
     queryFn: async () => {
-      // Pull all finished attempts (practice + mock)
-      const { data: attempts } = await supabase
+      let query = supabase
         .from("attempts")
-        .select("id, user_id, type, finished_at, details")
+        .select("id, user_id, type, finished_at, score")
         .not("finished_at", "is", null);
+
+      const cutoff = periodCutoffISO(period);
+      if (cutoff) query = query.gte("finished_at", cutoff);
+
+      const { data: attempts } = await query;
 
       if (!attempts || attempts.length === 0) return [];
 
-      // Score with +1 / -0.25 across ALL attempts using stored details
+      // FIXED: previously this recomputed score with a DIFFERENT formula
+      // (+1 / -0.25) than the rest of the app. Every attempt already has a
+      // correctly-computed +4/-1 NEET score stored on it (Test.tsx,
+      // Practice.tsx, and the OMR scanner all write it the same way) — so
+      // we just sum that directly instead of recalculating it differently
+      // here, which was producing leaderboard numbers that didn't match
+      // what the student sees on their own Test History / Mock results.
       const byUser = new Map<string, { total: number; count: number; best: number }>();
       attempts.forEach((a: any) => {
-        const correct = Number(a.details?.correctCount ?? 0);
-        const wrong = Number(a.details?.wrongCount ?? 0);
-        const score = correct * 1 - wrong * 0.25;
+        const score = Number(a.score ?? 0);
         const cur = byUser.get(a.user_id) || { total: 0, count: 0, best: -Infinity };
         cur.total += score;
         cur.count += 1;
@@ -43,7 +61,6 @@ const Leaderboard = () => {
         byUser.set(a.user_id, cur);
       });
 
-      // Fetch profile names
       const userIds = Array.from(byUser.keys());
       const { data: profiles } = await supabase
         .from("profiles")
@@ -66,7 +83,6 @@ const Leaderboard = () => {
         };
       });
 
-      // Sort by total score desc
       rows.sort((a, b) => b.totalScore - a.totalScore);
       return rows;
     },
@@ -122,7 +138,7 @@ const Leaderboard = () => {
       {rows.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
           <Trophy className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p>No mock attempts yet. Be the first on the leaderboard!</p>
+          <p>No attempts in this period yet. Be the first on the leaderboard!</p>
         </div>
       )}
     </div>
@@ -138,9 +154,18 @@ const Leaderboard = () => {
           </div>
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold">Leaderboard</h1>
-            <p className="text-muted-foreground">All sessions • Practice + Mock • +1 correct / -0.25 wrong</p>
+            <p className="text-muted-foreground">Practice + Mock • NEET scoring (+4 correct / −1 wrong)</p>
           </div>
         </div>
+
+        {/* Period selector */}
+        <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
+          <TabsList className="grid grid-cols-3 w-full sm:w-72">
+            <TabsTrigger value="week">This Week</TabsTrigger>
+            <TabsTrigger value="month">This Month</TabsTrigger>
+            <TabsTrigger value="all">All Time</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* My rank card */}
         {myRank !== undefined && myRank >= 0 && myRow && (
@@ -191,7 +216,7 @@ const Leaderboard = () => {
           </CardContent></Card>
         </div>
 
-        {/* Tabs */}
+        {/* Rankings tabs */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Rankings</CardTitle>
