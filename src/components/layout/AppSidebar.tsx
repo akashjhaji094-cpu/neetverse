@@ -18,7 +18,8 @@ import {
   Send,
   BookX,
   History,
-  Inbox
+  Inbox,
+  Crown
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,16 @@ const navGroups: NavGroup[] = [
       { icon: Inbox, label: "Pending OMR", path: "/pending-omr", badge: "NEW" },
     ],
   },
+  {
+  title: "UPGRADE",
+  items: [
+    {
+      icon: Crown,
+      label: "Premium ✨",
+      path: "/premium",
+    },
+  ],
+},
   {
     title: "ANALYSIS",
     items: [
@@ -217,7 +228,7 @@ export function AppSidebar() {
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
             <a
-              href="https://t.me/akaxxh"
+              href="https://t.me/Neetverseowner_bot?text=I%20want%20subscription"
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
@@ -236,7 +247,7 @@ export function AppSidebar() {
           </TooltipTrigger>
           {collapsed && (
             <TooltipContent side="right" className="font-medium">
-              Contact on Telegram — @akaxxh
+              Contact on Telegram — @Neetverseowner_bot
             </TooltipContent>
           )}
         </Tooltip>
