@@ -97,13 +97,16 @@ export const PremiumAccessDialog = ({
       console.error(plannersError);
     }
 
+    // State Updates
     setHasAccess(true);
     setPremiumTests(testsData || []);
     setPlanners(plannersData || []);
+
     toast.success("Access verified! You can now access premium tests.");
+
+    // Removed onAccessGranted() and onOpenChange(false) so the dialog stays open
     setLoading(false);
   };
-
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,10 +120,10 @@ export const PremiumAccessDialog = ({
             <p>Enter your premium access key to unlock exclusive test content.</p>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm">
               <p className="font-semibold text-yellow-800 dark:text-yellow-200">
-                💰 Get Premium Access for only ₹399!
+                💰 Get Premium Access for only ₹199!
               </p>
               <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                Contact on Telegram: <a href="https://t.me/akaxxh" target="_blank" rel="noopener noreferrer" className="underline font-medium">@akaxxh</a>
+                Contact on Telegram: <a href="https://t.me/Neetverseowner_bot?text=I%20want%20subscription" target="_blank" rel="noopener noreferrer" className="underline font-medium">@Neetverseowner_bot</a>
               </p>
             </div>
           </DialogDescription>
