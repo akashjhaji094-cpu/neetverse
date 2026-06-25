@@ -13,6 +13,7 @@ import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { AttemptModeSelector } from "@/components/mock/AttemptModeSelector";
 import { OfflinePaperPreview } from "@/components/mock/OfflinePaperPreview";
+import { PremiumPopup } from "@/components/PremiumPopup";
 import { toast } from "sonner";
 import { ListChecks, Loader2, GraduationCap, Dna, Atom, Crown, Monitor, FileText } from "lucide-react";
 import { Question } from "@/lib/supabase";
@@ -131,6 +132,7 @@ function pickWithPriority(pool: Question[], want: number, history: Map<string, Q
 const Test = () => {
   const { user } = useAuth();
   const { limits, refetch: refetchLimits } = useMockLimits();
+  const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -421,24 +423,18 @@ const Test = () => {
   };
 
   const handleChooseOnline = () => {
-    if (limits && !limits.canTakeOnline) {
-      toast.error(
-        `Weekly online mock limit reached (${limits.onlineLimit}/week). ` +
-        (limits.plan === 'free' ? 'Upgrade to Premium for 6/week.' : 'Resets on a rolling 7-day basis.')
-      );
-      return;
-    }
+  if (limits && !limits.canTakeOnline) {
+  setShowPremiumPopup(true);
+  return;
+          }
     setTestMode('testing');
   };
 
   const handleChooseOffline = async () => {
     if (limits && !limits.canTakeOffline) {
-      toast.error(
-        `Weekly offline paper limit reached (${limits.offlineLimit}/week). ` +
-        (limits.plan === 'free' ? 'Upgrade to Premium for 6/week.' : 'Resets on a rolling 7-day basis.')
-      );
-      return;
-    }
+  setShowPremiumPopup(true);
+  return;
+          }
     if (user) {
       // Store the EXACT question set so this paper can be re-opened and
       // scored correctly later from the Pending OMR Vault, even days after
@@ -759,6 +755,11 @@ const Test = () => {
           )}
         </div>
       </div>
+
+      <PremiumPopup
+  open={showPremiumPopup}
+  onClose={() => setShowPremiumPopup(false)}
+/>
     </DashboardLayout>
   );
 };
