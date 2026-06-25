@@ -10,6 +10,7 @@ import { NeetCountdown } from "@/components/dashboard/NeetCountdown";
 import { useEffect } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PremiumWelcomePopup } from "@/components/PremiumWelcomePopup";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ const Dashboard = () => {
 
   return (
     <DashboardLayout>
+      <PremiumWelcomePopup />
       <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
         <div className="flex items-center justify-between">
           <div>
