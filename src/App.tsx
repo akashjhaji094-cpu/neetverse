@@ -26,43 +26,51 @@ import WeakChapters from "./pages/WeakChapters";
 import PendingOMR from "./pages/PendingOMR";
 import Premium from "./pages/Premium";
 
+// नए पेजों के इम्पोर्ट्स यहाँ जोड़े गए हैं
+import AdaptiveLearning from "./pages/AdaptiveLearning";
+import BattleArena from "./pages/BattleArena";
+
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/landing" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/practice" element={<Practice />} />
-            <Route path="/revision" element={<Revision />} />
-            <Route path="/pyqs" element={<Pyqs />} />
-            <Route path="/test" element={<Test />} />
-            <Route path="/notes" element={<Notes />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/progress" element={<Progress />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/mistake-book" element={<MistakeBook />} />
-            <Route path="/test-history" element={<TestHistory />} />
-            <Route path="/weak-chapters" element={<WeakChapters />} />
-            <Route path="/pending-omr" element={<PendingOMR />} />
-            <Route path="/premium" element={<Premium />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+<QueryClientProvider client={queryClient}>
+<TooltipProvider>
+<AuthProvider>
+<Toaster />
+<Sonner />
+<BrowserRouter>
+<Routes>
+<Route path="/" element={<Dashboard />} />
+<Route path="/landing" element={<Landing />} />
+<Route path="/auth" element={<Auth />} />
+<Route path="/practice" element={<Practice />} />
+<Route path="/revision" element={<Revision />} />
+<Route path="/pyqs" element={<Pyqs />} />
+<Route path="/test" element={<Test />} />
+<Route path="/notes" element={<Notes />} />
+<Route path="/admin" element={<Admin />} />
+<Route path="/analytics" element={<Analytics />} />
+<Route path="/progress" element={<Progress />} />
+<Route path="/leaderboard" element={<Leaderboard />} />
+<Route path="/notifications" element={<Notifications />} />
+<Route path="/account" element={<Account />} />
+<Route path="/settings" element={<Settings />} />
+<Route path="/mistake-book" element={<MistakeBook />} />
+<Route path="/test-history" element={<TestHistory />} />
+<Route path="/weak-chapters" element={<WeakChapters />} />
+<Route path="/pending-omr" element={<PendingOMR />} />
+<Route path="/premium" element={<Premium />} />
 
-export default App;
+{/* नए रूट्स यहाँ catch-all "*" रूट से ठीक पहले जोड़े गए हैं */}  
+        <Route path="/adaptive-learning" element={<AdaptiveLearning />} />  
+        <Route path="/battle-arena" element={<BattleArena />} />  
+
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}  
+        <Route path="*" element={<NotFound />} />  
+      </Routes>  
+    </BrowserRouter>  
+  </AuthProvider>  
+</TooltipProvider>
+
+  </QueryClientProvider>  
+);  export default App;
