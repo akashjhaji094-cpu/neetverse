@@ -1,4 +1,4 @@
-'''import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -1077,4 +1077,3 @@ const AdaptiveLearning = () => {
 };
 
 export default AdaptiveLearning;
-'''
