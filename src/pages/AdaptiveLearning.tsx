@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+'''import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,32 +11,18 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { useMathJax } from '@/hooks/useMathJax';
+import { SafeImage, ImageGrid } from '@/components/SafeImage';
+import { selectAdaptiveQuestions, updateSkillLevel, SelectedQuestion } from '@/lib/adaptiveEngine';
 import {
-  Brain,
-  Target,
-  TrendingUp,
-  Zap,
-  BookOpen,
-  Trophy,
-  Clock,
-  ChevronRight,
-  Star,
-  Flame,
-  BarChart3,
-  RotateCcw,
-  Play,
-  Lock,
-  Crown,
-  ArrowRight,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  Timer,
-  Calendar,
-  AlertTriangle
+  Brain, Target, TrendingUp, Zap, BookOpen, Trophy, Clock, ChevronRight,
+  Star, Flame, BarChart3, RotateCcw, Play, Lock, Crown, ArrowRight,
+  CheckCircle2, XCircle, HelpCircle, Timer, Calendar, AlertTriangle,
+  Sparkles, TrendingDown, Award, Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// ─── Types ───
 interface SkillLevel {
   chapter_id: string;
   chapter_name: string;
@@ -47,6 +33,9 @@ interface SkillLevel {
   consecutive_correct: number;
   consecutive_wrong: number;
   last_attempted_at: string | null;
+  avg_response_time: number;
+  weak_concepts: string[];
+  strong_concepts: string[];
 }
 
 interface AdaptiveSession {
@@ -56,10 +45,18 @@ interface AdaptiveSession {
   mode: 'chapter' | 'subject' | 'mixed';
   target_skill_level: number;
   current_question_index: number;
-  questions: any[];
-  answers: Record<string, any>;
+  questions: SelectedQuestion[];
+  answers: Record<string, SessionAnswer>;
   status: 'active' | 'completed' | 'abandoned';
   started_at: string;
+  completed_at?: string;
+}
+
+interface SessionAnswer {
+  option_index: number;
+  is_correct: boolean;
+  time_taken: number;
+  answered_at: string;
 }
 
 interface Subject {
@@ -75,6 +72,7 @@ interface Chapter {
   slug: string;
 }
 
+// ─── Helpers ───
 const getSkillLabel = (level: number): string => {
   if (level < 20) return 'Beginner';
   if (level < 40) return 'Novice';
@@ -102,24 +100,159 @@ const getProgressColor = (level: number): string => {
   return 'bg-purple-500';
 };
 
+// ─── Session Analysis Component ───
+const SessionAnalysis = ({ 
+  session, 
+  onClose 
+}: { 
+  session: AdaptiveSession; 
+  onClose: () => void;
+}) => {
+  const answers = Object.values(session.answers);
+  const correct = answers.filter(a => a.is_correct).length;
+  const accuracy = answers.length > 0 ? Math.round((correct / answers.length) * 100) : 0;
+  const avgTime = answers.length > 0 
+    ? Math.round(answers.reduce((a, b) => a + b.time_taken, 0) / answers.length) 
+    : 0;
+  
+  const xpGained = correct * 10 + (accuracy > 80 ? 50 : 0);
+  const coinsGained = correct * 5;
+
+  const weakTopics = session.questions
+    .filter((q) => !answers[q.question.id]?.is_correct)
+    .map(q => q.question.concept_tags || [])
+    .flat()
+    .filter(Boolean);
+
+  const strongTopics = session.questions
+    .filter((q) => answers[q.question.id]?.is_correct)
+    .map(q => q.question.concept_tags || [])
+    .flat()
+    .filter(Boolean);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-2xl mx-auto space-y-6"
+    >
+      <div className="text-center space-y-2">
+        <Trophy className="w-16 h-16 mx-auto text-yellow-500" />
+        <h2 className="text-3xl font-bold">Session Complete!</h2>
+        <p className="text-muted-foreground">Here is how you performed</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-green-500">{accuracy}%</p>
+            <p className="text-xs text-muted-foreground">Accuracy</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-blue-500">{avgTime}s</p>
+            <p className="text-xs text-muted-foreground">Avg Time</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-purple-500">+{xpGained}</p>
+            <p className="text-xs text-muted-foreground">XP Gained</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-yellow-500">+{coinsGained}</p>
+            <p className="text-xs text-muted-foreground">Coins</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-red-500" />
+            Weak Areas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {weakTopics.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {[...new Set(weakTopics)].slice(0, 8).map(topic => (
+                <Badge key={topic} variant="destructive">{topic}</Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No weak areas - great job!</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-green-500" />
+            Strong Areas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {strongTopics.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {[...new Set(strongTopics)].slice(0, 8).map(topic => (
+                <Badge key={topic} variant="default" className="bg-green-500">{topic}</Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">Keep practicing to build strengths!</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex gap-3 justify-center">
+        <Button onClick={onClose} variant="outline">
+          <RotateCcw className="w-4 h-4 mr-2" />
+          Back to Dashboard
+        </Button>
+        <Button onClick={() => window.location.reload()}>
+          <Play className="w-4 h-4 mr-2" />
+          New Session
+        </Button>
+      </div>
+    </motion.div>
+  );
+};
+
 // ─── Active Adaptive Session Component ───
-const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSession; onComplete: () => void }) => {
+const ActiveAdaptiveSession = ({ 
+  session, 
+  onComplete 
+}: { 
+  session: AdaptiveSession; 
+  onComplete: (updated: AdaptiveSession) => void;
+}) => {
   const [currentQIndex, setCurrentQIndex] = useState(session.current_question_index);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
-  const [answers, setAnswers] = useState<Record<string, any>>(session.answers || {});
+  const [answers, setAnswers] = useState<Record<string, SessionAnswer>>(session.answers || {});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { ref: mathRef, mathReady } = useMathJax([currentQIndex, showExplanation]);
 
-  const currentQuestion = session.questions[currentQIndex];
+  const currentQ = session.questions[currentQIndex];
   const totalQuestions = session.questions.length;
   const progress = ((currentQIndex) / totalQuestions) * 100;
 
+  // Timer effect
   useEffect(() => {
     if (timeLeft > 0 && !showExplanation) {
       const timer = setTimeout(() => setTimeLeft(t => t - 1), 1000);
       return () => clearTimeout(timer);
+    } else if (timeLeft === 0 && !showExplanation) {
+      handleSubmit(); // Auto-submit on timeout
     }
   }, [timeLeft, showExplanation]);
 
@@ -129,21 +262,39 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
   };
 
   const handleSubmit = async () => {
-    if (selectedOption === null) return;
+    if (selectedOption === null && timeLeft > 0) {
+      toast.error('Please select an answer');
+      return;
+    }
     setIsSubmitting(true);
 
-    const isCorrect = selectedOption === currentQuestion.correct_option_index;
-    const newAnswers = {
-      ...answers,
-      [currentQuestion.id]: {
-        option_index: selectedOption,
-        is_correct: isCorrect,
-        time_taken: 120 - timeLeft,
-      }
+    const timeTaken = Math.round((Date.now() - questionStartTime) / 1000);
+    const isCorrect = selectedOption === currentQ.question.correct_option_index;
+    
+    const newAnswer: SessionAnswer = {
+      option_index: selectedOption ?? -1,
+      is_correct: isCorrect,
+      time_taken: Math.min(timeTaken, 120),
+      answered_at: new Date().toISOString(),
     };
+
+    const newAnswers = { ...answers, [currentQ.question.id]: newAnswer };
     setAnswers(newAnswers);
     setShowExplanation(true);
 
+    // Update skill level in background
+    if (user) {
+      updateSkillLevel(
+        user.id,
+        currentQ.question.chapter_id,
+        isCorrect,
+        timeTaken,
+        currentQ.question.difficulty,
+        currentQ.question.concept_tags
+      ).catch(console.error);
+    }
+
+    // Update session in DB
     await supabase.from('adaptive_learning_sessions').update({
       current_question_index: currentQIndex,
       answers: newAnswers,
@@ -158,39 +309,56 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
       setSelectedOption(null);
       setShowExplanation(false);
       setTimeLeft(120);
+      setQuestionStartTime(Date.now());
 
       await supabase.from('adaptive_learning_sessions').update({
         current_question_index: currentQIndex + 1,
       }).eq('id', session.id);
     } else {
+      const completedSession = {
+        ...session,
+        status: 'completed' as const,
+        completed_at: new Date().toISOString(),
+        answers,
+        current_question_index: currentQIndex,
+      };
+      
       await supabase.from('adaptive_learning_sessions').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        current_question_index: currentQIndex,
+        answers,
       }).eq('id', session.id);
 
       queryClient.invalidateQueries({ queryKey: ['adaptive-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['skill-levels'] });
-      toast.success('Session completed! Your skills have been updated.');
-      onComplete();
+      toast.success('Session completed!');
+      onComplete(completedSession);
     }
   };
 
-  if (!currentQuestion) return null;
+  if (!currentQ) return null;
 
   // Parse options safely
   let options: string[] = [];
   try {
-    if (Array.isArray(currentQuestion.options)) {
-      options = currentQuestion.options;
-    } else if (typeof currentQuestion.options === 'string') {
-      options = JSON.parse(currentQuestion.options);
+    if (Array.isArray(currentQ.question.options)) {
+      options = currentQ.question.options;
+    } else if (typeof currentQ.question.options === 'string') {
+      options = JSON.parse(currentQ.question.options);
     }
   } catch {
     options = ['Option A', 'Option B', 'Option C', 'Option D'];
   }
 
+  const images = currentQ.question.images 
+    ? (Array.isArray(currentQ.question.images) 
+        ? currentQ.question.images 
+        : JSON.parse(currentQ.question.images as unknown as string))
+    : [];
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6" ref={mathRef}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -198,10 +366,16 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
           </div>
           <div>
             <h2 className="font-semibold">Adaptive Practice</h2>
-            <p className="text-sm text-muted-foreground">Question {currentQIndex + 1} of {totalQuestions}</p>
+            <p className="text-sm text-muted-foreground">
+              Question {currentQIndex + 1} of {totalQuestions}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <Badge variant="outline" className="text-xs">
+            <Sparkles className="w-3 h-3 mr-1" />
+            {currentQ.selectionReason}
+          </Badge>
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
             timeLeft < 20 ? 'bg-red-100 text-red-700 dark:bg-red-900/30' : 'bg-muted'
           }`}>
@@ -231,14 +405,18 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
             <CardContent className="p-6 space-y-6">
               <div className="text-lg font-medium leading-relaxed">
                 <span className="text-primary font-bold mr-2">Q{currentQIndex + 1}.</span>
-                <span dangerouslySetInnerHTML={{ __html: currentQuestion.question_text || '' }} />
+                <span dangerouslySetInnerHTML={{ __html: currentQ.question.question_text || '' }} />
               </div>
+
+              {images.length > 0 && (
+                <ImageGrid images={images} alt={`Question ${currentQIndex + 1}`} />
+              )}
 
               <div className="space-y-3">
                 {options.map((option: string, idx: number) => {
                   let optionClass = 'border-2 hover:border-primary/50 hover:bg-primary/5';
                   if (showExplanation) {
-                    if (idx === currentQuestion.correct_option_index) {
+                    if (idx === currentQ.question.correct_option_index) {
                       optionClass = 'border-2 border-green-500 bg-green-50 dark:bg-green-900/20';
                     } else if (idx === selectedOption) {
                       optionClass = 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
@@ -258,7 +436,7 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
                     >
                       <div className="flex items-start gap-3">
                         <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                          showExplanation && idx === currentQuestion.correct_option_index
+                          showExplanation && idx === currentQ.question.correct_option_index
                             ? 'bg-green-500 text-white'
                             : showExplanation && idx === selectedOption
                             ? 'bg-red-500 text-white'
@@ -269,10 +447,10 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
                           {String.fromCharCode(65 + idx)}
                         </span>
                         <div className="flex-1" dangerouslySetInnerHTML={{ __html: option }} />
-                        {showExplanation && idx === currentQuestion.correct_option_index && (
+                        {showExplanation && idx === currentQ.question.correct_option_index && (
                           <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                         )}
-                        {showExplanation && idx === selectedOption && idx !== currentQuestion.correct_option_index && (
+                        {showExplanation && idx === selectedOption && idx !== currentQ.question.correct_option_index && (
                           <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                         )}
                       </div>
@@ -281,17 +459,18 @@ const ActiveAdaptiveSession = ({ session, onComplete }: { session: AdaptiveSessi
                 })}
               </div>
 
-              {showExplanation && currentQuestion.explanation && (
+              {showExplanation && currentQ.question.explanation && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4"
                 >
                   <div className="flex items-start gap-2">
-                    <HelpCircle className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <Lightbulb className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Explanation</p>
-                      <div className="text-sm text-blue-600 dark:text-blue-400" dangerouslySetInnerHTML={{ __html: currentQuestion.explanation }} />
+                      <div className="text-sm text-blue-600 dark:text-blue-400" 
+                        dangerouslySetInnerHTML={{ __html: currentQ.question.explanation }} />
                     </div>
                   </div>
                 </motion.div>
@@ -331,6 +510,7 @@ const AdaptiveLearning = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('overview');
   const [activeSession, setActiveSession] = useState<AdaptiveSession | null>(null);
+  const [completedSession, setCompletedSession] = useState<AdaptiveSession | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedChapter, setSelectedChapter] = useState<string>('');
@@ -339,7 +519,15 @@ const AdaptiveLearning = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(false);
 
-  // Fetch subjects from DB
+  // Redirect guests
+  useEffect(() => {
+    if (isGuest) {
+      toast.error('Please sign in to use Adaptive Learning');
+      navigate('/auth');
+    }
+  }, [isGuest, navigate]);
+
+  // Fetch subjects
   const { data: dbSubjects, isLoading: subjectsLoading } = useQuery({
     queryKey: ['subjects'],
     queryFn: async () => {
@@ -353,7 +541,7 @@ const AdaptiveLearning = () => {
     if (dbSubjects) setSubjects(dbSubjects);
   }, [dbSubjects]);
 
-  // Fetch chapters when subject changes
+  // Fetch chapters
   useEffect(() => {
     if (!selectedSubject) {
       setChapters([]);
@@ -381,14 +569,13 @@ const AdaptiveLearning = () => {
         .from('user_skill_levels')
         .select(`
           *,
-          chapters:chapter_id(name),
+          chapters:chapter_id(name, subject_id),
           subjects:subject_id(name)
         `)
         .eq('user_id', user.id)
         .order('skill_level', { ascending: true });
 
       if (error) {
-        // Table might not exist, return empty
         if (error.code === '42P01') return [];
         throw error;
       }
@@ -422,58 +609,18 @@ const AdaptiveLearning = () => {
     enabled: !!user && !isGuest,
   });
 
-  // Start new adaptive session mutation
+  // Start new session mutation
   const startSessionMutation = useMutation({
     mutationFn: async ({ subjectId, chapterId, mode }: { subjectId: string; chapterId?: string; mode: string }) => {
       if (!user) throw new Error('Not authenticated');
 
-      let skillLevel = 50;
-      if (chapterId) {
-        const { data: sl } = await supabase
-          .from('user_skill_levels')
-          .select('skill_level')
-          .eq('user_id', user.id)
-          .eq('chapter_id', chapterId)
-          .single();
-        if (sl) skillLevel = sl.skill_level;
-      }
-
-      const buckets = skillLevel < 40 ? ['auto_easy', 'auto_easy', 'auto_medium'] :
-                     skillLevel < 70 ? ['auto_easy', 'auto_medium', 'auto_hard'] :
-                     skillLevel < 90 ? ['auto_medium', 'auto_hard', 'auto_hard'] :
-                     ['auto_hard', 'auto_hard', 'auto_hard'];
-
-      // Build query
-      let query = supabase
-        .from('questions')
-        .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id')
-        .eq('subject_id', subjectId)
-        .limit(200);
-
-      if (chapterId) {
-        query = query.eq('chapter_id', chapterId);
-      }
-
-      const { data: questions, error } = await query;
-
-      if (error) throw error;
-      if (!questions || questions.length < 5) {
-        throw new Error(`Only ${questions?.length || 0} questions found. Need at least 5.`);
-      }
-
-      // Smart selection based on difficulty
-      const selected: any[] = [];
-      const shuffled = [...questions].sort(() => Math.random() - 0.5);
-
-      for (let i = 0; i < 15 && selected.length < 15; i++) {
-        const targetDiff = buckets[i % buckets.length];
-        const match = shuffled.find(q => q.difficulty === targetDiff && !selected.includes(q));
-        if (match) selected.push(match);
-        else {
-          const fallback = shuffled.find(q => !selected.includes(q));
-          if (fallback) selected.push(fallback);
-        }
-      }
+      const selected = await selectAdaptiveQuestions({
+        userId: user.id,
+        subjectId,
+        chapterId,
+        mode: mode as any,
+        targetQuestionCount: 15,
+      });
 
       const { data: session, error: sessionError } = await supabase
         .from('adaptive_learning_sessions')
@@ -483,7 +630,7 @@ const AdaptiveLearning = () => {
           chapter_id: chapterId || null,
           mode,
           questions: selected,
-          target_skill_level: Math.min(skillLevel + 10, 100),
+          target_skill_level: 50,
         })
         .select()
         .single();
@@ -506,17 +653,35 @@ const AdaptiveLearning = () => {
     setActiveSession(session);
   };
 
-  const overallStats = {
+  const handleSessionComplete = (session: AdaptiveSession) => {
+    setActiveSession(null);
+    setCompletedSession(session);
+  };
+
+  const overallStats = useMemo(() => ({
     avgSkill: skillLevels?.length ? Math.round(skillLevels.reduce((a, b) => a + b.skill_level, 0) / skillLevels.length) : 0,
     totalAttempted: skillLevels?.reduce((a, b) => a + b.questions_attempted, 0) || 0,
     totalCorrect: skillLevels?.reduce((a, b) => a + b.questions_correct, 0) || 0,
     weakChapters: skillLevels?.filter(s => s.skill_level < 50).length || 0,
     strongChapters: skillLevels?.filter(s => s.skill_level >= 80).length || 0,
-  };
+  }), [skillLevels]);
 
   const accuracy = overallStats.totalAttempted > 0 
     ? Math.round((overallStats.totalCorrect / overallStats.totalAttempted) * 100) 
     : 0;
+
+  if (completedSession) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <SessionAnalysis 
+            session={completedSession} 
+            onClose={() => setCompletedSession(null)} 
+          />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (activeSession) {
     return (
@@ -524,7 +689,7 @@ const AdaptiveLearning = () => {
         <div className="p-6">
           <ActiveAdaptiveSession 
             session={activeSession} 
-            onComplete={() => setActiveSession(null)} 
+            onComplete={handleSessionComplete} 
           />
         </div>
       </DashboardLayout>
@@ -533,78 +698,46 @@ const AdaptiveLearning = () => {
 
   return (
     <DashboardLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Brain className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+              <Brain className="w-7 h-7 md:w-8 md:h-8 text-primary" />
               Adaptive Learning
             </h1>
-            <p className="text-muted-foreground mt-1">
-              AI-powered practice that adapts to your skill level in real-time
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">
+              AI-powered practice that adapts to your skill level
             </p>
           </div>
-          <Button onClick={() => setShowStartDialog(true)} size="lg" className="gap-2">
+          <Button onClick={() => setShowStartDialog(true)} size="lg" className="gap-2 w-full md:w-auto">
             <Zap className="w-4 h-4" />
             Start Adaptive Session
           </Button>
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-primary" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {[
+            { icon: Target, label: 'Avg Skill', value: `${overallStats.avgSkill}%`, color: 'text-primary' },
+            { icon: TrendingUp, label: 'Accuracy', value: `${accuracy}%`, color: 'text-green-500' },
+            { icon: BookOpen, label: 'Weak Areas', value: overallStats.weakChapters, color: 'text-red-500' },
+            { icon: Trophy, label: 'Mastered', value: overallStats.strongChapters, color: 'text-purple-500' },
+          ].map((stat, idx) => (
+            <Card key={idx}>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl bg-primary/10 flex items-center justify-center`}>
+                    <stat.icon className={`w-4 h-4 md:w-5 md:h-5 ${stat.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-lg md:text-2xl font-bold">{stat.value}</p>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">{stat.label}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{overallStats.avgSkill}%</p>
-                  <p className="text-xs text-muted-foreground">Avg Skill Level</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{accuracy}%</p>
-                  <p className="text-xs text-muted-foreground">Accuracy</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-red-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{overallStats.weakChapters}</p>
-                  <p className="text-xs text-muted-foreground">Weak Areas</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{overallStats.strongChapters}</p>
-                  <p className="text-xs text-muted-foreground">Mastered</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Main Content */}
@@ -616,28 +749,26 @@ const AdaptiveLearning = () => {
           </TabsList>
 
           {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            {/* Active Sessions */}
+          <TabsContent value="overview" className="space-y-4 md:space-y-6">
             {activeSessions && activeSessions.length > 0 && (
               <Card className="border-primary/20 bg-primary/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5 text-primary" />
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+                    <RotateCcw className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                     Resume Session
                   </CardTitle>
-                  <CardDescription>You have an active adaptive session</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {activeSessions.map(session => (
                     <div key={session.id} className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">Adaptive Practice Session</p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="font-medium text-sm">Adaptive Practice Session</p>
+                        <p className="text-xs text-muted-foreground">
                           Question {session.current_question_index + 1} of {session.questions.length}
                         </p>
                       </div>
-                      <Button onClick={() => handleResumeSession(session)}>
-                        <Play className="w-4 h-4 mr-2" />
+                      <Button size="sm" onClick={() => handleResumeSession(session)}>
+                        <Play className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
                         Resume
                       </Button>
                     </div>
@@ -646,22 +777,21 @@ const AdaptiveLearning = () => {
               </Card>
             )}
 
-            {/* Quick Start Cards - Dynamic from DB */}
+            {/* Subject Cards */}
             {subjectsLoading ? (
               <div className="grid md:grid-cols-3 gap-4">
                 {[1,2,3].map(i => <Skeleton key={i} className="h-32" />)}
               </div>
             ) : (
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-3 gap-3 md:gap-4">
                 {subjects.map((subject, idx) => {
                   const colors = [
                     'from-blue-500 to-indigo-600',
                     'from-emerald-500 to-teal-600', 
                     'from-green-500 to-emerald-600'
                   ];
-                  const icons = ['⚛️', '🧪', '🧬'];
                   const subjectSkills = skillLevels?.filter(s => 
-                    s.subject_name.toLowerCase() === subject.name.toLowerCase()
+                    s.subject_name?.toLowerCase() === subject.name.toLowerCase()
                   ) || [];
                   const avgSkill = subjectSkills.length 
                     ? Math.round(subjectSkills.reduce((a, b) => a + b.skill_level, 0) / subjectSkills.length) 
@@ -676,19 +806,19 @@ const AdaptiveLearning = () => {
                         setShowStartDialog(true);
                       }}
                     >
-                      <CardContent className="p-6">
-                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${colors[idx % colors.length]} flex items-center justify-center text-2xl mb-4`}>
-                          {icons[idx % icons.length]}
+                      <CardContent className="p-4 md:p-6">
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-gradient-to-br ${colors[idx % colors.length]} flex items-center justify-center text-xl md:text-2xl mb-3 md:mb-4`}>
+                          {['⚛️', '🧪', '🧬'][idx % 3]}
                         </div>
-                        <h3 className="text-lg font-bold mb-1">{subject.name}</h3>
-                        <div className="flex items-center gap-2 mb-3">
+                        <h3 className="text-base md:text-lg font-bold mb-1">{subject.name}</h3>
+                        <div className="flex items-center gap-2 mb-2 md:mb-3">
                           <Progress value={avgSkill} className="h-2 flex-1" />
                           <span className="text-sm font-medium">{avgSkill}%</span>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">{subjectSkills.length} chapters tracked</span>
+                        <div className="flex items-center justify-between text-xs md:text-sm">
+                          <span className="text-muted-foreground">{subjectSkills.length} chapters</span>
                           {weakCount > 0 && (
-                            <Badge variant="destructive" className="text-xs">{weakCount} weak</Badge>
+                            <Badge variant="destructive" className="text-[10px] md:text-xs">{weakCount} weak</Badge>
                           )}
                         </div>
                       </CardContent>
@@ -701,32 +831,31 @@ const AdaptiveLearning = () => {
             {/* Weak Chapters Alert */}
             {skillLevels && skillLevels.filter(s => s.skill_level < 40).length > 0 && (
               <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                    <Flame className="w-5 h-5" />
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300 text-sm md:text-base">
+                    <Flame className="w-4 h-4 md:w-5 md:h-5" />
                     Focus Areas
                   </CardTitle>
-                  <CardDescription>These chapters need your attention</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
+                  <div className="space-y-2 md:space-y-3">
                     {skillLevels
                       .filter(s => s.skill_level < 40)
                       .slice(0, 5)
                       .map(skill => (
                         <div key={skill.chapter_id} className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${getProgressColor(skill.skill_level)}`} />
-                            <div>
-                              <p className="font-medium text-sm">{skill.chapter_name}</p>
-                              <p className="text-xs text-muted-foreground">{skill.subject_name}</p>
+                          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                            <div className={`w-2 h-2 rounded-full ${getProgressColor(skill.skill_level)} flex-shrink-0`} />
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{skill.chapter_name}</p>
+                              <p className="text-[10px] md:text-xs text-muted-foreground">{skill.subject_name}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Badge variant="outline" className={getSkillColor(skill.skill_level)}>
+                          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                            <Badge variant="outline" className={`text-[10px] md:text-xs ${getSkillColor(skill.skill_level)}`}>
                               {getSkillLabel(skill.skill_level)}
                             </Badge>
-                            <Button size="sm" variant="ghost" onClick={() => {
+                            <Button size="sm" variant="ghost" className="h-7 md:h-8 px-2" onClick={() => {
                               setSelectedSubject(skill.subject_name.toLowerCase());
                               setSelectedChapter(skill.chapter_id);
                               setSelectedMode('chapter');
@@ -744,46 +873,46 @@ const AdaptiveLearning = () => {
           </TabsContent>
 
           {/* Skill Map Tab */}
-          <TabsContent value="skills" className="space-y-6">
+          <TabsContent value="skills" className="space-y-4 md:space-y-6">
             {skillsLoading ? (
               <div className="space-y-4">
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-20" />)}
               </div>
             ) : skillLevels && skillLevels.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3 md:space-y-4">
                 {skillLevels.map(skill => (
                   <Card key={skill.chapter_id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
-                            <h4 className="font-semibold">{skill.chapter_name}</h4>
-                            <Badge variant="secondary" className="text-xs">{skill.subject_name}</Badge>
+                            <h4 className="font-semibold text-sm md:text-base truncate">{skill.chapter_name}</h4>
+                            <Badge variant="secondary" className="text-[10px] md:text-xs flex-shrink-0">{skill.subject_name}</Badge>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2 md:gap-4">
                             <div className="flex-1">
-                              <Progress value={skill.skill_level} className="h-2.5" />
+                              <Progress value={skill.skill_level} className="h-2 md:h-2.5" />
                             </div>
-                            <div className="flex items-center gap-3 min-w-[200px]">
-                              <span className={`text-sm font-bold ${getSkillColor(skill.skill_level)}`}>
+                            <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
+                              <span className={`text-sm md:text-base font-bold ${getSkillColor(skill.skill_level)}`}>
                                 {skill.skill_level}%
                               </span>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="outline" className="text-[10px] md:text-xs">
                                 {getSkillLabel(skill.skill_level)}
                               </Badge>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2 md:gap-4 mt-1 md:mt-2 text-[10px] md:text-xs text-muted-foreground">
                             <span>{skill.questions_attempted} attempted</span>
                             <span>{skill.questions_correct} correct</span>
                             {skill.consecutive_correct > 2 && (
                               <span className="text-green-500 flex items-center gap-1">
-                                <Flame className="w-3 h-3" /> {skill.consecutive_correct} streak
+                                <Flame className="w-2.5 h-2.5 md:w-3 md:h-3" /> {skill.consecutive_correct} streak
                               </span>
                             )}
                           </div>
                         </div>
-                        <Button size="sm" variant="ghost" className="ml-4" onClick={() => {
+                        <Button size="sm" variant="ghost" className="flex-shrink-0 h-8 w-8 p-0" onClick={() => {
                           setSelectedSubject(skill.subject_name.toLowerCase());
                           setSelectedChapter(skill.chapter_id);
                           setSelectedMode('chapter');
@@ -797,11 +926,11 @@ const AdaptiveLearning = () => {
                 ))}
               </div>
             ) : (
-              <Card className="p-12 text-center">
-                <Brain className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Data Yet</h3>
-                <p className="text-muted-foreground mb-4">Start practicing to build your skill map</p>
-                <Button onClick={() => setShowStartDialog(true)}>
+              <Card className="p-8 md:p-12 text-center">
+                <Brain className="w-10 h-10 md:w-12 md:h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-base md:text-lg font-medium mb-2">No Data Yet</h3>
+                <p className="text-muted-foreground mb-4 text-sm">Start practicing to build your skill map</p>
+                <Button onClick={() => setShowStartDialog(true)} size="sm">
                   <Play className="w-4 h-4 mr-2" />
                   Start First Session
                 </Button>
@@ -810,12 +939,12 @@ const AdaptiveLearning = () => {
           </TabsContent>
 
           {/* Daily Plan Tab */}
-          <TabsContent value="plan" className="space-y-6">
+          <TabsContent value="plan" className="space-y-4 md:space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  Today's Study Plan
+                <CardTitle className="flex items-center gap-2 text-sm md:text-base">
+                  <Target className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                  Today&apos;s Study Plan
                 </CardTitle>
                 <CardDescription>
                   Personalized daily study recommendations
@@ -861,7 +990,7 @@ const AdaptiveLearning = () => {
                           if (mode === 'mixed') setSelectedChapter('');
                         }}
                         className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                          selectedMode === mode ? 'border-primary bg-primary/10' : 'border-muted hover:border-primary/30'
+                        selectedMode === mode ? 'border-primary bg-primary/10' : 'border-muted hover:border-primary/30'
                         }`}
                       >
                         {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -948,3 +1077,4 @@ const AdaptiveLearning = () => {
 };
 
 export default AdaptiveLearning;
+'''
