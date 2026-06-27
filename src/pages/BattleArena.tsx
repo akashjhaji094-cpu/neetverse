@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,42 +12,18 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { SafeImage, ImageGrid } from '@/components/SafeImage';
+import { useMathJax } from '@/hooks/useMathJax';
 import {
-  Swords,
-  Users,
-  Trophy,
-  Crown,
-  Zap,
-  Timer,
-  ArrowRight,
-  Copy,
-  CheckCircle2,
-  XCircle,
-  Star,
-  Flame,
-  Shield,
-  Sword,
-  Gem,
-  Medal,
-  Radio,
-  UserPlus,
-  LogOut,
-  Play,
-  RotateCcw,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Clock,
-  ChevronRight,
-  AlertCircle,
-  Wifi,
-  WifiOff,
-  BookOpen
+  Swords, Users, Trophy, Crown, Zap, Timer, ArrowRight, Copy,
+  CheckCircle2, XCircle, Star, Flame, Shield, Sword, Gem, Medal,
+  Radio, UserPlus, LogOut, Play, RotateCcw, Volume2, VolumeX,
+  Sparkles, Target, TrendingUp, Clock, ChevronRight, AlertCircle,
+  Wifi, WifiOff, BookOpen, Loader2, CircleDot
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// ─── Types ───
 interface BattleRoom {
   id: string;
   code: string;
@@ -63,6 +39,7 @@ interface BattleRoom {
   questions: any[];
   current_question_index: number;
   started_at: string | null;
+  created_at: string;
 }
 
 interface BattlePlayer {
@@ -78,13 +55,16 @@ interface BattlePlayer {
   streak: number;
   max_streak: number;
   is_connected: boolean;
+  last_seen_at: string;
 }
 
 interface BattleQuestionState {
+  room_id: string;
   question_index: number;
+  question_id: string;
   status: 'active' | 'revealed' | 'finished';
   ends_at: string;
-  player_answers: Record<string, { option_index: number; time_taken_ms: number; is_correct: boolean }>;
+  player_answers: Record<string, { option_index: number; time_taken_ms: number; is_correct: boolean | null }>;
 }
 
 interface Subject {
@@ -99,6 +79,30 @@ interface Chapter {
   subject_id: string;
 }
 
+interface LeaderboardEntry {
+  user_id: string;
+  display_name: string;
+  rating: number;
+  rank_tier: string;
+  total_battles: number;
+  total_wins: number;
+  best_streak: number;
+}
+
+interface BattleHistoryEntry {
+  id: string;
+  user_id: string;
+  room_id: string;
+  subject_name: string | null;
+  final_rank: number;
+  score: number;
+  correct_count: number;
+  wrong_count: number;
+  max_streak: number;
+  rating_change: number;
+  played_at: string;
+}
+
 const RANK_TIERS: Record<string, { color: string; icon: string; min: number }> = {
   Bronze: { color: 'from-amber-700 to-amber-600', icon: '🥉', min: 0 },
   Silver: { color: 'from-gray-400 to-gray-300', icon: '🥈', min: 1000 },
@@ -110,6 +114,39 @@ const RANK_TIERS: Record<string, { color: string; icon: string; min: number }> =
 };
 
 const AVATARS = ['🎓', '🧠', '⚡', '🔥', '🎯', '🚀', '💪', '⭐', '🦁', '🦅', '🐯', '🐉'];
+
+// ─── Safe JSON Parser ───
+function safeParseJSON<T>(input: any, fallback: T): T {
+  if (input === null || input === undefined) return fallback;
+  if (Array.isArray(input)) return input as unknown as T;
+  if (typeof input === 'object') return input as T;
+  if (typeof input === 'string') {
+    try { return JSON.parse(input); } catch { return fallback; }
+  }
+  return fallback;
+}
+
+function safeParseOptions(input: any): string[] {
+  const parsed = safeParseJSON<string[]>(input, []);
+  if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  return ['Option A', 'Option B', 'Option C', 'Option D'];
+}
+
+// ─── Connection Status Hook ───
+function useConnectionStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+  return isOnline;
+}
 
 // ─── Live Battle Room Component ───
 const LiveBattleRoom = ({ 
@@ -127,88 +164,139 @@ const LiveBattleRoom = ({
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(room.time_per_question);
   const [questionState, setQuestionState] = useState<BattleQuestionState | null>(null);
   const [finalResults, setFinalResults] = useState<BattlePlayer[] | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<any>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isOnline = useConnectionStatus();
+  const { ref: mathRef } = useMathJax([currentQuestion, showResults]);
 
   const currentPlayer = players.find(p => p.user_id === currentUserId);
   const isHost = currentPlayer?.is_host || false;
 
+  // Setup realtime subscriptions with auto-reconnect
   useEffect(() => {
-    const channel = supabase.channel(`battle:${room.id}`)
-      .on('postgres_changes', {
+    let mounted = true;
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+
+    const setupChannel = () => {
+      if (!mounted) return;
+
+      const channel = supabase.channel(`battle:${room.id}`, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: currentUserId },
+        }
+      });
+
+      channel.on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'battle_question_states',
         filter: `room_id=eq.${room.id}`
       }, (payload: any) => {
-        setQuestionState(payload.new);
-        if (payload.new.status === 'active') {
-          setCurrentQuestion(payload.new.question_index);
+        if (!mounted) return;
+        const newState = payload.new as BattleQuestionState;
+        setQuestionState(newState);
+        
+        if (newState.status === 'active') {
+          setCurrentQuestion(newState.question_index);
           setSelectedOption(null);
           setHasAnswered(false);
           setShowResults(false);
-          setTimeLeft(room.time_per_question);
-        } else if (payload.new.status === 'revealed') {
+        } else if (newState.status === 'revealed') {
           setShowResults(true);
         }
-      })
-      .on('postgres_changes', {
-        event: '*',
+      });
+
+      channel.on('postgres_changes', {
+        event: 'UPDATE',
         schema: 'public',
         table: 'battle_rooms',
         filter: `id=eq.${room.id}`
       }, (payload: any) => {
-        if (payload.new.status === 'finished') {
-          setFinalResults(players.sort((a, b) => b.score - a.score));
+        if (!mounted) return;
+        const updated = payload.new as BattleRoom;
+        
+        if (updated.status === 'countdown') {
+          setCountdown(3);
+        } else if (updated.status === 'finished') {
+          const ranked = [...players].sort((a, b) => b.score - a.score);
+          setFinalResults(ranked);
         }
-      })
-      .subscribe();
+      });
 
-    channelRef.current = channel;
+      channel.subscribe((status: string) => {
+        if (!mounted) return;
+        if (status === 'SUBSCRIBED') {
+          setIsReconnecting(false);
+          retryCount = 0;
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          if (retryCount < MAX_RETRIES) {
+            retryCount++;
+            setIsReconnecting(true);
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (mounted) setupChannel();
+            }, Math.min(1000 * Math.pow(2, retryCount), 10000));
+          }
+        }
+      });
+
+      channelRef.current = channel;
+    };
+
+    setupChannel();
 
     return () => {
-      channel.unsubscribe();
+      mounted = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+      }
     };
-  }, [room.id, players, room.time_per_question]);
+  }, [room.id, currentUserId]);
 
+  // Countdown timer
   useEffect(() => {
-    if (room.status === 'active' && timeLeft > 0 && !hasAnswered) {
-      timerRef.current = setTimeout(() => setTimeLeft(t => t - 1), 1000);
+    if (room.status === 'countdown' && countdown > 0) {
+      timerRef.current = setTimeout(() => setCountdown(c => c - 1), 1000);
       return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
       };
     }
-  }, [timeLeft, hasAnswered, room.status]);
-
-  useEffect(() => {
-    if (room.status === 'countdown' && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
-      return () => clearTimeout(timer);
-    }
   }, [countdown, room.status]);
 
   const handleAnswer = async (optionIndex: number) => {
-    if (hasAnswered || showResults) return;
+    if (hasAnswered || showResults || !questionState) return;
     setSelectedOption(optionIndex);
     setHasAnswered(true);
 
-    const timeTaken = (room.time_per_question - timeLeft) * 1000;
+    const timeTaken = questionState.ends_at 
+      ? Math.max(0, new Date(questionState.ends_at).getTime() - Date.now())
+      : room.time_per_question * 1000;
+    const timeTakenMs = room.time_per_question * 1000 - timeTaken;
 
-    await supabase.from('battle_question_states').update({
-      player_answers: {
-        ...(questionState?.player_answers || {}),
-        [currentUserId]: {
-          option_index: optionIndex,
-          time_taken_ms: timeTaken,
-          is_correct: null
+    try {
+      await supabase.from('battle_question_states').update({
+        player_answers: {
+          ...(questionState.player_answers || {}),
+          [currentUserId]: {
+            option_index: optionIndex,
+            time_taken_ms: Math.max(0, timeTakenMs),
+            is_correct: null
+          }
         }
-      }
-    }).eq('room_id', room.id).eq('question_index', currentQuestion);
+      }).eq('room_id', room.id).eq('question_index', currentQuestion);
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
+      toast.error('Failed to submit answer. Please try again.');
+    }
   };
 
   const handleStartGame = async () => {
@@ -220,53 +308,74 @@ const LiveBattleRoom = ({
       return;
     }
 
-    // Build query based on room settings
-    let query = supabase
-      .from('questions')
-      .select('id, question_text, options, correct_option_index, explanation, images')
-      .limit(500);
-
-    if (room.subject_id) {
-      query = query.eq('subject_id', room.subject_id);
-    }
-    if (room.chapter_id) {
-      query = query.eq('chapter_id', room.chapter_id);
-    }
-
-    const { data: questions, error } = await query;
-
-    if (error || !questions || questions.length < room.question_count) {
-      toast.error(`Only ${questions?.length || 0} questions available. Need ${room.question_count}.`);
+    if (players.length < 2) {
+      toast.error('Need at least 2 players to start');
       return;
     }
 
-    const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, room.question_count);
+    try {
+      let query = supabase
+        .from('questions')
+        .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id')
+        .limit(500);
 
-    await supabase.from('battle_rooms').update({
-      status: 'countdown',
-      questions: shuffled,
-    }).eq('id', room.id);
+      if (room.subject_id) {
+        query = query.eq('subject_id', room.subject_id);
+      }
+      if (room.chapter_id) {
+        query = query.eq('chapter_id', room.chapter_id);
+      }
 
-    setTimeout(async () => {
+      const { data: questions, error } = await query;
+
+      if (error) throw error;
+      if (!questions || questions.length < room.question_count) {
+        toast.error(`Only ${questions?.length || 0} questions available. Need ${room.question_count}.`);
+        return;
+      }
+
+      const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, room.question_count);
+
       await supabase.from('battle_rooms').update({
-        status: 'active',
-        started_at: new Date().toISOString(),
-        current_question_index: 0,
+        status: 'countdown',
+        questions: shuffled,
       }).eq('id', room.id);
 
-      await supabase.from('battle_question_states').insert({
-        room_id: room.id,
-        question_index: 0,
-        question_id: shuffled[0].id,
-        ends_at: new Date(Date.now() + room.time_per_question * 1000).toISOString(),
-      });
-    }, 3000);
+      setTimeout(async () => {
+        try {
+          await supabase.from('battle_rooms').update({
+            status: 'active',
+            started_at: new Date().toISOString(),
+            current_question_index: 0,
+          }).eq('id', room.id);
+
+          await supabase.from('battle_question_states').insert({
+            room_id: room.id,
+            question_index: 0,
+            question_id: shuffled[0].id,
+            status: 'active',
+            ends_at: new Date(Date.now() + room.time_per_question * 1000).toISOString(),
+            player_answers: {},
+          });
+        } catch (err) {
+          console.error('Failed to start game:', err);
+        }
+      }, 3000);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to start game');
+    }
   };
 
   const handleToggleReady = async () => {
-    await supabase.from('battle_players').update({
-      is_ready: !currentPlayer?.is_ready
-    }).eq('room_id', room.id).eq('user_id', currentUserId);
+    if (!currentPlayer) return;
+    try {
+      await supabase.from('battle_players').update({
+        is_ready: !currentPlayer.is_ready,
+        last_seen_at: new Date().toISOString(),
+      }).eq('room_id', room.id).eq('user_id', currentUserId);
+    } catch (err) {
+      toast.error('Failed to update ready status');
+    }
   };
 
   // Render countdown screen
@@ -279,15 +388,17 @@ const LiveBattleRoom = ({
           className="text-center space-y-8"
         >
           <h2 className="text-2xl font-bold">Get Ready!</h2>
-          <motion.div
-            key={countdown}
-            initial={{ scale: 2, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            className="text-8xl font-black text-primary"
-          >
-            {countdown > 0 ? countdown : 'GO!'}
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={countdown}
+              initial={{ scale: 2, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              className="text-8xl font-black text-primary"
+            >
+              {countdown > 0 ? countdown : 'GO!'}
+            </motion.div>
+          </AnimatePresence>
           <div className="flex items-center gap-4 justify-center">
             {players.map(p => (
               <div key={p.id} className="text-center">
@@ -302,8 +413,9 @@ const LiveBattleRoom = ({
   }
 
   // Render final results
-  if (finalResults) {
-    const myRank = finalResults.findIndex(p => p.user_id === currentUserId) + 1;
+  if (finalResults || room.status === 'finished') {
+    const results = finalResults || [...players].sort((a, b) => b.score - a.score);
+    const myRank = results.findIndex(p => p.user_id === currentUserId) + 1;
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -315,12 +427,12 @@ const LiveBattleRoom = ({
           <Trophy className="w-16 h-16 mx-auto text-yellow-500" />
           <h2 className="text-3xl font-bold">Battle Complete!</h2>
           <p className="text-xl text-muted-foreground">
-            You ranked <span className="font-bold text-primary">#{myRank}</span> out of {finalResults.length}
+            You ranked <span className="font-bold text-primary">#{myRank}</span> out of {results.length}
           </p>
         </motion.div>
 
         <div className="space-y-3">
-          {finalResults.map((player, idx) => (
+          {results.map((player, idx) => (
             <motion.div
               key={player.id}
               initial={{ opacity: 0, x: -20 }}
@@ -397,7 +509,7 @@ const LiveBattleRoom = ({
                   {!player.is_connected && <Badge variant="destructive" className="text-xs">Offline</Badge>}
                 </div>
               ))}
-              {Array.from({ length: room.max_players - players.length }).map((_, i) => (
+              {Array.from({ length: Math.max(0, room.max_players - players.length) }).map((_, i) => (
                 <div key={`empty-${i}`} className="p-4 rounded-xl border-2 border-dashed border-muted text-center space-y-2 opacity-50">
                   <div className="text-4xl">➕</div>
                   <p className="text-sm text-muted-foreground">Waiting...</p>
@@ -456,26 +568,37 @@ const LiveBattleRoom = ({
   }
 
   // Render active battle
-  const question = room.questions[currentQuestion];
-  if (!question) return null;
-
-  const progress = ((currentQuestion) / room.question_count) * 100;
-  const timerProgress = (timeLeft / room.time_per_question) * 100;
-
-  // Parse options safely
-  let options: string[] = [];
-  try {
-    if (Array.isArray(question.options)) {
-      options = question.options;
-    } else if (typeof question.options === 'string') {
-      options = JSON.parse(question.options);
-    }
-  } catch {
-    options = ['Option A', 'Option B', 'Option C', 'Option D'];
+  const question = room.questions?.[currentQuestion];
+  if (!question) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading question...</p>
+        </div>
+      </div>
+    );
   }
 
+  const progress = ((currentQuestion) / room.question_count) * 100;
+  const options = safeParseOptions(question.options);
+  const images = safeParseJSON<string[]>(question.images, []);
+
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-4xl mx-auto space-y-4" ref={mathRef}>
+      {!isOnline && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+          <WifiOff className="w-4 h-4" />
+          You are offline. Answers may not sync until you reconnect.
+        </div>
+      )}
+      {isReconnecting && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Reconnecting to server...
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="text-sm">
@@ -491,15 +614,17 @@ const LiveBattleRoom = ({
         </Button>
       </div>
 
-      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-        <motion.div
-          className={`absolute inset-y-0 left-0 rounded-full ${
-            timerProgress > 50 ? 'bg-green-500' : timerProgress > 25 ? 'bg-yellow-500' : 'bg-red-500'
-          }`}
-          style={{ width: `${timerProgress}%` }}
-          transition={{ duration: 0.5 }}
-        />
-      </div>
+      {questionState?.status === 'active' && (
+        <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+          <motion.div
+            className="absolute inset-y-0 left-0 rounded-full bg-green-500"
+            style={{ width: `${questionState?.ends_at ? 
+              Math.max(0, (new Date(questionState.ends_at).getTime() - Date.now()) / (room.time_per_question * 1000) * 100) 
+              : 0}%` }}
+            transition={{ duration: 0.1 }}
+          />
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-2">
         {players.sort((a, b) => b.score - a.score).map(player => (
@@ -531,6 +656,10 @@ const LiveBattleRoom = ({
                 <span dangerouslySetInnerHTML={{ __html: question.question_text || '' }} />
               </div>
 
+              {images.length > 0 && (
+                <ImageGrid images={images} alt={`Question ${currentQuestion + 1}`} />
+              )}
+
               <div className="grid gap-3">
                 {options.map((option: string, idx: number) => {
                   let btnClass = 'border-2 hover:border-primary/50 hover:bg-primary/5';
@@ -539,7 +668,7 @@ const LiveBattleRoom = ({
                     if (idx === question.correct_option_index) {
                       btnClass = 'border-2 border-green-500 bg-green-50 dark:bg-green-900/20';
                     } else if (idx === selectedOption) {
-                      btnClass = 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
+                                                  btnClass = 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
                     } else {
                       btnClass = 'border-2 opacity-40';
                     }
@@ -567,6 +696,12 @@ const LiveBattleRoom = ({
                           {String.fromCharCode(65 + idx)}
                         </span>
                         <div className="flex-1" dangerouslySetInnerHTML={{ __html: option }} />
+                        {showResults && idx === question.correct_option_index && (
+                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        )}
+                        {showResults && idx === selectedOption && idx !== question.correct_option_index && (
+                          <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        )}
                       </div>
                     </button>
                   );
@@ -581,9 +716,10 @@ const LiveBattleRoom = ({
                 >
                   <h4 className="font-medium mb-2">Results</h4>
                   <div className="space-y-2">
-                    {players.sort((a, b) => b.score - a.score).map((player, idx) => {
+                    {players.sort((a, b) => b.score - a.score).map((player) => {
                       const answer = questionState?.player_answers?.[player.user_id];
                       const isCorrect = answer?.is_correct;
+                      const points = isCorrect ? Math.round(100 + (answer?.time_taken_ms < 15000 ? 50 : 0)) : 0;
 
                       return (
                         <div key={player.id} className="flex items-center justify-between text-sm">
@@ -596,7 +732,7 @@ const LiveBattleRoom = ({
                               <XCircle className="w-4 h-4 text-red-500" />
                             )}
                           </div>
-                          <span className="font-medium">+{isCorrect ? Math.round(100 + (answer?.time_taken_ms < 15000 ? 50 : 0)) : 0}</span>
+                          <span className="font-medium">+{points}</span>
                         </div>
                       );
                     })}
@@ -609,12 +745,13 @@ const LiveBattleRoom = ({
       </AnimatePresence>
     </div>
   );
-};
+  };
 
 // ─── Main Battle Arena Page ───
 const BattleArena = () => {
   const navigate = useNavigate();
   const { user, isGuest } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('lobby');
   const [currentRoom, setCurrentRoom] = useState<BattleRoom | null>(null);
   const [roomPlayers, setRoomPlayers] = useState<BattlePlayer[]>([]);
@@ -634,6 +771,8 @@ const BattleArena = () => {
     timePerQuestion: 30,
     maxPlayers: 5,
   });
+  const roomChannelRef = useRef<any>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Redirect guests
   useEffect(() => {
@@ -685,7 +824,7 @@ const BattleArena = () => {
         if (error.code === '42P01') return [];
         throw error;
       }
-      return data || [];
+      return (data || []) as LeaderboardEntry[];
     },
   });
 
@@ -705,7 +844,7 @@ const BattleArena = () => {
         if (error.code === '42P01') return [];
         throw error;
       }
-      return data || [];
+      return (data || []) as BattleHistoryEntry[];
     },
     enabled: !!user,
   });
@@ -725,7 +864,7 @@ const BattleArena = () => {
         if (error.code === '42P01') return null;
         throw error;
       }
-      return data;
+      return data as LeaderboardEntry | null;
     },
     enabled: !!user,
   });
@@ -761,9 +900,11 @@ const BattleArena = () => {
         avatar_emoji: selectedAvatar,
         is_host: true,
         is_ready: true,
+        is_connected: true,
+        last_seen_at: new Date().toISOString(),
       });
 
-      return room;
+      return room as BattleRoom;
     },
     onSuccess: (room) => {
       setCurrentRoom(room);
@@ -795,7 +936,7 @@ const BattleArena = () => {
         .select('*')
         .eq('room_id', room.id)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!existing) {
         await supabase.from('battle_players').insert({
@@ -803,10 +944,17 @@ const BattleArena = () => {
           user_id: user.id,
           display_name: displayName || user.user_metadata?.name || 'Player',
           avatar_emoji: selectedAvatar,
+          is_connected: true,
+          last_seen_at: new Date().toISOString(),
         });
+      } else {
+        await supabase.from('battle_players').update({
+          is_connected: true,
+          last_seen_at: new Date().toISOString(),
+        }).eq('id', existing.id);
       }
 
-      return room;
+      return room as BattleRoom;
     },
     onSuccess: (room) => {
       setCurrentRoom(room);
@@ -818,53 +966,91 @@ const BattleArena = () => {
     },
   });
 
-  // Subscribe to room updates
+  // Subscribe to room updates with heartbeat
   useEffect(() => {
-    if (!currentRoom) return;
+    if (!currentRoom || !user) return;
+    let mounted = true;
 
-    const channel = supabase.channel(`room:${currentRoom.id}`)
-      .on('postgres_changes', {
+    const setupRoomChannel = () => {
+      const channel = supabase.channel(`room:${currentRoom.id}`, {
+        config: {
+          broadcast: { self: true },
+        }
+      });
+
+      channel.on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'battle_players',
         filter: `room_id=eq.${currentRoom.id}`
       }, () => {
+        if (!mounted) return;
         supabase.from('battle_players')
           .select('*')
           .eq('room_id', currentRoom.id)
           .then(({ data }) => {
-            if (data) setRoomPlayers(data);
+            if (data && mounted) setRoomPlayers(data);
           });
-      })
-      .on('postgres_changes', {
-        event: '*',
+      });
+
+      channel.on('postgres_changes', {
+        event: 'UPDATE',
         schema: 'public',
         table: 'battle_rooms',
         filter: `id=eq.${currentRoom.id}`
       }, (payload: any) => {
-        setCurrentRoom(payload.new);
-      })
-      .subscribe();
+        if (!mounted) return;
+        setCurrentRoom(payload.new as BattleRoom);
+      });
 
+      channel.subscribe();
+      roomChannelRef.current = channel;
+    };
+
+    setupRoomChannel();
+
+    // Heartbeat to keep player connected
+    heartbeatRef.current = setInterval(async () => {
+      if (!mounted || !user) return;
+      await supabase.from('battle_players').update({
+        last_seen_at: new Date().toISOString(),
+        is_connected: true,
+      }).eq('room_id', currentRoom.id).eq('user_id', user.id);
+    }, 10000);
+
+    // Initial fetch
     supabase.from('battle_players')
       .select('*')
       .eq('room_id', currentRoom.id)
       .then(({ data }) => {
-        if (data) setRoomPlayers(data);
+        if (data && mounted) setRoomPlayers(data);
       });
 
     return () => {
-      channel.unsubscribe();
+      mounted = false;
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (roomChannelRef.current) {
+        roomChannelRef.current.unsubscribe();
+      }
     };
-  }, [currentRoom?.id]);
+  }, [currentRoom?.id, user?.id]);
 
   const handleLeaveRoom = async () => {
     if (!currentRoom || !user) return;
 
-    await supabase.from('battle_players')
-      .delete()
-      .eq('room_id', currentRoom.id)
-      .eq('user_id', user.id);
+    try {
+      await supabase.from('battle_players')
+        .delete()
+        .eq('room_id', currentRoom.id)
+        .eq('user_id', user.id);
+
+      // If host leaves and room is waiting, delete the room
+      if (currentRoom.host_id === user.id && currentRoom.status === 'waiting') {
+        await supabase.from('battle_rooms').delete().eq('id', currentRoom.id);
+      }
+    } catch (err) {
+      console.error('Error leaving room:', err);
+    }
 
     setCurrentRoom(null);
     setRoomPlayers([]);
@@ -873,7 +1059,7 @@ const BattleArena = () => {
   if (currentRoom) {
     return (
       <DashboardLayout>
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <LiveBattleRoom
             room={currentRoom}
             players={roomPlayers}
@@ -887,15 +1073,15 @@ const BattleArena = () => {
 
   return (
     <DashboardLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Swords className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+              <Swords className="w-7 h-7 md:w-8 md:h-8 text-primary" />
               Battle Arena
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">
               Compete live with other NEET aspirants in real-time quiz battles
             </p>
           </div>
@@ -913,29 +1099,29 @@ const BattleArena = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 gap-3 md:gap-4">
           <Card className="cursor-pointer hover:shadow-lg transition-all group" onClick={() => setShowCreateDialog(true)}>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-2xl">
-                <Swords className="w-7 h-7 text-white" />
+            <CardContent className="p-4 md:p-6 flex items-center gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-xl md:text-2xl flex-shrink-0">
+                <Swords className="w-6 h-6 md:w-7 md:h-7 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold group-hover:text-primary transition-colors">Create Battle</h3>
-                <p className="text-sm text-muted-foreground">Host a room and invite friends</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base md:text-lg font-bold group-hover:text-primary transition-colors">Create Battle</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">Host a room and invite friends</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
             </CardContent>
           </Card>
           <Card className="cursor-pointer hover:shadow-lg transition-all group" onClick={() => setShowJoinDialog(true)}>
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-2xl">
-                <UserPlus className="w-7 h-7 text-white" />
+            <CardContent className="p-4 md:p-6 flex items-center gap-4">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-xl md:text-2xl flex-shrink-0">
+                <UserPlus className="w-6 h-6 md:w-7 md:h-7 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold group-hover:text-green-500 transition-colors">Join Battle</h3>
-                <p className="text-sm text-muted-foreground">Enter a room code to compete</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base md:text-lg font-bold group-hover:text-green-500 transition-colors">Join Battle</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">Enter a room code to compete</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
             </CardContent>
           </Card>
         </div>
@@ -962,7 +1148,7 @@ const BattleArena = () => {
               {leaderboardLoading ? (
                 Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-16" />)
               ) : leaderboard && leaderboard.length > 0 ? (
-                leaderboard.map((entry: any, idx: number) => {
+                leaderboard.map((entry, idx: number) => {
                   const tier = RANK_TIERS[entry.rank_tier] || RANK_TIERS['Bronze'];
                   return (
                     <motion.div
@@ -972,24 +1158,24 @@ const BattleArena = () => {
                       transition={{ delay: idx * 0.05 }}
                     >
                       <Card className={`${entry.user_id === user?.id ? 'border-primary bg-primary/5' : ''}`}>
-                        <CardContent className="p-4 flex items-center gap-4">
-                          <div className="text-xl font-black w-10 text-center">
+                        <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
+                          <div className="text-lg md:text-xl font-black w-8 md:w-10 text-center flex-shrink-0">
                             {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : `#${idx + 1}`}
                           </div>
-                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${tier.color} flex items-center justify-center text-lg`}>
+                          <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br ${tier.color} flex items-center justify-center text-base md:text-lg flex-shrink-0`}>
                             {tier.icon}
                           </div>
-                          <div className="flex-1">
-                            <p className="font-bold">{entry.display_name}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm md:text-base truncate">{entry.display_name}</p>
+                            <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-muted-foreground">
                               <span>{entry.total_battles} battles</span>
                               <span>{entry.total_wins} wins</span>
-                              <span className="flex items-center gap-1"><Flame className="w-3 h-3" /> {entry.best_streak}</span>
+                              <span className="flex items-center gap-1"><Flame className="w-2.5 h-2.5 md:w-3 md:h-3" /> {entry.best_streak}</span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-lg font-black">{entry.rating}</p>
-                            <Badge variant="outline" className="text-xs">{entry.rank_tier}</Badge>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-base md:text-lg font-black">{entry.rating}</p>
+                            <Badge variant="outline" className="text-[10px] md:text-xs">{entry.rank_tier}</Badge>
                           </div>
                         </CardContent>
                       </Card>
@@ -1008,28 +1194,28 @@ const BattleArena = () => {
           <TabsContent value="history" className="space-y-4">
             {battleHistory && battleHistory.length > 0 ? (
               <div className="grid gap-3">
-                {battleHistory.map((battle: any) => (
+                {battleHistory.map((battle) => (
                   <Card key={battle.id}>
-                    <CardContent className="p-4 flex items-center gap-4">
-                      <div className="text-2xl font-black w-12 text-center">
+                    <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
+                      <div className="text-xl md:text-2xl font-black w-10 md:w-12 text-center flex-shrink-0">
                         {battle.final_rank === 1 ? '👑' : `#${battle.final_rank}`}
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium">{battle.subject_name || 'Mixed Subject'}</p>
-                          <Badge variant={battle.rating_change >= 0 ? "default" : "destructive"} className="text-xs">
+                          <p className="font-medium text-sm md:text-base">{battle.subject_name || 'Mixed Subject'}</p>
+                          <Badge variant={battle.rating_change >= 0 ? "default" : "destructive"} className="text-[10px] md:text-xs">
                             {battle.rating_change >= 0 ? '+' : ''}{battle.rating_change}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> {battle.correct_count}</span>
-                          <span className="flex items-center gap-1"><XCircle className="w-3 h-3 text-red-500" /> {battle.wrong_count}</span>
-                          <span className="flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" /> {battle.max_streak}</span>
+                        <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><CheckCircle2 className="w-2.5 h-2.5 md:w-3 md:h-3 text-green-500" /> {battle.correct_count}</span>
+                          <span className="flex items-center gap-1"><XCircle className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-500" /> {battle.wrong_count}</span>
+                          <span className="flex items-center gap-1"><Flame className="w-2.5 h-2.5 md:w-3 md:h-3 text-orange-500" /> {battle.max_streak}</span>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold">{battle.score}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(battle.played_at).toLocaleDateString()}</p>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-base md:text-lg font-bold">{battle.score}</p>
+                        <p className="text-[10px] md:text-xs text-muted-foreground">{new Date(battle.played_at).toLocaleDateString()}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -1093,7 +1279,6 @@ const BattleArena = () => {
                   />
                 </div>
 
-                {/* Subject & Chapter Selection */}
                 <div>
                   <label className="text-sm font-medium mb-2 block">Subject (Optional)</label>
                   <select
@@ -1274,7 +1459,7 @@ const ActiveRoomsList = ({ onJoin }: { onJoin: (room: BattleRoom) => void }) => 
         if (error.code === '42P01') return [];
         throw error;
       }
-      return data as BattleRoom[];
+      return (data || []) as BattleRoom[];
     },
     refetchInterval: 5000,
   });
@@ -1300,22 +1485,22 @@ const ActiveRoomsList = ({ onJoin }: { onJoin: (room: BattleRoom) => void }) => 
     <div className="grid gap-3">
       {rooms.map(room => (
         <Card key={room.id} className="hover:shadow-md transition-shadow">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-xl">
+          <CardContent className="p-3 md:p-4 flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-lg md:text-xl flex-shrink-0">
               ⚔️
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold">{room.name}</h4>
-                <Badge variant="outline" className="text-xs font-mono">{room.code}</Badge>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-bold text-sm md:text-base truncate">{room.name}</h4>
+                <Badge variant="outline" className="text-[10px] md:text-xs font-mono flex-shrink-0">{room.code}</Badge>
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {room.current_players}/{room.max_players}</span>
-                <span className="flex items-center gap-1"><Target className="w-3 h-3" /> {room.question_count} Qs</span>
-                <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> {room.time_per_question}s</span>
+              <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Users className="w-2.5 h-2.5 md:w-3 md:h-3" /> {room.current_players}/{room.max_players}</span>
+                <span className="flex items-center gap-1"><Target className="w-2.5 h-2.5 md:w-3 md:h-3" /> {room.question_count} Qs</span>
+                <span className="flex items-center gap-1"><Timer className="w-2.5 h-2.5 md:w-3 md:h-3" /> {room.time_per_question}s</span>
               </div>
             </div>
-            <Button onClick={() => onJoin(room)} disabled={room.current_players >= room.max_players}>
+            <Button onClick={() => onJoin(room)} disabled={room.current_players >= room.max_players} size="sm" className="flex-shrink-0">
               {room.current_players >= room.max_players ? 'Full' : 'Join'}
             </Button>
           </CardContent>
