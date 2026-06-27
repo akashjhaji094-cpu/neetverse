@@ -1,289 +1,335 @@
-import { useState } from "react";
-import { 
-  Home, 
-  Target, 
-  BarChart3, 
-  User, 
-  Settings,
-  BookOpen,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-  Shield,
-  ClipboardList,
-  Trophy,
-  Bell,
-  RotateCcw,
-  FileText,
-  Send,
-  BookX,
-  History,
-  Inbox,
-  Crown
-} from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from 'react';
+import { useLocation, useNavigate, NavLink } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
+import {
+Menu,
+Home,
+BookOpen,
+TestTube,
+FileText,
+BarChart3,
+Settings,
+User,
+LogOut,
+ChevronLeft,
+ChevronRight,
+Shield,
+Trophy,
+History,
+AlertTriangle,
+Crown,
+Zap,
+Swords,
+Brain,
+Send,
+TrendingUp
+} from 'lucide-react';
 
 interface NavItem {
-  icon: React.ElementType;
-  label: string;
-  path: string;
-  badge?: string;
-  adminOnly?: boolean;
+title: string;
+href: string;
+icon: React.ElementType;
+badge?: string;
+premium?: boolean;
+new?: boolean;
 }
 
 interface NavGroup {
-  title: string;
-  items: NavItem[];
+title: string;
+items: NavItem[];
 }
-
-const navGroups: NavGroup[] = [
-  {
-    title: "",
-    items: [
-      { icon: Home, label: "Dashboard", path: "/" },
-    ],
-  },
-  {
-    title: "PRACTICE",
-    items: [
-      { icon: Target, label: "Practice Questions", path: "/practice" },
-      { icon: RotateCcw, label: "Revision", path: "/revision", badge: "NEW" },
-      { icon: FileText, label: "All PYQS", path: "/pyqs", badge: "NEW" },
-      { icon: BookOpen, label: "Notes & PDFs", path: "/notes" },
-      { icon: ClipboardList, label: "Mock Tests", path: "/test" },
-      { icon: Inbox, label: "Pending OMR", path: "/pending-omr", badge: "NEW" },
-    ],
-  },
-  {
-  title: "UPGRADE",
-  items: [
-    {
-      icon: Crown,
-      label: "Premium ✨",
-      path: "/premium",
-    },
-  ],
-},
-  {
-    title: "ANALYSIS",
-    items: [
-      { icon: BookX, label: "Mistake Book", path: "/mistake-book", badge: "NEW" },
-      { icon: History, label: "Test History", path: "/test-history", badge: "NEW" },
-      { icon: Target, label: "Weak Chapters", path: "/weak-chapters", badge: "NEW" },
-      { icon: BarChart3, label: "Reports", path: "/progress" },
-      { icon: Trophy, label: "Leaderboard", path: "/leaderboard" },
-      { icon: Bell, label: "Notifications", path: "/notifications" },
-    ],
-  },
-];
-
-const adminItem: NavItem = { icon: Shield, label: "Admin", path: "/admin", adminOnly: true };
-
-const bottomNavItems: NavItem[] = [
-  { icon: User, label: "Account", path: "/account" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-];
 
 export function AppSidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-  const location = useLocation();
-  const { user, signOut } = useAuth();
+const location = useLocation();
+const navigate = useNavigate();
+const { user, signOut, isGuest } = useAuth();
+const [collapsed, setCollapsed] = useState(false);
+const [mobileOpen, setMobileOpen] = useState(false);
 
-  const { data: isAdmin } = useQuery({
-    queryKey: ['user-is-admin', user?.id],
-    queryFn: async () => {
-      if (!user) return false;
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .in("role", ["superadmin", "content_admin"]);
-      return !!roles && roles.length > 0;
-    },
-    enabled: !!user,
-  });
+const { data: isAdmin } = useQuery({
+queryKey: ['user-is-admin', user?.id],
+queryFn: async () => {
+if (!user) return false;
+const { data: roles } = await supabase
+.from("user_roles")
+.select("role")
+.eq("user_id", user.id)
+.in("role", ["superadmin", "content_admin"]);
+return !!roles && roles.length > 0;
+},
+enabled: !!user,
+});
 
-  const NavItemComponent = ({ item }: { item: NavItem }) => {
-    const Icon = item.icon;
-    const isActive = location.pathname === item.path;
+const navGroups: NavGroup[] = [
+{
+title: "Study",
+items: [
+{ title: "Dashboard", href: "/", icon: Home },
+{ title: "Practice", href: "/practice", icon: BookOpen },
+{ title: "Mock Tests", href: "/test", icon: TestTube },
+{ title: "PYQs", href: "/pyqs", icon: FileText },
+{ title: "Notes & Books", href: "/notes", icon: FileText },
+{ title: "Revision", href: "/revision", icon: BookOpen },
+],
+},
+{
+title: "AI & Adaptive",
+items: [
+{ title: "Adaptive Learning", href: "/adaptive-learning", icon: Brain, new: true },
+{ title: "Battle Arena", href: "/battle-arena", icon: Swords, new: true },
+],
+},
+{
+title: "Progress",
+items: [
+{ title: "Analytics", href: "/analytics", icon: BarChart3 },
+{ title: "Progress", href: "/progress", icon: TrendingUp },
+{ title: "Mistake Book", href: "/mistake-book", icon: AlertTriangle },
+{ title: "Test History", href: "/test-history", icon: History },
+{ title: "Weak Chapters", href: "/weak-chapters", icon: Zap },
+{ title: "Leaderboard", href: "/leaderboard", icon: Trophy },
+],
+},
+{
+title: "Premium",
+items: [
+{ title: "Premium Content", href: "/premium", icon: Crown, badge: "NEW" },
+],
+},
+];
 
-    const content = (
-      <NavLink
-        to={item.path}
-        className={cn(
-          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative",
-          isActive 
-            ? "bg-primary/10 text-primary font-semibold" 
-            : "hover:bg-muted text-muted-foreground hover:text-foreground"
-        )}
-      >
-        {isActive && (
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
-        )}
-        <Icon className={cn("h-5 w-5 flex-shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-        {!collapsed && (
-          <>
-            <span className="text-sm">{item.label}</span>
-            {item.badge && (
-              <span className="ml-auto px-2 py-0.5 text-xs font-semibold bg-warning text-warning-foreground rounded-full">
-                {item.badge}
-              </span>
-            )}
-          </>
-        )}
-        {collapsed && item.badge && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-warning rounded-full" />
-        )}
-      </NavLink>
-    );
+const bottomNavItems: NavItem[] = [
+{ title: "Account", href: "/account", icon: User },
+{ title: "Settings", href: "/settings", icon: Settings },
+];
 
-    if (collapsed) {
-      return (
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>{content}</TooltipTrigger>
-          <TooltipContent side="right" className="font-medium">
-            {item.label}
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    return content;
-  };
-
-  return (
-    <aside
-      className={cn(
-        "fixed left-0 top-0 z-40 h-screen border-r border-border bg-card flex flex-col transition-all duration-300",
-        collapsed ? "w-16" : "w-60"
-      )}
-    >
-      {/* Logo */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-        {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <img src={neetverseLogo} alt="NEETVerse" className="w-9 h-9 rounded-xl" />
-            <span className="text-lg font-bold text-primary">NEETVerse</span>
-          </div>
-        )}
-        {collapsed && (
-          <img src={neetverseLogo} alt="NEETVerse" className="w-9 h-9 rounded-xl mx-auto" />
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn("h-7 w-7", collapsed && "absolute -right-3.5 top-5 bg-card border shadow-sm rounded-full")}
-        >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-
-      {/* Navigation Groups */}
-      <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-1">
-        {navGroups.map((group, gi) => (
-          <div key={gi} className={cn(gi > 0 && "mt-4")}>
-            {group.title && !collapsed && (
-              <p className="px-3 mb-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                {group.title}
-              </p>
-            )}
-            {group.title && collapsed && gi > 0 && (
-              <div className="mx-3 my-2 border-t border-border" />
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <NavItemComponent key={item.path} item={item} />
-              ))}
-            </div>
-          </div>
-        ))}
-        
-        {isAdmin && (
-          <div className="mt-4">
-            {!collapsed && (
-              <p className="px-3 mb-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                ADMIN
-              </p>
-            )}
-            <NavItemComponent item={adminItem} />
-          </div>
-        )}
-      </nav>
-
-      {/* Bottom */}
-      <div className="p-3 border-t border-border space-y-0.5">
-        {bottomNavItems.map((item) => (
-          <NavItemComponent key={item.path} item={item} />
-        ))}
-
-        {/* Telegram Contact */}
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <a
-              href="https://t.me/Neetverseowner_bot?text=I%20want%20subscription"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 w-full",
-                "text-muted-foreground hover:text-[#229ED9] hover:bg-[#229ED9]/10"
-              )}
-            >
-              <Send className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && (
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium leading-tight">Contact on Telegram</span>
-                  <span className="text-[10px] text-muted-foreground">@akaxxh — Report issues, suggestions</span>
-                </div>
-              )}
-            </a>
-          </TooltipTrigger>
-          {collapsed && (
-            <TooltipContent side="right" className="font-medium">
-              Contact on Telegram — @Neetverseowner_bot
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        <Tooltip delayDuration={0}>
-          <TooltipTrigger asChild>
-            <button
-              onClick={signOut}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 w-full",
-                "text-destructive hover:bg-destructive/10"
-              )}
-            >
-              <LogOut className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span className="text-sm font-medium">Sign Out</span>}
-            </button>
-          </TooltipTrigger>
-          {collapsed && (
-            <TooltipContent side="right" className="font-medium">
-              Sign Out
-            </TooltipContent>
-          )}
-        </Tooltip>
-
-        {user && !collapsed && (
-          <div className="mt-2 px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="h-4 w-4 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">{user.user_metadata?.name || 'Student'}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </aside>
-  );
+const handleNavClick = (href: string) => {
+if (isGuest && href !== '/practice' && href !== '/' && href !== '/auth') {
+toast.error('Please sign in to access this feature');
+navigate('/auth');
+return;
 }
+setMobileOpen(false);
+};
+
+const NavItemComponent = ({ item }: { item: NavItem }) => {
+const Icon = item.icon;
+const active = location.pathname === item.href;
+
+const content = (  
+  <NavLink  
+    to={item.href}  
+    onClick={() => handleNavClick(item.href)}  
+    className={cn(  
+      "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",  
+      active  
+        ? "bg-primary text-primary-foreground shadow-sm font-semibold"  
+        : "text-muted-foreground hover:bg-muted hover:text-foreground",  
+      collapsed && "justify-center px-2"  
+    )}  
+  >  
+    <Icon className={cn("w-5 h-5 flex-shrink-0", active && "text-primary-foreground")} />  
+    {!collapsed && (  
+      <>  
+        <span className="flex-1 text-left truncate">{item.title}</span>  
+        {item.badge && (  
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">  
+            {item.badge}  
+          </Badge>  
+        )}  
+        {item.new && (  
+          <Badge className="bg-green-500 text-[10px] px-1.5 py-0 h-5 text-white">  
+            NEW  
+          </Badge>  
+        )}  
+        {item.premium && (  
+          <Crown className="w-3.5 h-3.5 text-amber-500" />  
+        )}  
+      </>  
+    )}  
+    {collapsed && (item.badge || item.new) && (  
+      <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full" />  
+    )}  
+  </NavLink>  
+);  
+
+if (collapsed) {  
+  return (  
+    <Tooltip delayDuration={0}>  
+      <TooltipTrigger asChild>{content}</TooltipTrigger>  
+      <TooltipContent side="right" className="font-medium">  
+        {item.title}  
+      </TooltipContent>  
+    </Tooltip>  
+  );  
+}  
+
+return content;
+
+};
+
+const SidebarContent = (
+<div className={cn("flex flex-col h-full bg-card border-r border-border transition-all duration-300", collapsed ? "w-16" : "w-64")}>
+{/* Logo */}
+<div className="p-4 flex items-center justify-between border-b border-border">
+<div className="flex items-center gap-3">
+<img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-xl" />
+{!collapsed && (
+<div className="flex-1 min-w-0">
+<h1 className="font-bold text-lg leading-tight text-primary">NEETVerse</h1>
+<p className="text-xs text-muted-foreground">Prep Smarter</p>
+</div>
+)}
+</div>
+<Button
+variant="ghost"
+size="icon"
+className={cn("h-8 w-8", collapsed && "absolute -right-3.5 top-5 bg-card border shadow-sm rounded-full")}
+onClick={() => setCollapsed(!collapsed)}
+>
+{collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+</Button>
+</div>
+
+<ScrollArea className="flex-1 py-2">  
+    {navGroups.map((group, gi) => (  
+      <div key={group.title} className={cn("px-2", gi > 0 && "mt-4")}>  
+        {!collapsed && (  
+          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">  
+            {group.title}  
+          </h3>  
+        )}  
+        {collapsed && gi > 0 && (  
+          <div className="mx-auto w-8 h-px bg-border mb-2" />  
+        )}  
+        <div className="space-y-1">  
+          {group.items.map((item) => (  
+            <NavItemComponent key={item.href} item={item} />  
+          ))}  
+        </div>  
+      </div>  
+    ))}  
+
+    {/* Admin Section */}  
+    {isAdmin && (  
+      <div className="px-2 mt-4">  
+        {!collapsed && (  
+          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">  
+            Admin  
+          </h3>  
+        )}  
+        <NavItemComponent item={{ title: "Admin Panel", href: "/admin", icon: Shield }} />  
+      </div>  
+    )}  
+  </ScrollArea>  
+
+  {/* Bottom */}  
+  <div className="p-2 border-t border-border space-y-1">  
+    {bottomNavItems.map((item) => (  
+      <NavItemComponent key={item.href} item={item} />  
+    ))}  
+
+    {/* Telegram Contact */}  
+    <Tooltip delayDuration={0}>  
+      <TooltipTrigger asChild>  
+        <a  
+          href="https://t.me/Neetverseowner_bot?text=I%20want%20subscription"  
+          target="_blank"  
+          rel="noopener noreferrer"  
+          className={cn(  
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",  
+            "text-muted-foreground hover:text-[#229ED9] hover:bg-[#229ED9]/10",  
+            collapsed && "justify-center px-2"  
+          )}  
+        >  
+          <Send className="w-5 h-5 flex-shrink-0" />  
+          {!collapsed && (  
+            <div className="flex flex-col text-left">  
+              <span className="text-sm font-medium leading-tight">Contact on Telegram</span>  
+              <span className="text-[10px] text-muted-foreground">@akaxxh — Report issues</span>  
+            </div>  
+          )}  
+        </a>  
+      </TooltipTrigger>  
+      {collapsed && (  
+        <TooltipContent side="right" className="font-medium">  
+          Contact on Telegram — @Neetverseowner_bot  
+        </TooltipContent>  
+      )}  
+    </Tooltip>  
+
+    {user && (  
+      <Tooltip delayDuration={0}>  
+        <TooltipTrigger asChild>  
+          <button  
+            onClick={() => {  
+              signOut();  
+              navigate('/auth');  
+            }}  
+            className={cn(  
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all",  
+              collapsed && "justify-center px-2"  
+            )}  
+          >  
+            <LogOut className="w-5 h-5 flex-shrink-0" />  
+            {!collapsed && <span>Sign Out</span>}  
+          </button>  
+        </TooltipTrigger>  
+        {collapsed && (  
+          <TooltipContent side="right" className="font-medium">  
+            Sign Out  
+          </TooltipContent>  
+        )}  
+      </Tooltip>  
+    )}  
+
+    {user && !collapsed && (  
+      <div className="mt-2 px-3 py-2 rounded-xl bg-muted/50 flex items-center gap-2">  
+        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">  
+          <User className="h-4 w-4 text-primary" />  
+        </div>  
+        <div className="flex-1 min-w-0">  
+          <p className="text-xs font-medium truncate">{user.user_metadata?.name || 'Student'}</p>  
+          <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>  
+        </div>  
+      </div>  
+    )}  
+  </div>  
+</div>
+
+);
+
+return (
+<>
+{/* Mobile Toggle */}
+<div className="lg:hidden fixed top-4 left-4 z-50">
+<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+<SheetTrigger asChild>
+<Button variant="outline" size="icon" className="h-10 w-10">
+<Menu className="h-5 w-5" />
+</Button>
+</SheetTrigger>
+<SheetContent side="left" className="p-0 w-64">
+{SidebarContent}
+</SheetContent>
+</Sheet>
+</div>
+
+{/* Desktop Sidebar */}  
+  <div className="hidden lg:block fixed left-0 top-0 h-screen z-40">  
+    {SidebarContent}  
+  </div>  
+</>
+
+);
+      }
