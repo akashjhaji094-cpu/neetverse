@@ -34,6 +34,7 @@ Brain,
 Send,
 TrendingUp
 } from 'lucide-react';
+import { SidebarChatbot } from './SidebarChatbot';
 
 interface NavItem {
 title: string;
@@ -240,7 +241,10 @@ onClick={() => setCollapsed(!collapsed)}
         )}  
         <NavItemComponent item={{ title: "Admin Panel", href: "/admin", icon: Shield }} />  
       </div>  
-    )}  
+    )}
+    
+    {/* AI Chatbot Section */}
+    <SidebarChatbot collapsed={collapsed} />
   </ScrollArea>  
 
   {/* Bottom */}  
@@ -342,4 +346,4 @@ return (
 </>
 
 );
-      }
+}
