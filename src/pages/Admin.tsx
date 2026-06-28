@@ -6,7 +6,7 @@ import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
-import EmailCampaigns from "@/pages/admin/EmailCampaigns"; // 1. नया इम्पोर्ट जोड़ा गया
+import EmailCampaigns from "@/components/admin/email/EmailCampaigns"; // 1. नया इम्पोर्ट जोड़ा गया
 import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Mail } from "lucide-react"; // 1. Mail आइकॉन जोड़ा गया
 
