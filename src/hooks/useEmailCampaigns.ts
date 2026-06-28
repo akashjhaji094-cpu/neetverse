@@ -68,13 +68,26 @@ export function useSendCampaign() {
   return useMutation({
     mutationFn: async (campaignId: string) => {
       const token = session?.access_token;
+      
+      // यहाँ पर आपका नया Fetch और Error Handling लॉजिक लागू किया गया है
       const res = await fetch("/api/send-campaign", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ campaignId }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to send campaign");
+      
+      const text = await res.text();
+      console.log("Status:", res.status);
+      console.log("Response:", text);
+
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(`Server returned: ${text}`);
+      }
+
+      if (!res.ok) throw new Error(json.error || "Failed");
       return json;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["email-campaigns"] }),
