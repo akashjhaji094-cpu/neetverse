@@ -1,5 +1,3 @@
-SidebarCharbot.tsx
-
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, X, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
