@@ -118,11 +118,33 @@ export async function selectAdaptiveQuestions(
   }
 
   const { data: allQuestions, error } = await query;
-  if (error || !allQuestions?.length) {
-    throw new Error(`No questions found: ${error?.message || 'Empty result'}`);
-  }
 
-  const questions = allQuestions as QuestionData[];
+if (error) {
+  console.error("Supabase error fetching questions:", error);
+  throw new Error(`Database error: ${error.message}`);
+}
+
+if (!allQuestions || allQuestions.length === 0) {
+  // Fallback: Try to fetch any questions from the subject if chapter is empty
+  console.log("No questions found for specific criteria, trying fallback...");
+  const { data: fallbackQuestions, error: fallbackError } = await supabase
+    .from('questions')
+    .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id, bloom_level, concept_tags')
+    .eq('subject_id', subjectId)
+    .limit(targetQuestionCount);
+    
+  if (fallbackError || !fallbackQuestions?.length) {
+    throw new Error("No questions available in this subject. Please upload questions first.");
+  }
+  return fallbackQuestions.map(q => ({
+    question: q as QuestionData,
+    selectionReason: 'Fallback - Random selection',
+    predictedDifficulty: 50
+  }));
+}
+
+const questions = allQuestions as QuestionData[];
+  
   const dynamicLevel = calculateDynamicDifficulty(userSkill, config.sessionHistory || []);
   
   const unseen: QuestionData[] = [];
