@@ -82,14 +82,23 @@ items: [
 { title: "Revision", href: "/revision", icon: BookOpen },
 ],
 },
-{
-title: "AI & Adaptive",
-items: [
-{ title: "Adaptive Learning", href: "/adaptive-learning", icon: Brain, new: true },
-{ title: "Battle Arena", href: "/battle-arena", icon: Swords, new: true },
-],
-},
-{
+// {
+//   title: "AI & Adaptive",
+//   items: [
+//     {
+//       title: "Adaptive Learning",
+//       href: "/adaptive-learning",
+//       icon: Brain,
+//       new: true,
+//     },
+//     {
+//       title: "Battle Arena",
+//       href: "/battle-arena",
+//       icon: Swords,
+//       new: true,
+//     },
+//   ],
+// },
 title: "Progress",
 items: [
 { title: "Analytics", href: "/analytics", icon: BarChart3 },
