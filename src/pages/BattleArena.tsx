@@ -328,14 +328,30 @@ const LiveBattleRoom = ({
 
       const { data: questions, error } = await query;
 
-      if (error) throw error;
-      if (!questions || questions.length < room.question_count) {
-        toast.error(`Only ${questions?.length || 0} questions available. Need ${room.question_count}.`);
-        return;
-      }
+if (error) throw error;
 
-      const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, room.question_count);
+let finalQuestions = questions || [];
 
+if (finalQuestions.length < room.question_count) {
+  // Fallback: fetch from subject if chapter doesn't have enough
+  const { data: fallback } = await supabase
+    .from('questions')
+    .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id')
+    .eq('subject_id', room.subject_id)
+    .limit(room.question_count);
+  
+  if (fallback && fallback.length >= room.question_count) {
+    finalQuestions = fallback;
+  } else if (finalQuestions.length === 0) {
+    toast.error("No questions found in database for this subject.");
+    return;
+  } else {
+    toast.warning(`Only ${finalQuestions.length} questions available. Starting with what we have.`);
+  }
+}
+
+const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Math.min(finalQuestions.length, room.question_count));
+      
       await supabase.from('battle_rooms').update({
         status: 'countdown',
         questions: shuffled,
