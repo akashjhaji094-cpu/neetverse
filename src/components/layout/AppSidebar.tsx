@@ -99,6 +99,7 @@ items: [
 //     },
 //   ],
 // },
+  {
 title: "Progress",
 items: [
 { title: "Analytics", href: "/analytics", icon: BarChart3 },
