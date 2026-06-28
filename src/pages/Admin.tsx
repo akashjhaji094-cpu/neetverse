@@ -6,8 +6,9 @@ import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
+import EmailCampaigns from "@/pages/admin/EmailCampaigns"; // 1. नया इम्पोर्ट जोड़ा गया
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Mail } from "lucide-react"; // 1. Mail आइकॉन जोड़ा गया
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -47,7 +48,8 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-3xl grid-cols-6">
+            {/* 6 की जगह grid-cols-7 किया गया है ताकि नया टैब सही से फिट हो सके */}
+            <TabsList className="grid w-full max-w-4xl grid-cols-7">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span className="hidden sm:inline">AI Import</span>
@@ -77,6 +79,12 @@ const Admin = () => {
                 <FileText className="h-4 w-4" />
                 <span className="hidden sm:inline">PYQS</span>
                 <span className="sm:hidden">PYQ</span>
+              </TabsTrigger>
+              {/* 2. नया TabsTrigger यहाँ जोड़ा गया है */}
+              <TabsTrigger value="email" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                <span className="hidden sm:inline">Email</span>
+                <span className="sm:hidden">Mail</span>
               </TabsTrigger>
             </TabsList>
 
@@ -124,6 +132,11 @@ const Admin = () => {
 
               <TabsContent value="pyqs" className="m-0">
                 <PyqsUpload />
+              </TabsContent>
+
+              {/* 3. नया TabsContent यहाँ जोड़ा गया है */}
+              <TabsContent value="email" className="m-0">
+                <EmailCampaigns />
               </TabsContent>
             </div>
           </Tabs>
