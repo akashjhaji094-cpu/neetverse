@@ -1009,15 +1009,24 @@ const BattleArena = () => {
           });
       });
 
-      channel.on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'battle_rooms',
-        filter: `id=eq.${currentRoom.id}`
-      }, (payload: any) => {
-        if (!mounted) return;
-        setCurrentRoom(payload.new as BattleRoom);
-      });
+      // Replace lines 1017-1027 with this:
+channel.on('postgres_changes', {
+  event: 'UPDATE',
+  schema: 'public',
+  table: 'battle_rooms',
+  filter: `id=eq.${currentRoom.id}`
+}, (payload) => {
+  if (!mounted) return;
+  const updatedRoom = payload.new as BattleRoom;
+  setCurrentRoom(updatedRoom);
+  
+  // Force refresh questions if game started
+  if (updatedRoom.status === 'active' && updatedRoom.questions) {
+    setQuestions(updatedRoom.questions);
+    setCurrentQuestion(updatedRoom.current_question_index || 0);
+  }
+});
+      
 
       channel.subscribe();
       roomChannelRef.current = channel;
