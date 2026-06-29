@@ -278,15 +278,31 @@ export async function updateSkillLevel(
 
   // Replace lines 278-289 with this:
 if (existing) {
-  const { error: updateError } = await supabase.from('user_skill_levels').update(updates).eq('id', existing.id);
+  const { error: updateError } = await supabase
+    .from('user_skill_levels')
+    .update(updates)
+    .eq('id', existing.id);
+
   if (updateError) console.error("Error updating skill level:", updateError);
+
 } else {
-  const { error: insertError } = await supabase.from('user_skill_levels').insert({ 
-    ...updates, 
-    user_id: userId, 
-    chapter_id: chapterId,
-    subject_id: (await supabase.from('chapters').select('subject_id').eq('id', chapterId).single()).data?.subject_id
-  });
+  const { data: chapter } = await supabase
+    .from('chapters')
+    .select('subject_id')
+    .eq('id', chapterId)
+    .single();
+
+  const { error: insertError } = await supabase
+    .from('user_skill_levels')
+    .insert({
+      ...updates,
+      user_id: userId,
+      chapter_id: chapterId,
+      subject_id: chapter?.subject_id
+    });
+
   if (insertError) console.error("Error inserting skill level:", insertError);
 }
-  
+
+// 👇 THIS IS MISSING
+}
