@@ -276,10 +276,17 @@ export async function updateSkillLevel(
       current.strong_concepts,
   };
 
-  if (existing) {
-    await supabase.from('user_skill_levels').update(updates).eq('id', existing.id);
-  } else {
-    await supabase.from('user_skill_levels').insert({ ...updates, user_id: userId, chapter_id: chapterId });
-  }
+  // Replace lines 278-289 with this:
+if (existing) {
+  const { error: updateError } = await supabase.from('user_skill_levels').update(updates).eq('id', existing.id);
+  if (updateError) console.error("Error updating skill level:", updateError);
+} else {
+  const { error: insertError } = await supabase.from('user_skill_levels').insert({ 
+    ...updates, 
+    user_id: userId, 
+    chapter_id: chapterId,
+    subject_id: (await supabase.from('chapters').select('subject_id').eq('id', chapterId).single()).data?.subject_id
+  });
+  if (insertError) console.error("Error inserting skill level:", insertError);
 }
-
+  
