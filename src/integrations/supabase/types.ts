@@ -1202,6 +1202,42 @@ export type Database = {
           },
         ]
       }
+      question_topics: {
+        Row: {
+          confidence: number
+          created_at: string
+          question_id: string
+          topic_id: string
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          question_id: string
+          topic_id: string
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          question_id?: string
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_topics_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_topics_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       questions: {
         Row: {
           bloom_level: number | null
@@ -1336,6 +1372,44 @@ export type Database = {
           slug?: string
         }
         Relationships: []
+      }
+      topics: {
+        Row: {
+          chapter_id: string
+          created_at: string
+          id: string
+          keywords: string[]
+          name: string
+          position: number
+          slug: string
+        }
+        Insert: {
+          chapter_id: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          name: string
+          position?: number
+          slug: string
+        }
+        Update: {
+          chapter_id?: string
+          created_at?: string
+          id?: string
+          keywords?: string[]
+          name?: string
+          position?: number
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topics_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_broadcast_reads: {
         Row: {
@@ -1573,6 +1647,13 @@ export type Database = {
         Args: never
         Returns: {
           chapter_id: string
+          total: number
+        }[]
+      }
+      get_question_counts_per_topic: {
+        Args: never
+        Returns: {
+          topic_id: string
           total: number
         }[]
       }
