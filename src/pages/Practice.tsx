@@ -10,6 +10,7 @@ import { TestInterface } from "@/components/practice/TestInterface";
 import { TestResults } from "@/components/practice/TestResults";
 import { QuestionReview } from "@/components/practice/QuestionReview";
 import { PracticeLoading } from "@/components/practice/PracticeLoading";
+import { TopicSelector, TopicOption } from "@/components/practice/TopicSelector";
 import { Question } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -44,6 +45,8 @@ const subjectConfig: Record<string, {
 const Practice = () => {
   const { toast } = useToast();
   const [selectedChapter, setSelectedChapter] = useState<{ id: string; name: string; subjectId: string; subjectSlug: string; chapterSlug: string } | null>(null);
+  const [pickingTopic, setPickingTopic] = useState<{ id: string; name: string; subjectId: string; subjectSlug: string; chapterSlug: string } | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<TopicOption | null>(null);
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
@@ -105,15 +108,27 @@ const Practice = () => {
   const countsLoading = !questionCounts;
 
   const startTestMutation = useMutation({
-    mutationFn: async ({ chapterId, subjectId, count }: { chapterId: string; subjectId: string; count: number }) => {
+    mutationFn: async ({ chapterId, subjectId, count, topicId }: { chapterId: string; subjectId: string; count: number; topicId?: string | null }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: allQuestions, error } = await supabase
-        .from('questions')
-        .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
-        .eq('chapter_id', chapterId)
-        .eq('subject_id', subjectId)
-        .limit(50000);
-      if (error) throw error;
+      let allQuestions: any[] | null = null;
+      if (topicId) {
+        const { data, error } = await supabase
+          .from('question_topics')
+          .select('questions!inner(id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty)')
+          .eq('topic_id', topicId)
+          .limit(50000);
+        if (error) throw error;
+        allQuestions = (data || []).map((r: any) => r.questions).filter(Boolean);
+      } else {
+        const { data, error } = await supabase
+          .from('questions')
+          .select('id, chapter_id, subject_id, question_text, options, correct_option_index, explanation, images, difficulty')
+          .eq('chapter_id', chapterId)
+          .eq('subject_id', subjectId)
+          .limit(50000);
+        if (error) throw error;
+        allQuestions = data;
+      }
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
 
       let pool = allQuestions;
@@ -170,7 +185,7 @@ const Practice = () => {
     const subjectId = slugMaps.subjectIdBySlug.get(subjectSlug);
     const chapterId = slugMaps.chapterIdBySlug.get(chapter.id);
     if (subjectId && chapterId) {
-      setSelectedChapter({ id: chapterId, name: chapter.name, subjectId, subjectSlug, chapterSlug: chapter.id });
+      setPickingTopic({ id: chapterId, name: chapter.name, subjectId, subjectSlug, chapterSlug: chapter.id });
     } else {
       // Defensive — only happens if the static chapter list and the live DB
       // have drifted out of sync (e.g. a chapter was renamed in the admin
@@ -180,7 +195,12 @@ const Practice = () => {
   };
 
   const handleStartTest = (count: number) => {
-    if (selectedChapter) startTestMutation.mutate({ chapterId: selectedChapter.id, subjectId: selectedChapter.subjectId, count });
+    if (selectedChapter) startTestMutation.mutate({
+      chapterId: selectedChapter.id,
+      subjectId: selectedChapter.subjectId,
+      count,
+      topicId: selectedTopic?.id ?? null,
+    });
   };
 
   const handleSubmitTest = (answers: Record<string, number | null>) => submitTestMutation.mutate({ answers });
@@ -317,11 +337,28 @@ const Practice = () => {
         {selectedChapter && (
           <TestConfig
             open={!!selectedChapter}
-            onClose={() => setSelectedChapter(null)}
-            chapterName={selectedChapter.name}
-            totalQuestions={questionCounts?.[`${selectedChapter.subjectSlug}-${selectedChapter.chapterSlug}`] || 0}
+            onClose={() => { setSelectedChapter(null); setSelectedTopic(null); }}
+            chapterName={selectedTopic && selectedTopic.id ? `${selectedChapter.name} · ${selectedTopic.name}` : selectedChapter.name}
+            totalQuestions={selectedTopic && selectedTopic.id
+              ? selectedTopic.count
+              : (questionCounts?.[`${selectedChapter.subjectSlug}-${selectedChapter.chapterSlug}`] || 0)}
             onStart={handleStartTest}
             loading={startTestMutation.isPending}
+          />
+        )}
+
+        {pickingTopic && (
+          <TopicSelector
+            open={!!pickingTopic}
+            onClose={() => setPickingTopic(null)}
+            chapterId={pickingTopic.id}
+            chapterName={pickingTopic.name}
+            totalChapterCount={questionCounts?.[`${pickingTopic.subjectSlug}-${pickingTopic.chapterSlug}`] || 0}
+            onSelect={(topic) => {
+              setSelectedTopic(topic);
+              setSelectedChapter(pickingTopic);
+              setPickingTopic(null);
+            }}
           />
         )}
       </div>
