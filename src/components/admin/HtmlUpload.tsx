@@ -46,6 +46,8 @@ const typesetMath = (el: HTMLElement | null) => {
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
   const [chapterId, setChapterId] = useState<string>("");
+  const [topicId, setTopicId] = useState<string>("");
+  const [availableTopics, setAvailableTopics] = useState<{ id: string; name: string }[]>([]);
   const [fileNames, setFileNames] = useState<string[]>([]);
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -71,6 +73,21 @@ export const HtmlUpload = () => {
 
   // Load MathJax on mount, typeset when questions change
   useEffect(() => { loadMathJax(); }, []);
+
+  // Load topics whenever chapter changes
+  useEffect(() => {
+    setTopicId("");
+    setAvailableTopics([]);
+    if (!chapterId) return;
+    // chapterId here is a static slug from neetPlanner. We need the real DB uuid.
+    (async () => {
+      const { data: chap } = await supabase.from("chapters").select("id").eq("slug", chapterId).maybeSingle();
+      if (!chap?.id) return;
+      const { data } = await supabase.from("topics").select("id, name, position").eq("chapter_id", chap.id).order("position");
+      setAvailableTopics((data || []).map((t: any) => ({ id: t.id, name: t.name })));
+    })();
+  }, [chapterId]);
+
   useEffect(() => {
     if (questions.length > 0) {
       const timer = setTimeout(() => typesetMath(previewRef.current), 200);
@@ -193,6 +210,13 @@ export const HtmlUpload = () => {
       });
 
       if (response.error) throw response.error;
+
+      // If a topic was picked, also tag every inserted question with that topic
+      if (topicId && (response.data as any)?.inserted_ids?.length) {
+        const ids: string[] = (response.data as any).inserted_ids;
+        const rows = ids.map((qid) => ({ question_id: qid, topic_id: topicId }));
+        await supabase.from("question_topics").upsert(rows, { onConflict: "question_id,topic_id" });
+      }
 
       setUploadProgress(100);
       toast.success(
