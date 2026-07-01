@@ -327,6 +327,23 @@ export const HtmlUpload = () => {
               </select>
             </div>
 
+            {chapterId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Topic <span className="text-muted-foreground text-xs">(optional — auto-classified by keywords if left blank)</span></label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={topicId}
+                  onChange={(e) => setTopicId(e.target.value)}
+                  disabled={uploading || availableTopics.length === 0}
+                >
+                  <option value="">Auto-classify</option>
+                  {availableTopics.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 HTML Files (up to 10)
