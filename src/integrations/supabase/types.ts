@@ -14,6 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
+      adaptive_learning_sessions: {
+        Row: {
+          answers: Json
+          chapter_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          current_question_index: number
+          id: string
+          mode: string
+          questions: Json
+          skill_snapshots: Json
+          started_at: string | null
+          status: string
+          subject_id: string
+          target_skill_level: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          chapter_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_question_index?: number
+          id?: string
+          mode?: string
+          questions?: Json
+          skill_snapshots?: Json
+          started_at?: string | null
+          status?: string
+          subject_id: string
+          target_skill_level?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          chapter_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_question_index?: number
+          id?: string
+          mode?: string
+          questions?: Json
+          skill_snapshots?: Json
+          started_at?: string | null
+          status?: string
+          subject_id?: string
+          target_skill_level?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adaptive_learning_sessions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adaptive_learning_sessions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adaptive_question_pools: {
+        Row: {
+          chapter_id: string
+          difficulty_bucket: string
+          id: string
+          question_ids: string[]
+          total_count: number
+          updated_at: string | null
+        }
+        Insert: {
+          chapter_id: string
+          difficulty_bucket: string
+          id?: string
+          question_ids?: string[]
+          total_count?: number
+          updated_at?: string | null
+        }
+        Update: {
+          chapter_id?: string
+          difficulty_bucket?: string
+          id?: string
+          question_ids?: string[]
+          total_count?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adaptive_question_pools_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_broadcasts: {
         Row: {
           body: string
@@ -133,6 +237,9 @@ export type Database = {
           details: Json | null
           finished_at: string | null
           id: string
+          omr_image_path: string | null
+          omr_status: string
+          question_ids: string[] | null
           score: number | null
           started_at: string
           type: Database["public"]["Enums"]["attempt_type"]
@@ -143,6 +250,9 @@ export type Database = {
           details?: Json | null
           finished_at?: string | null
           id?: string
+          omr_image_path?: string | null
+          omr_status?: string
+          question_ids?: string[] | null
           score?: number | null
           started_at?: string
           type: Database["public"]["Enums"]["attempt_type"]
@@ -153,6 +263,9 @@ export type Database = {
           details?: Json | null
           finished_at?: string | null
           id?: string
+          omr_image_path?: string | null
+          omr_status?: string
+          question_ids?: string[] | null
           score?: number | null
           started_at?: string
           type?: Database["public"]["Enums"]["attempt_type"]
@@ -164,6 +277,286 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      battle_history: {
+        Row: {
+          chapter_name: string | null
+          correct_count: number
+          display_name: string
+          final_rank: number
+          id: string
+          max_streak: number
+          new_rating: number
+          played_at: string | null
+          rating_change: number
+          room_id: string
+          score: number
+          subject_name: string | null
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          chapter_name?: string | null
+          correct_count: number
+          display_name: string
+          final_rank: number
+          id?: string
+          max_streak: number
+          new_rating: number
+          played_at?: string | null
+          rating_change?: number
+          room_id: string
+          score: number
+          subject_name?: string | null
+          user_id: string
+          wrong_count: number
+        }
+        Update: {
+          chapter_name?: string | null
+          correct_count?: number
+          display_name?: string
+          final_rank?: number
+          id?: string
+          max_streak?: number
+          new_rating?: number
+          played_at?: string | null
+          rating_change?: number
+          room_id?: string
+          score?: number
+          subject_name?: string | null
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: []
+      }
+      battle_leaderboard: {
+        Row: {
+          avg_score: number
+          best_streak: number
+          created_at: string | null
+          display_name: string
+          id: string
+          rank_tier: string
+          rating: number
+          total_battles: number
+          total_score: number
+          total_wins: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avg_score?: number
+          best_streak?: number
+          created_at?: string | null
+          display_name: string
+          id?: string
+          rank_tier?: string
+          rating?: number
+          total_battles?: number
+          total_score?: number
+          total_wins?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avg_score?: number
+          best_streak?: number
+          created_at?: string | null
+          display_name?: string
+          id?: string
+          rank_tier?: string
+          rating?: number
+          total_battles?: number
+          total_score?: number
+          total_wins?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      battle_players: {
+        Row: {
+          answers: Json
+          avatar_emoji: string | null
+          correct_count: number
+          display_name: string
+          id: string
+          is_connected: boolean
+          is_host: boolean
+          is_ready: boolean
+          joined_at: string | null
+          last_ping_at: string | null
+          max_streak: number
+          room_id: string
+          score: number
+          streak: number
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          answers?: Json
+          avatar_emoji?: string | null
+          correct_count?: number
+          display_name: string
+          id?: string
+          is_connected?: boolean
+          is_host?: boolean
+          is_ready?: boolean
+          joined_at?: string | null
+          last_ping_at?: string | null
+          max_streak?: number
+          room_id: string
+          score?: number
+          streak?: number
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          answers?: Json
+          avatar_emoji?: string | null
+          correct_count?: number
+          display_name?: string
+          id?: string
+          is_connected?: boolean
+          is_host?: boolean
+          is_ready?: boolean
+          joined_at?: string | null
+          last_ping_at?: string | null
+          max_streak?: number
+          room_id?: string
+          score?: number
+          streak?: number
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "battle_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      battle_question_states: {
+        Row: {
+          created_at: string | null
+          ends_at: string | null
+          id: string
+          player_answers: Json
+          question_id: string
+          question_index: number
+          room_id: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          player_answers?: Json
+          question_id: string
+          question_index: number
+          room_id: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          ends_at?: string | null
+          id?: string
+          player_answers?: Json
+          question_id?: string
+          question_index?: number
+          room_id?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_question_states_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "battle_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      battle_rooms: {
+        Row: {
+          chapter_id: string | null
+          code: string
+          created_at: string | null
+          current_players: number
+          current_question_index: number
+          finished_at: string | null
+          host_id: string
+          id: string
+          max_players: number
+          name: string
+          question_count: number
+          questions: Json
+          started_at: string | null
+          status: string
+          subject_id: string | null
+          time_per_question: number
+          updated_at: string | null
+        }
+        Insert: {
+          chapter_id?: string | null
+          code: string
+          created_at?: string | null
+          current_players?: number
+          current_question_index?: number
+          finished_at?: string | null
+          host_id: string
+          id?: string
+          max_players?: number
+          name?: string
+          question_count?: number
+          questions?: Json
+          started_at?: string | null
+          status?: string
+          subject_id?: string | null
+          time_per_question?: number
+          updated_at?: string | null
+        }
+        Update: {
+          chapter_id?: string | null
+          code?: string
+          created_at?: string | null
+          current_players?: number
+          current_question_index?: number
+          finished_at?: string | null
+          host_id?: string
+          id?: string
+          max_players?: number
+          name?: string
+          question_count?: number
+          questions?: Json
+          started_at?: string | null
+          status?: string
+          subject_id?: string | null
+          time_per_question?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_rooms_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_rooms_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
         ]
@@ -199,6 +592,196 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_study_plans: {
+        Row: {
+          completed_count: number
+          completed_tasks: Json
+          created_at: string | null
+          date: string
+          id: string
+          plan: Json
+          study_time_minutes: number
+          total_tasks: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_count?: number
+          completed_tasks?: Json
+          created_at?: string | null
+          date?: string
+          id?: string
+          plan?: Json
+          study_time_minutes?: number
+          total_tasks?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_count?: number
+          completed_tasks?: Json
+          created_at?: string | null
+          date?: string
+          id?: string
+          plan?: Json
+          study_time_minutes?: number
+          total_tasks?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_campaign_recipients: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          email: string
+          error_message: string | null
+          id: string
+          sent_at: string | null
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          email: string
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          email?: string
+          error_message?: string | null
+          id?: string
+          sent_at?: string | null
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaign_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaign_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_campaigns: {
+        Row: {
+          audience_filter: Json | null
+          audience_type: string
+          blocks: Json
+          created_at: string
+          failed_count: number
+          id: string
+          provider_used: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_count: number
+          status: string
+          subject: string
+          title: string
+          total_recipients: number
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          audience_filter?: Json | null
+          audience_type?: string
+          blocks?: Json
+          created_at?: string
+          failed_count?: number
+          id?: string
+          provider_used?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_count?: number
+          status?: string
+          subject: string
+          title: string
+          total_recipients?: number
+          trigger_type?: string
+          updated_at?: string
+        }
+        Update: {
+          audience_filter?: Json | null
+          audience_type?: string
+          blocks?: Json
+          created_at?: string
+          failed_count?: number
+          id?: string
+          provider_used?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_count?: number
+          status?: string
+          subject?: string
+          title?: string
+          total_recipients?: number
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_campaigns_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          blocks: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          is_builtin: boolean
+          name: string
+        }
+        Insert: {
+          blocks?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_builtin?: boolean
+          name: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_builtin?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -241,6 +824,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      learning_paths: {
+        Row: {
+          chapters_order: string[]
+          created_at: string | null
+          daily_targets: Json
+          description: string | null
+          difficulty_level: string
+          duration_days: number
+          id: string
+          is_premium: boolean
+          subject_id: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          chapters_order?: string[]
+          created_at?: string | null
+          daily_targets?: Json
+          description?: string | null
+          difficulty_level?: string
+          duration_days?: number
+          id?: string
+          is_premium?: boolean
+          subject_id?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          chapters_order?: string[]
+          created_at?: string | null
+          daily_targets?: Json
+          description?: string | null
+          difficulty_level?: string
+          duration_days?: number
+          id?: string
+          is_premium?: boolean
+          subject_id?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_paths_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notes: {
         Row: {
@@ -387,6 +1020,8 @@ export type Database = {
           email: string | null
           id: string
           name: string | null
+          referral_code: string | null
+          referred_by: string | null
           updated_at: string
         }
         Insert: {
@@ -394,6 +1029,8 @@ export type Database = {
           email?: string | null
           id: string
           name?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -401,9 +1038,19 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          referral_code?: string | null
+          referred_by?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pyq_attempts: {
         Row: {
@@ -557,7 +1204,9 @@ export type Database = {
       }
       questions: {
         Row: {
+          bloom_level: number | null
           chapter_id: string
+          concept_tags: string[] | null
           correct_option_index: number | null
           created_at: string
           difficulty: Database["public"]["Enums"]["difficulty_level"] | null
@@ -572,7 +1221,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bloom_level?: number | null
           chapter_id: string
+          concept_tags?: string[] | null
           correct_option_index?: number | null
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
@@ -587,7 +1238,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bloom_level?: number | null
           chapter_id?: string
+          concept_tags?: string[] | null
           correct_option_index?: number | null
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
@@ -614,6 +1267,51 @@ export type Database = {
             columns: ["subject_id"]
             isOneToOne: false
             referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          referred_id: string
+          referrer_id: string
+          reward_tier_unlocked: number | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          referred_id: string
+          referrer_id: string
+          reward_tier_unlocked?: number | null
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          referred_id?: string
+          referrer_id?: string
+          reward_tier_unlocked?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referred_id_fkey"
+            columns: ["referred_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -668,6 +1366,56 @@ export type Database = {
           },
         ]
       }
+      user_learning_paths: {
+        Row: {
+          completed_at: string | null
+          completed_chapters: string[]
+          created_at: string | null
+          current_day: number
+          id: string
+          path_id: string
+          progress_percent: number
+          started_at: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_chapters?: string[]
+          created_at?: string | null
+          current_day?: number
+          id?: string
+          path_id: string
+          progress_percent?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_chapters?: string[]
+          created_at?: string | null
+          current_day?: number
+          id?: string
+          path_id?: string
+          progress_percent?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_learning_paths_path_id_fkey"
+            columns: ["path_id"]
+            isOneToOne: false
+            referencedRelation: "learning_paths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -693,6 +1441,66 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_skill_levels: {
+        Row: {
+          chapter_id: string
+          consecutive_correct: number
+          consecutive_wrong: number
+          created_at: string | null
+          id: string
+          last_attempted_at: string | null
+          questions_attempted: number
+          questions_correct: number
+          skill_level: number
+          subject_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chapter_id: string
+          consecutive_correct?: number
+          consecutive_wrong?: number
+          created_at?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          questions_attempted?: number
+          questions_correct?: number
+          skill_level?: number
+          subject_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chapter_id?: string
+          consecutive_correct?: number
+          consecutive_wrong?: number
+          created_at?: string | null
+          id?: string
+          last_attempted_at?: string | null
+          questions_attempted?: number
+          questions_correct?: number
+          skill_level?: number
+          subject_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_skill_levels_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_skill_levels_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
         ]
@@ -732,6 +1540,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_battle_score: {
+        Args: {
+          p_current_streak: number
+          p_is_correct: boolean
+          p_time_limit_ms: number
+          p_time_taken_ms: number
+        }
+        Returns: number
+      }
+      cleanup_old_battle_rooms: { Args: never; Returns: undefined }
+      complete_referral_for_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      generate_daily_plan: { Args: { p_user_id: string }; Returns: Json }
+      generate_room_code: { Args: never; Returns: string }
+      get_adaptive_question: {
+        Args: {
+          p_chapter_id: string
+          p_exclude_ids?: string[]
+          p_subject_id: string
+          p_user_id: string
+        }
+        Returns: {
+          difficulty_bucket: string
+          question_id: string
+          skill_match_score: number
+        }[]
+      }
       get_question_counts_per_chapter: {
         Args: never
         Returns: {
