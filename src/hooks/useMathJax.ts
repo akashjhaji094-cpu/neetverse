@@ -28,14 +28,19 @@ function loadMathJax(): Promise<void> {
     }
 
     (window as any).MathJax = {
-      tex: { 
-        inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], 
-        displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
         processEscapes: true,
         processEnvironments: true,
+        packages: { '[+]': ['ams', 'noerrors', 'noundefined', 'mhchem'] },
+      },
+      loader: {
+        load: ['[tex]/ams', '[tex]/noerrors', '[tex]/noundefined', '[tex]/mhchem'],
       },
       options: {
         skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        enableMenu: false,
       },
       startup: { 
         ready: () => { 
