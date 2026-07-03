@@ -147,23 +147,54 @@ function preprocessLatex(html: string): string {
   
   return html
     // First, fix HTML-escaped backslashes by replacing \\ with \
-    .replace(/\\(\w)/g, '\\$1')
-    // Fix double backslashes that were HTML escaped (e.g., \\mathsf -> \mathsf)
-    .replace(/\\\\(
-?\w)/g, '\\$1')
+    .replace(/\\\\(\\w)/g, '\\$1')
     // Fix specific escaped LaTeX commands
-    .replace(/\\mathsf{/g, '\\mathsf{')
-    .replace(/\\mathit{/g, '\\mathit{')
-    .replace(/\\mathbf{/g, '\\mathbf{')
-    .replace(/\\mathrm{/g, '\\mathrm{')
-    .replace(/\\text{/g, '\\text{')
-    .replace(/\\frac{/g, '\\frac{')
-    .replace(/\\sqrt{/g, '\\sqrt{')
+    .replace(/\\\\mathsf\\{/g, '\\mathsf{')
+    .replace(/\\\\mathit\\{/g, '\\mathit{')
+    .replace(/\\\\mathbf\\{/g, '\\mathbf{')
+    .replace(/\\\\mathrm\\{/g, '\\mathrm{')
+    .replace(/\\\\text\\{/g, '\\text{')
+    .replace(/\\\\frac\\{/g, '\\frac{')
+    .replace(/\\\\sqrt\\{/g, '\\sqrt{')
+    // Fix Greek letters
+    .replace(/\\\\lambda/g, '\\lambda')
+    .replace(/\\\\alpha/g, '\\alpha')
+    .replace(/\\\\beta/g, '\\beta')
+    .replace(/\\\\gamma/g, '\\gamma')
+    .replace(/\\\\delta/g, '\\delta')
+    .replace(/\\\\theta/g, '\\theta')
+    .replace(/\\\\phi/g, '\\phi')
+    .replace(/\\\\pi/g, '\\pi')
+    .replace(/\\\\omega/g, '\\omega')
+    .replace(/\\\\sigma/g, '\\sigma')
+    .replace(/\\\\mu/g, '\\mu')
+    .replace(/\\\\nu/g, '\\nu')
+    .replace(/\\\\rho/g, '\\rho')
+    .replace(/\\\\tau/g, '\\tau')
+    .replace(/\\\\eta/g, '\\eta')
+    .replace(/\\\\psi/g, '\\psi')
+    .replace(/\\\\chi/g, '\\chi')
+    // Fix other common commands
+    .replace(/\\\\cdot/g, '\\cdot')
+    .replace(/\\\\times/g, '\\times')
+    .replace(/\\\\pm/g, '\\pm')
+    .replace(/\\\\infty/g, '\\infty')
+    .replace(/\\\\approx/g, '\\approx')
+    .replace(/\\\\neq/g, '\\neq')
+    .replace(/\\\\leq/g, '\\leq')
+    .replace(/\\\\geq/g, '\\geq')
+    .replace(/\\\\to/g, '\\to')
+    .replace(/\\\\sum/g, '\\sum')
+    .replace(/\\\\int/g, '\\int')
+    .replace(/\\\\frac/g, '\\frac')
+    .replace(/\\\\sqrt/g, '\\sqrt')
+    .replace(/\\\\left/g, '\\left')
+    .replace(/\\\\right/g, '\\right')
     // Ensure math delimiters $ are properly spaced
-    .replace(/\$(\S)/g, ' $1')
-    .replace(/(\S)\$/g, '$1 ')
+    .replace(/\\$(\\S)/g, ' $1')
+    .replace(/(\\S)\\$/g, '$1 ')
     // Clean up multiple spaces
-    .replace(/\s+/g, ' ')
+    .replace(/\\s+/g, ' ')
     .trim();
 }
 
