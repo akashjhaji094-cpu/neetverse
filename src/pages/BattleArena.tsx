@@ -214,6 +214,8 @@ const LiveBattleRoom = ({
           setSelectedOption(null);
           setHasAnswered(false);
           setShowResults(false);
+          setRevealedCorrectIndex(null);
+          setRoundEndsAt(new Date(newState.ends_at).getTime());
         } else if (newState.status === 'revealed') {
           setShowResults(true);
         }
@@ -227,7 +229,10 @@ const LiveBattleRoom = ({
       }, (payload: any) => {
         if (!mounted) return;
         const updated = payload.new as BattleRoom;
-        
+
+        if (typeof updated.current_question_index === 'number') {
+          setCurrentQuestion(updated.current_question_index);
+        }
         if (updated.status === 'countdown') {
           setCountdown(3);
         } else if (updated.status === 'finished') {
