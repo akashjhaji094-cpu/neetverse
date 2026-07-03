@@ -592,7 +592,7 @@ const LiveBattleRoom = ({
   }
 
   // Render active battle
-  const question = room.questions?.[currentQuestion];
+  const question = activeQuestion;
   if (!question) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -606,7 +606,8 @@ const LiveBattleRoom = ({
 
   const progress = ((currentQuestion) / room.question_count) * 100;
   const options = safeParseOptions(question.options);
-  const images = safeParseJSON<string[]>(question.images, []);
+  const images = safeParseJSON<string[]>(question.question_image, []);
+  const correctIdx = revealedCorrectIndex;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4" ref={mathRef}>
