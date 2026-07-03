@@ -144,6 +144,7 @@ export const MockTestAnalytics = ({
   onReview,
   questions,
   answers,
+  attemptId,
 }: MockTestAnalyticsProps) => {
   const maxScore = totalQuestions * 4;
   const percentage = ((score / maxScore) * 100).toFixed(1);
