@@ -570,6 +570,7 @@ const Test = () => {
         onReview={() => setTestMode('review')}
         questions={questions}
         answers={testAnswers}
+        attemptId={results.attemptId || undefined}
       />
     );
   }
