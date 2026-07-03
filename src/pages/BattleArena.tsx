@@ -178,7 +178,7 @@ const LiveBattleRoom = ({
   const channelRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOnline = useConnectionStatus();
-  const { ref: mathRef } = useMathJax([currentQuestion, showResults]);
+  const { ref: mathRef } = useMathJax([currentQuestion?.id, showResults]);
 
   const currentPlayer = players.find(p => p.user_id === currentUserId);
   const isHost = currentPlayer?.is_host || false;

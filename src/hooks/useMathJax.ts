@@ -71,13 +71,24 @@ export function useMathJax(deps: any[] = []) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mathReady, setMathReady] = useState(false);
   const [mathError, setMathError] = useState<string | null>(null);
+  const pendingTypeset = useRef(false);
 
   const typeset = useCallback(() => {
     const MJ = (window as any).MathJax;
-    if (!MJ?.typesetPromise || !containerRef.current) return;
+    if (!MJ?.typesetPromise || !containerRef.current) {
+      // Queue typeset for when MathJax is ready
+      if (!MJ?.typesetPromise) {
+        pendingTypeset.current = true;
+        return;
+      }
+      return;
+    }
     
-    MJ.typesetPromise([containerRef.current]).catch((err: any) => {
-      console.warn('MathJax typeset error:', err);
+    // Use requestAnimationFrame to ensure DOM is rendered
+    requestAnimationFrame(() => {
+      MJ.typesetPromise([containerRef.current]).catch((err: any) => {
+        console.warn('MathJax typeset error:', err);
+      });
     });
   }, []);
 
@@ -89,7 +100,8 @@ export function useMathJax(deps: any[] = []) {
         if (!cancelled) {
           setMathReady(true);
           setMathError(null);
-          typeset();
+          // Small delay to ensure React has rendered content
+          setTimeout(() => typeset(), 50);
         }
       })
       .catch((err) => {
@@ -102,7 +114,16 @@ export function useMathJax(deps: any[] = []) {
     return () => {
       cancelled = true;
     };
-  }, [typeset, ...deps]);
+  }, []);
+
+  // Re-typeset when deps change (e.g., question changes)
+  useEffect(() => {
+    if (mathReady) {
+      // Small delay to ensure React has rendered new content
+      const timeoutId = setTimeout(() => typeset(), 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [mathReady, typeset, ...deps]);
 
   return { ref: containerRef, mathReady, mathError, typeset };
 }
