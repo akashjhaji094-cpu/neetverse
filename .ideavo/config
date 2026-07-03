@@ -1,0 +1,52 @@
+{
+  "systemSetup": [],
+  "templateName": "custom",
+  "projectDependencies": [
+    {
+      "name": "Install Dependencies",
+      "command": "bun install"
+    }
+  ],
+  "codeChecks": [
+    {
+      "name": "Lint Check",
+      "command": "bun run lint"
+    },
+    {
+      "name": "Type Check",
+      "command": "bunx tsc --noEmit"
+    }
+  ],
+  "buildSteps": [
+    {
+      "name": "Build Project",
+      "command": "bun run build"
+    }
+  ],
+  "runStep": [
+    {
+      "name": "Start Dev Server",
+      "command": "bun run dev --host --port 8080",
+      "port": "8080"
+    }
+  ],
+  "deploySteps": [
+    {
+      "name": "Build for Production",
+      "command": "bun run build"
+    }
+  ],
+  "cleanupFiles": [
+    "dist",
+    "node_modules",
+    ".vite",
+    "*.log"
+  ],
+  "packageManager": "bun",
+  "envPaths": [
+    {
+      "name": "default",
+      "path": ".env"
+    }
+  ]
+}
