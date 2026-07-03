@@ -396,7 +396,7 @@ const Test = () => {
         await supabase.from('attempt_answers').insert(answerRecords);
       }
 
-      return { score, correctCount, wrongCount, unattemptedCount, subjectAnalytics: Object.values(subjectScores), answers };
+      return { score, correctCount, wrongCount, unattemptedCount, subjectAnalytics: Object.values(subjectScores), answers, attemptId: attempt?.id ?? null };
     },
     onSuccess: (data) => {
       setResults(data);
