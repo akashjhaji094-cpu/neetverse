@@ -301,6 +301,14 @@ export const MockTestAnalytics = ({
 
         {/* Actions */}
         <div className="flex flex-wrap justify-center gap-4">
+          {attemptId && (
+            <Link to={`/mock-analysis/${attemptId}`}>
+              <Button size="lg" className="gap-2">
+                <BarChart3 className="w-4 h-4" />
+                View Detailed Analysis
+              </Button>
+            </Link>
+          )}
           {onReview && (
             <Button onClick={onReview} variant="outline" size="lg">
               <Eye className="w-4 h-4 mr-2" />
@@ -311,7 +319,7 @@ export const MockTestAnalytics = ({
             <Printer className="w-4 h-4 mr-2" />
             Print / Save PDF
           </Button>
-          <Button onClick={onClose} size="lg">
+          <Button onClick={onClose} variant="outline" size="lg">
             Back to Tests
           </Button>
           <Button variant="outline" size="lg" onClick={() => window.location.href = '/practice'}>
