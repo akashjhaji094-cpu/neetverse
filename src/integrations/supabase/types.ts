@@ -486,6 +486,45 @@ export type Database = {
           },
         ]
       }
+      battle_room_questions: {
+        Row: {
+          created_at: string
+          id: string
+          question_id: string
+          question_index: number
+          room_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_id: string
+          question_index: number
+          room_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_id?: string
+          question_index?: number
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battle_room_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_room_questions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "battle_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       battle_rooms: {
         Row: {
           chapter_id: string | null
@@ -1614,6 +1653,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      battle_advance_question: { Args: { p_room_id: string }; Returns: number }
+      battle_get_question: {
+        Args: { p_index: number; p_room_id: string }
+        Returns: {
+          ends_at: string
+          options: Json
+          question_id: string
+          question_image: string
+          question_text: string
+          status: string
+        }[]
+      }
+      battle_reveal_answer: {
+        Args: { p_question_index: number; p_room_id: string }
+        Returns: {
+          correct_option_index: number
+          explanation: string
+        }[]
+      }
+      battle_start_room: { Args: { p_room_id: string }; Returns: undefined }
+      battle_submit_answer: {
+        Args: {
+          p_option_index: number
+          p_question_index: number
+          p_room_id: string
+          p_time_taken_ms: number
+        }
+        Returns: {
+          is_correct: boolean
+          new_streak: number
+          score_gained: number
+        }[]
+      }
       calculate_battle_score: {
         Args: {
           p_current_streak: number
