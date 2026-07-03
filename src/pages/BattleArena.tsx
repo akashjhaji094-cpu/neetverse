@@ -639,13 +639,11 @@ const LiveBattleRoom = ({
         </Button>
       </div>
 
-      {questionState?.status === 'active' && (
+      {!showResults && roundEndsAt && (
         <div className="relative h-2 bg-muted rounded-full overflow-hidden">
           <motion.div
             className="absolute inset-y-0 left-0 rounded-full bg-green-500"
-            style={{ width: `${questionState?.ends_at ? 
-              Math.max(0, (new Date(questionState.ends_at).getTime() - Date.now()) / (room.time_per_question * 1000) * 100) 
-              : 0}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, (roundEndsAt - Date.now()) / (room.time_per_question * 1000) * 100))}%` }}
             transition={{ duration: 0.1 }}
           />
         </div>
