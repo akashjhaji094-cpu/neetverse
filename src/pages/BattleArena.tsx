@@ -170,6 +170,10 @@ const LiveBattleRoom = ({
   const [countdown, setCountdown] = useState(3);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  const [activeQuestion, setActiveQuestion] = useState<any | null>(null);
+  const [revealedCorrectIndex, setRevealedCorrectIndex] = useState<number | null>(null);
+  const [roundEndsAt, setRoundEndsAt] = useState<number | null>(null);
+  const [, forceTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const channelRef = useRef<any>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,6 +214,8 @@ const LiveBattleRoom = ({
           setSelectedOption(null);
           setHasAnswered(false);
           setShowResults(false);
+          setRevealedCorrectIndex(null);
+          setRoundEndsAt(new Date(newState.ends_at).getTime());
         } else if (newState.status === 'revealed') {
           setShowResults(true);
         }
@@ -223,7 +229,10 @@ const LiveBattleRoom = ({
       }, (payload: any) => {
         if (!mounted) return;
         const updated = payload.new as BattleRoom;
-        
+
+        if (typeof updated.current_question_index === 'number') {
+          setCurrentQuestion(updated.current_question_index);
+        }
         if (updated.status === 'countdown') {
           setCountdown(3);
         } else if (updated.status === 'finished') {
@@ -274,114 +283,112 @@ const LiveBattleRoom = ({
   }, [countdown, room.status]);
 
   const handleAnswer = async (optionIndex: number) => {
-    if (hasAnswered || showResults || !questionState) return;
+    if (hasAnswered || showResults) return;
     setSelectedOption(optionIndex);
     setHasAnswered(true);
 
-    const timeTaken = questionState.ends_at 
-      ? Math.max(0, new Date(questionState.ends_at).getTime() - Date.now())
-      : room.time_per_question * 1000;
-    const timeTakenMs = room.time_per_question * 1000 - timeTaken;
+    const totalMs = room.time_per_question * 1000;
+    const remaining = roundEndsAt ? Math.max(0, roundEndsAt - Date.now()) : totalMs;
+    const timeTakenMs = Math.max(0, totalMs - remaining);
 
     try {
-      await supabase.from('battle_question_states').update({
-        player_answers: {
-          ...(questionState.player_answers || {}),
-          [currentUserId]: {
-            option_index: optionIndex,
-            time_taken_ms: Math.max(0, timeTakenMs),
-            is_correct: null
-          }
-        }
-      }).eq('room_id', room.id).eq('question_index', currentQuestion);
-    } catch (err) {
+      const { error } = await supabase.rpc('battle_submit_answer', {
+        p_room_id: room.id,
+        p_question_index: currentQuestion,
+        p_option_index: optionIndex,
+        p_time_taken_ms: timeTakenMs,
+      });
+      if (error) throw error;
+    } catch (err: any) {
       console.error('Failed to submit answer:', err);
-      toast.error('Failed to submit answer. Please try again.');
+      toast.error(err?.message || 'Failed to submit answer.');
+      setHasAnswered(false);
+      setSelectedOption(null);
     }
   };
 
   const handleStartGame = async () => {
     if (!isHost) return;
-
-    const allReady = players.every(p => p.is_ready || p.is_host);
-    if (!allReady) {
-      toast.error('Not all players are ready!');
-      return;
-    }
-
     if (players.length < 2) {
       toast.error('Need at least 2 players to start');
       return;
     }
-
     try {
-      let query = supabase
-        .from('questions')
-        .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id')
-        .limit(500);
-
-      if (room.subject_id) {
-        query = query.eq('subject_id', room.subject_id);
-      }
-      if (room.chapter_id) {
-        query = query.eq('chapter_id', room.chapter_id);
-      }
-
-      const { data: questions, error } = await query;
-
-if (error) throw error;
-
-let finalQuestions = questions || [];
-
-if (finalQuestions.length < room.question_count) {
-  // Fallback: fetch from subject if chapter doesn't have enough
-  const { data: fallback } = await supabase
-    .from('questions')
-    .select('id, question_text, options, correct_option_index, explanation, images, difficulty, chapter_id, subject_id')
-    .eq('subject_id', room.subject_id)
-    .limit(room.question_count);
-  
-  if (fallback && fallback.length >= room.question_count) {
-    finalQuestions = fallback;
-  } else if (finalQuestions.length === 0) {
-    toast.error("No questions found in database for this subject.");
-    return;
-  } else {
-    toast.warning(`Only ${finalQuestions.length} questions available. Starting with what we have.`);
-  }
-}
-
-const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Math.min(finalQuestions.length, room.question_count));
-      
-      await supabase.from('battle_rooms').update({
-        status: 'countdown',
-        questions: shuffled,
-      }).eq('id', room.id);
-
+      // Show countdown first
+      await supabase.from('battle_rooms').update({ status: 'countdown' }).eq('id', room.id);
       setTimeout(async () => {
-        try {
-          await supabase.from('battle_rooms').update({
-            status: 'active',
-            started_at: new Date().toISOString(),
-            current_question_index: 0,
-          }).eq('id', room.id);
-
-          await supabase.from('battle_question_states').insert({
-            room_id: room.id,
-            question_index: 0,
-            question_id: shuffled[0].id,
-            status: 'active',
-            ends_at: new Date(Date.now() + room.time_per_question * 1000).toISOString(),
-            player_answers: {},
-          });
-        } catch (err) {
-          console.error('Failed to start game:', err);
+        const { error } = await supabase.rpc('battle_start_room', { p_room_id: room.id });
+        if (error) {
+          toast.error(error.message || 'Failed to start battle');
+          await supabase.from('battle_rooms').update({ status: 'waiting' }).eq('id', room.id);
         }
       }, 3000);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to start game');
+      toast.error(err.message || 'Failed to start battle');
     }
   };
+
+  // Load active question via secure RPC (no correct answer exposed)
+  useEffect(() => {
+    if (room.status !== 'active') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('battle_get_question', {
+          p_room_id: room.id,
+          p_index: currentQuestion,
+        });
+        if (error) throw error;
+        if (cancelled) return;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) {
+          setActiveQuestion(row);
+          if (row.ends_at) setRoundEndsAt(new Date(row.ends_at).getTime());
+        }
+      } catch (err) {
+        console.error('Failed to load question:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [room.id, room.status, currentQuestion]);
+
+  // Local per-second tick for timer bar + auto reveal
+  useEffect(() => {
+    if (room.status !== 'active' || !roundEndsAt) return;
+    const interval = setInterval(() => forceTick(t => t + 1), 250);
+    return () => clearInterval(interval);
+  }, [room.status, roundEndsAt]);
+
+  // When round time is up: reveal + host advances
+  useEffect(() => {
+    if (room.status !== 'active' || !roundEndsAt || showResults) return;
+    const now = Date.now();
+    if (now >= roundEndsAt) {
+      (async () => {
+        try {
+          const { data, error } = await supabase.rpc('battle_reveal_answer', {
+            p_room_id: room.id,
+            p_question_index: currentQuestion,
+          });
+          if (!error && data) {
+            const row = Array.isArray(data) ? data[0] : data;
+            if (row) setRevealedCorrectIndex(row.correct_option_index);
+          }
+          setShowResults(true);
+          if (isHost) {
+            setTimeout(async () => {
+              await supabase.rpc('battle_advance_question', { p_room_id: room.id });
+            }, 4000);
+          }
+        } catch (err) {
+          console.error('Reveal failed:', err);
+        }
+      })();
+      return;
+    }
+    const t = setTimeout(() => forceTick(x => x + 1), Math.max(50, roundEndsAt - now));
+    return () => clearTimeout(t);
+  }, [roundEndsAt, showResults, room.status, room.id, currentQuestion, isHost]);
 
   const handleToggleReady = async () => {
     if (!currentPlayer) return;
@@ -585,7 +592,7 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
   }
 
   // Render active battle
-  const question = room.questions?.[currentQuestion];
+  const question = activeQuestion;
   if (!question) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -599,7 +606,8 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
 
   const progress = ((currentQuestion) / room.question_count) * 100;
   const options = safeParseOptions(question.options);
-  const images = safeParseJSON<string[]>(question.images, []);
+  const images = safeParseJSON<string[]>(question.question_image, []);
+  const correctIdx = revealedCorrectIndex;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4" ref={mathRef}>
@@ -631,13 +639,11 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
         </Button>
       </div>
 
-      {questionState?.status === 'active' && (
+      {!showResults && roundEndsAt && (
         <div className="relative h-2 bg-muted rounded-full overflow-hidden">
           <motion.div
             className="absolute inset-y-0 left-0 rounded-full bg-green-500"
-            style={{ width: `${questionState?.ends_at ? 
-              Math.max(0, (new Date(questionState.ends_at).getTime() - Date.now()) / (room.time_per_question * 1000) * 100) 
-              : 0}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, (roundEndsAt - Date.now()) / (room.time_per_question * 1000) * 100))}%` }}
             transition={{ duration: 0.1 }}
           />
         </div>
@@ -682,7 +688,7 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
                   let btnClass = 'border-2 hover:border-primary/50 hover:bg-primary/5';
 
                   if (showResults) {
-                    if (idx === question.correct_option_index) {
+                    if (idx === correctIdx) {
                       btnClass = 'border-2 border-green-500 bg-green-50 dark:bg-green-900/20';
                     } else if (idx === selectedOption) {
                                                   btnClass = 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
@@ -702,7 +708,7 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
                     >
                       <div className="flex items-center gap-3">
                         <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                          showResults && idx === question.correct_option_index
+                          showResults && idx === correctIdx
                             ? 'bg-green-500 text-white'
                             : showResults && idx === selectedOption
                             ? 'bg-red-500 text-white'
@@ -713,10 +719,10 @@ const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, Ma
                           {String.fromCharCode(65 + idx)}
                         </span>
                         <div className="flex-1" dangerouslySetInnerHTML={{ __html: option }} />
-                        {showResults && idx === question.correct_option_index && (
+                        {showResults && idx === correctIdx && (
                           <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                         )}
-                        {showResults && idx === selectedOption && idx !== question.correct_option_index && (
+                        {showResults && idx === selectedOption && idx !== correctIdx && (
                           <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                         )}
                       </div>
