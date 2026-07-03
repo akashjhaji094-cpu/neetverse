@@ -147,7 +147,7 @@ function preprocessLatex(html: string): string {
   
   return html
     // First, fix HTML-escaped backslashes by replacing \\ with \
-    .replace(/\\\\(\\w)/g, '\\$1')
+    .replace(/\\\\(\w)/g, '\\$1')
     // Fix specific escaped LaTeX commands
     .replace(/\\\\mathsf\\{/g, '\\mathsf{')
     .replace(/\\\\mathit\\{/g, '\\mathit{')
@@ -194,7 +194,7 @@ function preprocessLatex(html: string): string {
     .replace(/\\$(\\S)/g, ' $1')
     .replace(/(\\S)\\$/g, '$1 ')
     // Clean up multiple spaces
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
