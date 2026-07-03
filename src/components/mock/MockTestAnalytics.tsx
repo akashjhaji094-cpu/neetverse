@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, XCircle, MinusCircle, TrendingUp, TrendingDown, AlertCircle, Eye, Printer } from "lucide-react";
+import { CheckCircle2, XCircle, MinusCircle, TrendingUp, TrendingDown, AlertCircle, Eye, Printer, BarChart3 } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { useRef } from "react";
-
+import { Link } from "react-router-dom";
 interface SubjectAnalytics {
   subject: string;
   correct: number;
