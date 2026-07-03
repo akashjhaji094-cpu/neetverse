@@ -139,12 +139,44 @@ function formatMatchColumns(html: string): string {
 }
 
 /**
+ * Pre-process LaTeX math expressions to ensure MathJax can render them properly.
+ * Handles HTML-escaped characters and ensures MathJax delimiters work.
+ */
+function preprocessLatex(html: string): string {
+  if (!html) return '';
+  
+  return html
+    // First, fix HTML-escaped backslashes by replacing \\ with \
+    .replace(/\\(\w)/g, '\\$1')
+    // Fix double backslashes that were HTML escaped (e.g., \\mathsf -> \mathsf)
+    .replace(/\\\\(
+?\w)/g, '\\$1')
+    // Fix specific escaped LaTeX commands
+    .replace(/\\mathsf{/g, '\\mathsf{')
+    .replace(/\\mathit{/g, '\\mathit{')
+    .replace(/\\mathbf{/g, '\\mathbf{')
+    .replace(/\\mathrm{/g, '\\mathrm{')
+    .replace(/\\text{/g, '\\text{')
+    .replace(/\\frac{/g, '\\frac{')
+    .replace(/\\sqrt{/g, '\\sqrt{')
+    // Ensure math delimiters $ are properly spaced
+    .replace(/\$(\S)/g, ' $1')
+    .replace(/(\S)\$/g, '$1 ')
+    // Clean up multiple spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Public formatter. Safe to run on every question — returns input unchanged
  * if no special patterns are detected.
  */
 export function formatQuestionHtml(html: string | null | undefined): string {
   if (!html) return "";
-  const norm = normalize(html);
+  
+  // First preprocess LaTeX to fix escaped characters
+  const preprocessed = preprocessLatex(html);
+  const norm = normalize(preprocessed);
 
   // Match-the-column has higher priority (more specific)
   const colFormatted = formatMatchColumns(norm);

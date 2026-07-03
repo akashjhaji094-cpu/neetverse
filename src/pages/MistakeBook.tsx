@@ -10,6 +10,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { usePerformanceData } from "@/hooks/usePerformanceData";
 import { BookX, Search, XCircle, MinusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { formatQuestionHtml } from "@/lib/questionFormatter";
 
 const PAGE_SIZE = 20;
 
@@ -131,7 +132,7 @@ const MistakeBook = () => {
                       </div>
                       <p
                         className="text-sm line-clamp-2 text-foreground"
-                        dangerouslySetInnerHTML={{ __html: m.questionText }}
+                        dangerouslySetInnerHTML={{ __html: formatQuestionHtml(m.questionText) }}
                       />
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span>{m.testName}</span>

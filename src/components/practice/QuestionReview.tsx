@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Question } from "@/lib/supabase";
 import { useMathJax } from "@/hooks/useMathJax";
+import { formatQuestionHtml } from "@/lib/questionFormatter";
 
 interface QuestionReviewProps {
   questions: Question[];
@@ -132,8 +133,8 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
             <CardContent className="space-y-6">
               {/* Question Text */}
               <div 
-                className="text-base leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: currentQuestion.question_text }}
+                className="text-base leading-relaxed neet-question"
+                dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.question_text) }}
               />
 
               {/* Question Images */}
@@ -158,7 +159,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
                       </span>
                       <div 
                         className="flex-1"
-                        dangerouslySetInnerHTML={{ __html: String(option) }}
+                        dangerouslySetInnerHTML={{ __html: formatQuestionHtml(String(option)) }}
                       />
                       {currentQuestion.correct_option_index === idx && (
                         <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -180,7 +181,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
                   <CardContent>
                     <div 
                       className="text-sm"
-                      dangerouslySetInnerHTML={{ __html: currentQuestion.explanation }}
+                      dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.explanation) }}
                     />
                   </CardContent>
                 </Card>

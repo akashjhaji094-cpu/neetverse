@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { useMathJax } from '@/hooks/useMathJax';
+import { formatQuestionHtml } from '@/lib/questionFormatter';
 import { SafeImage, ImageGrid } from '@/components/SafeImage';
 import { selectAdaptiveQuestions, updateSkillLevel, SelectedQuestion } from '@/lib/adaptiveEngine';
 import {
@@ -406,7 +407,7 @@ const ActiveAdaptiveSession = ({
             <CardContent className="p-6 space-y-6">
               <div className="text-lg font-medium leading-relaxed">
                 <span className="text-primary font-bold mr-2">Q{currentQIndex + 1}.</span>
-                <span dangerouslySetInnerHTML={{ __html: currentQ.question.question_text || '' }} />
+                <span dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQ.question.question_text) }} />
               </div>
 
               {images.length > 0 && (
@@ -447,7 +448,7 @@ const ActiveAdaptiveSession = ({
                         }`}>
                           {String.fromCharCode(65 + idx)}
                         </span>
-                        <div className="flex-1" dangerouslySetInnerHTML={{ __html: option }} />
+                        <div className="flex-1" dangerouslySetInnerHTML={{ __html: formatQuestionHtml(option) }} />
                         {showExplanation && idx === currentQ.question.correct_option_index && (
                           <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                         )}
@@ -471,7 +472,7 @@ const ActiveAdaptiveSession = ({
                     <div>
                       <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Explanation</p>
                       <div className="text-sm text-blue-600 dark:text-blue-400" 
-                        dangerouslySetInnerHTML={{ __html: currentQ.question.explanation }} />
+                        dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQ.question.explanation) }} />
                     </div>
                   </div>
                 </motion.div>
