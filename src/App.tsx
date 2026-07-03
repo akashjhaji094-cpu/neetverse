@@ -95,6 +95,7 @@ const App = () => (
                 <Route path="/premium" element={<Premium />} />
                 <Route path="/adaptive-learning" element={<AdaptiveLearning />} />
                 <Route path="/battle-arena" element={<BattleArena />} />
+                <Route path="/mock-analysis/:attemptId" element={<MockAnalysis />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
