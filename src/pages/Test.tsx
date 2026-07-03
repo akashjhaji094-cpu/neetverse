@@ -148,6 +148,7 @@ const Test = () => {
     wrongCount: number;
     unattemptedCount: number;
     subjectAnalytics: SubjectAnalytics[];
+    attemptId: string | null;
   } | null>(null);
 
   const { data: questionCounts } = useQuery({
