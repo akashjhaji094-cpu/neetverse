@@ -34,6 +34,7 @@ const PendingOMR = lazy(() => import("./pages/PendingOMR"));
 const Premium = lazy(() => import("./pages/Premium"));
 const AdaptiveLearning = lazy(() => import("./pages/AdaptiveLearning"));
 const BattleArena = lazy(() => import("./pages/BattleArena"));
+const MockAnalysis = lazy(() => import("./pages/MockAnalysis"));
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
