@@ -26,6 +26,7 @@ interface MockTestAnalyticsProps {
   onReview?: () => void;
   questions?: Question[];
   answers?: Record<string, number | null>;
+  attemptId?: string;
 }
 
 const generatePrintHtml = (
