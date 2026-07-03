@@ -690,7 +690,7 @@ const LiveBattleRoom = ({
                   let btnClass = 'border-2 hover:border-primary/50 hover:bg-primary/5';
 
                   if (showResults) {
-                    if (idx === question.correct_option_index) {
+                    if (idx === correctIdx) {
                       btnClass = 'border-2 border-green-500 bg-green-50 dark:bg-green-900/20';
                     } else if (idx === selectedOption) {
                                                   btnClass = 'border-2 border-red-500 bg-red-50 dark:bg-red-900/20';
@@ -710,7 +710,7 @@ const LiveBattleRoom = ({
                     >
                       <div className="flex items-center gap-3">
                         <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                          showResults && idx === question.correct_option_index
+                          showResults && idx === correctIdx
                             ? 'bg-green-500 text-white'
                             : showResults && idx === selectedOption
                             ? 'bg-red-500 text-white'
@@ -721,10 +721,10 @@ const LiveBattleRoom = ({
                           {String.fromCharCode(65 + idx)}
                         </span>
                         <div className="flex-1" dangerouslySetInnerHTML={{ __html: option }} />
-                        {showResults && idx === question.correct_option_index && (
+                        {showResults && idx === correctIdx && (
                           <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                         )}
-                        {showResults && idx === selectedOption && idx !== question.correct_option_index && (
+                        {showResults && idx === selectedOption && idx !== correctIdx && (
                           <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                         )}
                       </div>
