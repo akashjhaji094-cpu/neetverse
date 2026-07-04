@@ -419,9 +419,9 @@ const submitTestMutation = useMutation({
     setOfflineAttemptId(null);
   };
 
-  const handleTestSubmit = (answers: Record<string, number | null>) => {
+  const handleTestSubmit = (answers: Record<string, number | null>, timeSpent: Record<string, number>) => {
     setTestAnswers(answers);
-    submitTestMutation.mutate(answers);
+    submitTestMutation.mutate({ answers, timeSpent });
   };
 
   const handleChooseOnline = () => {
