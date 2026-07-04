@@ -6,10 +6,12 @@ import {
 } from "@/components/ui/select";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { usePerformanceData } from "@/hooks/usePerformanceData";
-import { History, Clock, CheckCircle2, XCircle, MinusCircle, TrendingUp } from "lucide-react";
+import { History, Clock, CheckCircle2, XCircle, MinusCircle, TrendingUp, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 const TestHistory = () => {
+  const navigate = useNavigate();
   const { data, isLoading } = usePerformanceData();
   const [typeFilter, setTypeFilter] = useState<"all" | "practice" | "mock">("all");
 
