@@ -183,12 +183,31 @@ export default function MockAnalysis() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <StatCard icon={CheckCircle2} label="Correct" value={overall.correct} sublabel={`+${overall.positiveMarks} marks`} tone="success" />
           <StatCard icon={XCircle} label="Incorrect" value={overall.wrong} sublabel={`-${overall.negativeMarks} marks`} tone="danger" />
           <StatCard icon={MinusCircle} label="Unattempted" value={overall.unattempted} tone="muted" />
           <StatCard icon={Clock} label="Time Taken" value={formatDuration(overall.durationSeconds)} />
         </div>
+
+        {overall.hasEnoughPeerData && (
+          <Card>
+            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-600">
+                  <Award className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Rank #{overall.rank} of {overall.totalPeers}</p>
+                  <p className="text-xs text-muted-foreground">Among mocks with the same question count</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-primary border-primary">
+                Top {Math.max(0, 100 - (overall.percentile ?? 0)).toFixed(0)}%
+              </Badge>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -244,6 +263,45 @@ export default function MockAnalysis() {
             </div>
           </CardContent>
         </Card>
+
+        {(weakTopics.length > 0 || strongTopics.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="border-red-200 dark:border-red-900">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-600"><Layers className="h-5 w-5" />Weak Topics</CardTitle>
+                <CardDescription>Specific concepts to revise first</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {weakTopics.map((t) => (
+                  <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{t.topic}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
+                    </div>
+                    <Badge variant="outline" className="text-red-600 border-red-300 shrink-0">{t.accuracy}%</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-200 dark:border-emerald-900">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-emerald-600"><Layers className="h-5 w-5" />Strong Topics</CardTitle>
+                <CardDescription>Concepts you've mastered</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {strongTopics.map((t) => (
+                  <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{t.topic}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
+                    </div>
+                    <Badge variant="outline" className="text-emerald-600 border-emerald-300 shrink-0">{t.accuracy}%</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="border-red-200 dark:border-red-900">
