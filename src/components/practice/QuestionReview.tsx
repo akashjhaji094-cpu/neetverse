@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Question } from "@/lib/supabase";
-import { useMathJax } from "@/hooks/useMathJax";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { MathContent } from "@/components/MathContent";
 
 interface QuestionReviewProps {
   questions: Question[];
@@ -19,7 +19,6 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentQuestion = questions[currentIndex];
   const userAnswer = answers[currentQuestion.id];
-  const mathRef = useMathJax([currentIndex]);
   const isCorrect = userAnswer === currentQuestion.correct_option_index;
   const isUnattempted = userAnswer === null || userAnswer === undefined;
 
@@ -55,7 +54,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
     : [];
 
   return (
-    <div className="min-h-screen bg-background p-4" ref={mathRef}>
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-6xl mx-auto space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -132,9 +131,9 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Question Text */}
-              <div 
+              <MathContent
+                html={formatQuestionHtml(currentQuestion.question_text)}
                 className="text-base leading-relaxed neet-question"
-                dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.question_text) }}
               />
 
               {/* Question Images */}
@@ -157,10 +156,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
                       <span className="font-semibold text-muted-foreground">
                         {String.fromCharCode(65 + idx)}.
                       </span>
-                      <div 
-                        className="flex-1"
-                        dangerouslySetInnerHTML={{ __html: formatQuestionHtml(String(option)) }}
-                      />
+                      <MathContent as="span" html={formatQuestionHtml(String(option))} className="flex-1" />
                       {currentQuestion.correct_option_index === idx && (
                         <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                       )}
@@ -179,10 +175,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
                     <CardTitle className="text-sm text-primary">Explanation</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div 
-                      className="text-sm"
-                      dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.explanation) }}
-                    />
+                    <MathContent html={formatQuestionHtml(currentQuestion.explanation)} className="text-sm" />
                   </CardContent>
                 </Card>
               )}
