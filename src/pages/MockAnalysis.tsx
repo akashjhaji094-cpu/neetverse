@@ -442,12 +442,30 @@ export default function MockAnalysis() {
             </CardContent>
           </Card>
         ) : (
+        ) : (
           <Card className="border-dashed">
             <CardContent className="p-6 text-center">
               <Timer className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">
                 Time tracking wasn't available when you took this mock. Take a new one to see your pacing, time efficiency score, and slowest questions here.
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {overall.hasTimeData && mistakePatterns && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5 text-primary" />Mistake Patterns</CardTitle>
+              <CardDescription>Why the wrong answers likely happened, based on timing</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatCard icon={Zap} label="Likely Guess" value={mistakePatterns.likelyGuess ?? 0} sublabel="<10s" tone="danger" />
+                <StatCard icon={Brain} label="Overthinking" value={mistakePatterns.overthinking ?? 0} sublabel=">2x avg time" />
+                <StatCard icon={Timer} label="Time Pressure" value={mistakePatterns.timePressure ?? 0} sublabel="last 20% of paper" />
+                <StatCard icon={HelpCircle} label="Knowledge Gap" value={mistakePatterns.knowledgeGap ?? 0} sublabel="normal pace" tone="muted" />
+              </div>
             </CardContent>
           </Card>
         )}
