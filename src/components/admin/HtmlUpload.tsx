@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { neetPlanner } from "@/data/neetPlanner";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { parseHtmlFile, type ParsedQuestion } from "@/lib/htmlQuestionParser";
+import { useMathJax } from "@/hooks/useMathJax";
 import {
   Upload,
   FileCheck,
@@ -19,29 +20,6 @@ import {
   ChevronUp,
   Image as ImageIcon,
 } from "lucide-react";
-
-// Load MathJax once
-const loadMathJax = () => {
-  if (document.getElementById('mathjax-script')) return;
-  const config = document.createElement('script');
-  config.type = 'text/javascript';
-  config.textContent = `window.MathJax = {
-    tex: { inlineMath: [['$','$'],['\\\\(','\\\\)']], displayMath: [['$$','$$'],['\\\\[','\\\\]']], processEscapes: true },
-    options: { ignoreHtmlClass: "tex2jax_ignore", processHtmlClass: "tex2jax_process" },
-    startup: { typeset: false }
-  };`;
-  document.head.appendChild(config);
-  const script = document.createElement('script');
-  script.id = 'mathjax-script';
-  script.async = true;
-  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-  document.head.appendChild(script);
-};
-
-const typesetMath = (el: HTMLElement | null) => {
-  if (!el || !(window as any).MathJax?.typesetPromise) return;
-  (window as any).MathJax.typesetPromise([el]).catch(() => {});
-};
 
 export const HtmlUpload = () => {
   const [subjectId, setSubjectId] = useState<string>("physics");
@@ -60,7 +38,10 @@ export const HtmlUpload = () => {
     unmatched: 0,
   });
 
-  const previewRef = useRef<HTMLDivElement>(null);
+  // Reuses the same global MathJax loader as every other question surface
+  // in the app — re-typesets this container whenever the parsed list or
+  // the expanded question changes.
+  const { ref: previewRef } = useMathJax<HTMLDivElement>([questions, expandedQ]);
 
   const selectedSubject =
     neetPlanner.find((s) => s.id === subjectId) || neetPlanner[0];
@@ -70,9 +51,6 @@ export const HtmlUpload = () => {
     (acc, c) => { (acc[c.section] ||= []).push(c); return acc; },
     {}
   );
-
-  // Load MathJax on mount, typeset when questions change
-  useEffect(() => { loadMathJax(); }, []);
 
   // Load topics whenever chapter changes
   useEffect(() => {
@@ -87,13 +65,6 @@ export const HtmlUpload = () => {
       setAvailableTopics((data || []).map((t: any) => ({ id: t.id, name: t.name })));
     })();
   }, [chapterId]);
-
-  useEffect(() => {
-    if (questions.length > 0) {
-      const timer = setTimeout(() => typesetMath(previewRef.current), 200);
-      return () => clearTimeout(timer);
-    }
-  }, [questions, expandedQ]);
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
