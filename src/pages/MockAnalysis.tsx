@@ -235,8 +235,8 @@ export default function MockAnalysis() {
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip />
                     <Bar dataKey="marks" radius={[6, 6, 0, 0]}>
-                      {subjects.map((s) => (
-                        <Cell key={s.subjectId} fill={SUBJECT_COLORS[s.subject] || "hsl(var(--primary))"} />
+                      {subjects.map((s, index) => (
+                        <Cell key={s.subjectId || `${s.subject}-${index}`} fill={SUBJECT_COLORS[s.subject] || "hsl(var(--primary))"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -245,8 +245,8 @@ export default function MockAnalysis() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-              {subjects.map((s) => (
-                <div key={s.subjectId} className="space-y-2 p-4 rounded-xl border">
+              {subjects.map((s, index) => (
+                <div key={s.subjectId || `${s.subject}-${index}`} className="space-y-2 p-4 rounded-xl border">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold" style={{ color: SUBJECT_COLORS[s.subject] }}>{s.subject}</h4>
                     <span className="text-sm font-bold">{s.marks}/{s.maxMarks}</span>
@@ -272,8 +272,8 @@ export default function MockAnalysis() {
                 <CardDescription>Specific concepts to revise first</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {weakTopics.map((t) => (
-                  <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20">
+                {weakTopics.map((t, index) => (
+                  <div key={t.topicId || `${t.topic}-${index}`} className="flex items-center justify-between p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{t.topic}</p>
                       <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
@@ -289,8 +289,8 @@ export default function MockAnalysis() {
                 <CardDescription>Concepts you've mastered</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {strongTopics.map((t) => (
-                  <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+                {strongTopics.map((t, index) => (
+                  <div key={t.topicId || `${t.topic}-${index}`} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{t.topic}</p>
                       <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
@@ -311,8 +311,8 @@ export default function MockAnalysis() {
             </CardHeader>
             <CardContent className="space-y-3">
               {weakChapters.length === 0 && <p className="text-sm text-muted-foreground">Not enough attempted questions yet to identify weak chapters.</p>}
-              {weakChapters.map((c) => (
-                <div key={c.chapterId} className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/20">
+              {weakChapters.map((c, index) => (
+                <div key={c.chapterId || `${c.chapter}-${index}`} className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/20">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{c.chapter}</p>
                     <p className="text-xs text-muted-foreground">{c.subject}</p>
@@ -330,8 +330,8 @@ export default function MockAnalysis() {
             </CardHeader>
             <CardContent className="space-y-3">
               {strongChapters.length === 0 && <p className="text-sm text-muted-foreground">Not enough attempted questions yet to identify strong chapters.</p>}
-              {strongChapters.map((c) => (
-                <div key={c.chapterId} className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+              {strongChapters.map((c, index) => (
+                <div key={c.chapterId || `${c.chapter}-${index}`} className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{c.chapter}</p>
                     <p className="text-xs text-muted-foreground">{c.subject}</p>
@@ -350,10 +350,10 @@ export default function MockAnalysis() {
           </CardHeader>
           <CardContent className="space-y-3">
             {sortedChapters.length === 0 && <p className="text-sm text-muted-foreground">No chapters attempted in this mock.</p>}
-            {sortedChapters.map((c) => {
+            {sortedChapters.map((c, index) => {
               const rating = getRating(c.accuracy);
               return (
-                <div key={c.chapterId} className="p-3 rounded-lg border space-y-2">
+                <div key={c.chapterId || `${c.chapter}-${index}`} className="p-3 rounded-lg border space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{c.chapter}</p>
@@ -395,8 +395,8 @@ export default function MockAnalysis() {
                     <YAxis tick={{ fontSize: 12 }} label={{ value: 'sec/question', angle: -90, position: 'insideLeft', fontSize: 10 }} />
                     <Tooltip />
                     <Bar dataKey="avgTimeSeconds" radius={[6, 6, 0, 0]}>
-                      {subjects.map((s) => (
-                        <Cell key={s.subjectId} fill={SUBJECT_COLORS[s.subject] || "hsl(var(--primary))"} />
+                      {subjects.map((s, index) => (
+                        <Cell key={s.subjectId || `${s.subject}-${index}`} fill={SUBJECT_COLORS[s.subject] || "hsl(var(--primary))"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -409,8 +409,8 @@ export default function MockAnalysis() {
                     <div>
                       <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Timer className="h-4 w-4 text-amber-600" />Took Longest</h4>
                       <div className="space-y-2">
-                        {slowestQuestions.map((q) => (
-                          <div key={q.questionId} className="p-2.5 rounded-lg border text-xs space-y-1">
+                        {slowestQuestions.map((q, index) => (
+                          <div key={q.questionId || `${q.questionPreview}-${index}`} className="p-2.5 rounded-lg border text-xs space-y-1">
                             <p className="text-muted-foreground line-clamp-2">{q.questionPreview}...</p>
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">{q.subject} • {q.chapter}</span>
@@ -425,8 +425,8 @@ export default function MockAnalysis() {
                     <div>
                       <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Zap className="h-4 w-4 text-red-600" />Possible Guesses</h4>
                       <div className="space-y-2">
-                        {quickGuesses.map((q) => (
-                          <div key={q.questionId} className="p-2.5 rounded-lg border text-xs space-y-1">
+                        {quickGuesses.map((q, index) => (
+                          <div key={q.questionId || `${q.questionPreview}-${index}`} className="p-2.5 rounded-lg border text-xs space-y-1">
                             <p className="text-muted-foreground line-clamp-2">{q.questionPreview}...</p>
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">{q.subject} • {q.chapter}</span>
