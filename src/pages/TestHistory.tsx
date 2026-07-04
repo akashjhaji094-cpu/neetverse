@@ -93,8 +93,14 @@ const TestHistory = () => {
           </CardContent></Card>
         ) : (
           <div className="space-y-2">
-            {filtered.map((h) => (
-              <Card key={h.attemptId}>
+            {filtered.map((h) => {
+              const isMock = h.testType === "mock";
+              return (
+              <Card
+                key={h.attemptId}
+                onClick={() => isMock && navigate(`/mock-analysis/${h.attemptId}`)}
+                className={isMock ? "hover:border-primary hover:shadow-sm transition cursor-pointer" : ""}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
