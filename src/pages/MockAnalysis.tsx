@@ -162,6 +162,11 @@ export default function MockAnalysis() {
                   <span className="text-xl text-white/70">/ {overall.maxScore}</span>
                 </div>
                 <p className="text-white/90 mt-2 font-semibold">{overall.percentage}% Score</p>
+                {overall.isFullSyllabusMock && (
+                  <p className="text-white/80 text-xs mt-1.5">
+                    Full-syllabus mock — predicted NEET score ≈ <span className="font-bold text-white">{overall.neetScorePrediction}/720</span>
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                 <div className="text-center bg-white/15 rounded-xl px-4 py-3">
