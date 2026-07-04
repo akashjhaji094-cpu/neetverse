@@ -1,16 +1,16 @@
 // @ts-nocheck
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Question } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, Flag, Bookmark } from "lucide-react";
-import { useMathJax } from "@/hooks/useMathJax";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { MathContent } from "@/components/MathContent";
 
 interface TestInterfaceProps {
   questions: Question[];
-  onSubmit: (answers: Record<string, number | null>) => void;
+  onSubmit: (answers: Record<string, number | null>, timeSpent: Record<string, number>) => void;
 }
 
 export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
@@ -19,6 +19,9 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [marked, setMarked] = useState<Record<string, boolean>>({});
   const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
+  // Per-question time spent, in whole seconds. Keyed by question id.
+  const [questionTimeSpent, setQuestionTimeSpent] = useState<Record<string, number>>({});
+  const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
     setVisited(prev => ({ ...prev, [currentIndex]: true }));
@@ -41,20 +44,36 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
     }));
   };
 
-  const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
+  // Adds however long we've been sitting on the current question to its
+  // running total, then resets the clock. Call right before the visible
+  // question changes (Next / Previous / palette jump / submit), and use
+  // the RETURNED map immediately — questionTimeSpent state won't be
+  // updated yet in the same tick.
+  const commitCurrentQuestionTime = () => {
+    const q = questions[currentIndex];
+    if (!q) return questionTimeSpent;
+    const elapsedSec = Math.max(0, Math.round((Date.now() - questionStartRef.current) / 1000));
+    const updated = {
+      ...questionTimeSpent,
+      [q.id]: (questionTimeSpent[q.id] || 0) + elapsedSec,
+    };
+    setQuestionTimeSpent(updated);
+    questionStartRef.current = Date.now();
+    return updated;
   };
 
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
+  const goToQuestion = (idx: number) => {
+    if (idx < 0 || idx >= questions.length || idx === currentIndex) return;
+    commitCurrentQuestionTime();
+    setCurrentIndex(idx);
   };
+
+  const handleNext = () => goToQuestion(currentIndex + 1);
+  const handlePrevious = () => goToQuestion(currentIndex - 1);
 
   const handleSubmit = () => {
-    onSubmit(answers);
+    const finalTimeSpent = commitCurrentQuestionTime();
+    onSubmit(answers, finalTimeSpent);
   };
 
   const formatTime = (seconds: number) => {
@@ -64,7 +83,6 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   };
 
   const answeredCount = Object.keys(answers).length;
-  const mathRef = useMathJax([currentIndex]);
 
   const getStatus = (idx: number) => {
     const q = questions[idx];
@@ -86,7 +104,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-background" ref={mathRef}>
+    <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background border-b">
         <div className="container-custom py-4">
           <div className="flex items-center justify-between mb-2">
@@ -110,9 +128,9 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
               <div className="flex items-start gap-2">
                 <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
                 <div className="flex-1">
-                  <div
+                  <MathContent
+                    html={formatQuestionHtml(currentQuestion.question_text)}
                     className="text-base leading-relaxed neet-question"
-                    dangerouslySetInnerHTML={{ __html: formatQuestionHtml(currentQuestion.question_text) }}
                   />
                   {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
                     <div className="mt-4 space-y-2">
@@ -148,7 +166,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                       }`}>
                         {answers[currentQuestion.id] === index && '✓'}
                       </div>
-                      <span className="text-sm" dangerouslySetInnerHTML={{ __html: String(option) }} />
+                      <MathContent as="span" html={formatQuestionHtml(String(option))} className="text-sm" />
                     </div>
                   </button>
                 ))}
@@ -206,7 +224,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                 return (
                   <button
                     key={idx}
-                    onClick={() => setCurrentIndex(idx)}
+                    onClick={() => goToQuestion(idx)}
                     className={`h-8 w-8 rounded text-xs font-semibold border transition-all ${statusClass[s]} ${
                       idx === currentIndex ? "ring-2 ring-primary ring-offset-1" : ""
                     }`}
