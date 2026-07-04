@@ -100,6 +100,27 @@ export interface MockTestAnalysis {
   mistakePatterns: MistakePatterns | null;
 }
 
+function normalizeMockAnalysis(raw: Partial<MockTestAnalysis> | null | undefined): MockTestAnalysis {
+  if (!raw || !raw.overall) {
+    throw new Error("Mock analysis data is incomplete");
+  }
+
+  return {
+    attemptId: raw.attemptId ?? "",
+    overall: raw.overall,
+    subjects: Array.isArray(raw.subjects) ? raw.subjects : [],
+    chapters: Array.isArray(raw.chapters) ? raw.chapters : [],
+    weakChapters: Array.isArray(raw.weakChapters) ? raw.weakChapters : [],
+    strongChapters: Array.isArray(raw.strongChapters) ? raw.strongChapters : [],
+    slowestQuestions: Array.isArray(raw.slowestQuestions) ? raw.slowestQuestions : [],
+    quickGuesses: Array.isArray(raw.quickGuesses) ? raw.quickGuesses : [],
+    topics: Array.isArray(raw.topics) ? raw.topics : [],
+    weakTopics: Array.isArray(raw.weakTopics) ? raw.weakTopics : [],
+    strongTopics: Array.isArray(raw.strongTopics) ? raw.strongTopics : [],
+    mistakePatterns: raw.mistakePatterns ?? null,
+  };
+}
+
 export function useMockAnalysis(attemptId: string | undefined) {
   return useQuery({
     queryKey: ["mock-analysis", attemptId],
@@ -113,7 +134,7 @@ export function useMockAnalysis(attemptId: string | undefined) {
         { p_attempt_id: attemptId } as any
       );
       if (error) throw error;
-      return data as unknown as MockTestAnalysis;
+      return normalizeMockAnalysis(data as Partial<MockTestAnalysis> | null | undefined);
     },
     enabled: !!attemptId,
     staleTime: 1000 * 60 * 5,
