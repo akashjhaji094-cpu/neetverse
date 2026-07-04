@@ -392,6 +392,7 @@ const submitTestMutation = useMutation({
           question_id: q.id,
           chosen_option_index: answers[q.id] ?? null,
           is_correct: answers[q.id] === q.correct_option_index,
+          time_taken_seconds: timeSpent[q.id] ?? null,
         }));
         await supabase.from('attempt_answers').insert(answerRecords);
       }
