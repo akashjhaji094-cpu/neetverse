@@ -57,6 +57,12 @@ export interface OverallAnalysis {
   hasTimeData: boolean;
   avgTimePerQuestionSeconds: number | null;
   timeEfficiencyScore: number | null;
+  rank: number | null;
+  totalPeers: number;
+  percentile: number | null;
+  hasEnoughPeerData: boolean;
+  isFullSyllabusMock: boolean;
+  neetScorePrediction: number | null;
 }
 
 export interface TimeOutlierQuestion {
