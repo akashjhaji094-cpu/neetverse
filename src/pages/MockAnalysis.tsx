@@ -10,7 +10,7 @@ import { useMockProgress } from "@/hooks/useMockProgress";
 import {
   ArrowLeft, Target, CheckCircle2, XCircle, MinusCircle,
   Clock, TrendingUp, TrendingDown, Sparkles, BookOpen, AlertTriangle,
-  Timer, Gauge, Zap,
+  Timer, Gauge, Zap, Award, Layers, Brain, HelpCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
