@@ -332,9 +332,9 @@ const Test = () => {
       toast.error(error.message || 'Failed to fetch questions');
     },
   });
-
-  const submitTestMutation = useMutation({
-    mutationFn: async (answers: Record<string, number | null>) => {
+          
+const submitTestMutation = useMutation({
+    mutationFn: async ({ answers, timeSpent }: { answers: Record<string, number | null>; timeSpent: Record<string, number> }) => {
       if (!user) throw new Error('Not authenticated');
 
       let correctCount = 0;
