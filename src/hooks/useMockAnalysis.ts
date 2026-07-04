@@ -16,6 +16,21 @@ export interface SubjectAnalysisRow {
   totalTimeSeconds: number;
 }
 
+export interface ChapterAnalysisRow {
+  chapterId: string;
+  chapter: string;
+  subject: string;
+  subjectId: string;
+  totalQuestions: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  marks: number;
+  maxMarks: number;
+  accuracy: number;
+  avgTimeSeconds: number | null;
+}
+
 export interface TopicAnalysisRow {
   topicId: string;
   topic: string;
@@ -37,17 +52,13 @@ export interface MistakePatterns {
   knowledgeGap?: number;
 }
 
-export interface ChapterAnalysisRow {
-  chapterId: string;
+export interface TimeOutlierQuestion {
+  questionId: string;
+  questionPreview: string;
   chapter: string;
   subject: string;
-  correct: number;
-  wrong: number;
-  unattempted: number;
-  total: number;
-  marks: number;
-  maxMarks: number;
-  accuracy: number;
+  timeSeconds: number;
+  isCorrect: boolean;
 }
 
 export interface OverallAnalysis {
@@ -76,49 +87,19 @@ export interface OverallAnalysis {
   neetScorePrediction: number | null;
 }
 
-export interface TimeOutlierQuestion {
-  questionId: string;
-  questionPreview: string;
-  chapter: string;
-  subject: string;
-  timeSeconds: number;
-  isCorrect: boolean;
-}
-
 export interface MockTestAnalysis {
   attemptId: string;
   overall: OverallAnalysis;
   subjects: SubjectAnalysisRow[];
   chapters: ChapterAnalysisRow[];
+  topics: TopicAnalysisRow[];
   weakChapters: ChapterAnalysisRow[];
   strongChapters: ChapterAnalysisRow[];
-  slowestQuestions: TimeOutlierQuestion[];
-  quickGuesses: TimeOutlierQuestion[];
-  topics: TopicAnalysisRow[];
   weakTopics: TopicAnalysisRow[];
   strongTopics: TopicAnalysisRow[];
+  slowestQuestions: TimeOutlierQuestion[];
+  quickGuesses: TimeOutlierQuestion[];
   mistakePatterns: MistakePatterns | null;
-}
-
-function normalizeMockAnalysis(raw: Partial<MockTestAnalysis> | null | undefined): MockTestAnalysis {
-  if (!raw || !raw.overall) {
-    throw new Error("Mock analysis data is incomplete");
-  }
-
-  return {
-    attemptId: raw.attemptId ?? "",
-    overall: raw.overall,
-    subjects: Array.isArray(raw.subjects) ? raw.subjects : [],
-    chapters: Array.isArray(raw.chapters) ? raw.chapters : [],
-    weakChapters: Array.isArray(raw.weakChapters) ? raw.weakChapters : [],
-    strongChapters: Array.isArray(raw.strongChapters) ? raw.strongChapters : [],
-    slowestQuestions: Array.isArray(raw.slowestQuestions) ? raw.slowestQuestions : [],
-    quickGuesses: Array.isArray(raw.quickGuesses) ? raw.quickGuesses : [],
-    topics: Array.isArray(raw.topics) ? raw.topics : [],
-    weakTopics: Array.isArray(raw.weakTopics) ? raw.weakTopics : [],
-    strongTopics: Array.isArray(raw.strongTopics) ? raw.strongTopics : [],
-    mistakePatterns: raw.mistakePatterns ?? null,
-  };
 }
 
 export function useMockAnalysis(attemptId: string | undefined) {
@@ -134,7 +115,7 @@ export function useMockAnalysis(attemptId: string | undefined) {
         { p_attempt_id: attemptId } as any
       );
       if (error) throw error;
-      return normalizeMockAnalysis(data as Partial<MockTestAnalysis> | null | undefined);
+      return data as unknown as MockTestAnalysis;
     },
     enabled: !!attemptId,
     staleTime: 1000 * 60 * 5,
