@@ -1715,6 +1715,7 @@ export type Database = {
           skill_match_score: number
         }[]
       }
+      get_mock_test_analysis: { Args: { p_attempt_id: string }; Returns: Json }
       get_question_counts_per_chapter: {
         Args: never
         Returns: {
@@ -1729,6 +1730,7 @@ export type Database = {
           total: number
         }[]
       }
+      get_user_mock_progress: { Args: { p_limit?: number }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
