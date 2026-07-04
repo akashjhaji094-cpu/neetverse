@@ -6,6 +6,14 @@
  *
  * Returns enhanced HTML where each statement / column row sits in its own
  * visually distinct box (works in both screen + print).
+ *
+ * NOTE: this file intentionally does NOT touch LaTeX. Question text in the
+ * database is already valid, correctly-escaped LaTeX ($...$ / $$...$$,
+ * \frac, \mathsf, etc) — MathJax (see useMathJax.ts / MathContent.tsx)
+ * renders it as-is. An earlier "preprocessLatex" step here used to run
+ * backslash-fixing regexes on the assumption the HTML was double-escaped;
+ * it wasn't, so it was dead code, and it's been removed rather than risk
+ * it mangling real content in the future.
  */
 
 const BOX_BASE =
@@ -139,75 +147,13 @@ function formatMatchColumns(html: string): string {
 }
 
 /**
- * Pre-process LaTeX math expressions to ensure MathJax can render them properly.
- * Handles HTML-escaped characters and ensures MathJax delimiters work.
- */
-function preprocessLatex(html: string): string {
-  if (!html) return '';
-  
-  return html
-    // First, fix HTML-escaped backslashes by replacing \\ with \
-    .replace(/\\\\(\w)/g, '\\$1')
-    // Fix specific escaped LaTeX commands
-    .replace(/\\\\mathsf\\{/g, '\\mathsf{')
-    .replace(/\\\\mathit\\{/g, '\\mathit{')
-    .replace(/\\\\mathbf\\{/g, '\\mathbf{')
-    .replace(/\\\\mathrm\\{/g, '\\mathrm{')
-    .replace(/\\\\text\\{/g, '\\text{')
-    .replace(/\\\\frac\\{/g, '\\frac{')
-    .replace(/\\\\sqrt\\{/g, '\\sqrt{')
-    // Fix Greek letters
-    .replace(/\\\\lambda/g, '\\lambda')
-    .replace(/\\\\alpha/g, '\\alpha')
-    .replace(/\\\\beta/g, '\\beta')
-    .replace(/\\\\gamma/g, '\\gamma')
-    .replace(/\\\\delta/g, '\\delta')
-    .replace(/\\\\theta/g, '\\theta')
-    .replace(/\\\\phi/g, '\\phi')
-    .replace(/\\\\pi/g, '\\pi')
-    .replace(/\\\\omega/g, '\\omega')
-    .replace(/\\\\sigma/g, '\\sigma')
-    .replace(/\\\\mu/g, '\\mu')
-    .replace(/\\\\nu/g, '\\nu')
-    .replace(/\\\\rho/g, '\\rho')
-    .replace(/\\\\tau/g, '\\tau')
-    .replace(/\\\\eta/g, '\\eta')
-    .replace(/\\\\psi/g, '\\psi')
-    .replace(/\\\\chi/g, '\\chi')
-    // Fix other common commands
-    .replace(/\\\\cdot/g, '\\cdot')
-    .replace(/\\\\times/g, '\\times')
-    .replace(/\\\\pm/g, '\\pm')
-    .replace(/\\\\infty/g, '\\infty')
-    .replace(/\\\\approx/g, '\\approx')
-    .replace(/\\\\neq/g, '\\neq')
-    .replace(/\\\\leq/g, '\\leq')
-    .replace(/\\\\geq/g, '\\geq')
-    .replace(/\\\\to/g, '\\to')
-    .replace(/\\\\sum/g, '\\sum')
-    .replace(/\\\\int/g, '\\int')
-    .replace(/\\\\frac/g, '\\frac')
-    .replace(/\\\\sqrt/g, '\\sqrt')
-    .replace(/\\\\left/g, '\\left')
-    .replace(/\\\\right/g, '\\right')
-    // Ensure math delimiters $ are properly spaced
-    .replace(/\\$(\\S)/g, ' $1')
-    .replace(/(\\S)\\$/g, '$1 ')
-    // Clean up multiple spaces
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
  * Public formatter. Safe to run on every question — returns input unchanged
  * if no special patterns are detected.
  */
 export function formatQuestionHtml(html: string | null | undefined): string {
   if (!html) return "";
-  
-  // First preprocess LaTeX to fix escaped characters
-  const preprocessed = preprocessLatex(html);
-  const norm = normalize(preprocessed);
+
+  const norm = normalize(html);
 
   // Match-the-column has higher priority (more specific)
   const colFormatted = formatMatchColumns(norm);
