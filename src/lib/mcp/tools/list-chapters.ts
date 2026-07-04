@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 
+declare const process: { env: Record<string, string | undefined> };
+
 export default defineTool({
   name: "list_chapters",
   title: "List chapters",
