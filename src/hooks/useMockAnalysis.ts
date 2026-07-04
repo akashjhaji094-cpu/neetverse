@@ -14,19 +14,28 @@ export interface SubjectAnalysisRow {
   attemptRate: number;
 }
 
-export interface ChapterAnalysisRow {
-  chapterId: string;
+export interface TopicAnalysisRow {
+  topicId: string;
+  topic: string;
   chapter: string;
+  chapterId: string;
   subject: string;
   subjectId: string;
   totalQuestions: number;
   correct: number;
   wrong: number;
   unattempted: number;
-  marks: number;
-  maxMarks: number;
   accuracy: number;
 }
+
+export interface MistakePatterns {
+  likelyGuess?: number;
+  overthinking?: number;
+  timePressure?: number;
+  knowledgeGap?: number;
+}
+
+export interface ChapterAnalysisRow {
 
 export interface OverallAnalysis {
   totalQuestions: number;
