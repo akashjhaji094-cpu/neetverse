@@ -12,6 +12,8 @@ export interface SubjectAnalysisRow {
   maxMarks: number;
   accuracy: number;
   attemptRate: number;
+  avgTimeSeconds: number | null;
+  totalTimeSeconds: number;
 }
 
 export interface TopicAnalysisRow {
