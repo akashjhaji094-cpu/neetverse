@@ -122,7 +122,7 @@ export default function MockAnalysis() {
     );
   }
 
-  const { overall, chapters, weakChapters, strongChapters, slowestQuestions, quickGuesses } = data;
+  const { overall, chapters, weakChapters, strongChapters, slowestQuestions, quickGuesses, weakTopics, strongTopics, mistakePatterns } = data;
   const subjects = sortBySubjectOrder(data.subjects);
 
   const radarData = subjects.map((s) => ({ subject: s.subject, accuracy: s.accuracy }));
