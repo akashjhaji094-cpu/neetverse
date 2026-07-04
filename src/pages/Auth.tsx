@@ -16,6 +16,11 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [searchParams] = useSearchParams();
 
+  // Same-origin relative path only.
+  const rawNext = searchParams.get('next') || '';
+  const nextPath = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '';
+  const goNext = (fallback: string) => navigate(nextPath || fallback);
+
   // Pre-fill from ?ref=CODE in the URL (shared link), but the field stays
   // EDITABLE and OPTIONAL — someone who got a code via WhatsApp text instead
   // of a link can type it manually, and anyone can just leave it blank.
@@ -29,13 +34,13 @@ const Auth = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      goNext('/dashboard');
     }
-  }, [user, navigate]);
+  }, [user, navigate, nextPath]);
 
   const handleSkipSignup = () => {
     setGuestMode();
-    navigate('/dashboard');
+    goNext('/dashboard');
   };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -53,7 +58,7 @@ const Auth = () => {
         // fire-and-forget — don't block navigation if this fails
         applyReferralCode(code, userId);
       }
-      navigate('/dashboard');
+      goNext('/dashboard');
     }
     setLoading(false);
   };
@@ -67,7 +72,7 @@ const Auth = () => {
 
     const { error } = await signIn(email, password);
     if (!error) {
-      navigate('/');
+      goNext('/');
     }
     setLoading(false);
   };

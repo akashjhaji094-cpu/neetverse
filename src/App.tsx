@@ -35,6 +35,7 @@ const Premium = lazy(() => import("./pages/Premium"));
 const AdaptiveLearning = lazy(() => import("./pages/AdaptiveLearning"));
 const BattleArena = lazy(() => import("./pages/BattleArena"));
 const MockAnalysis = lazy(() => import("./pages/MockAnalysis"));
+const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -96,6 +97,7 @@ const App = () => (
                 <Route path="/adaptive-learning" element={<AdaptiveLearning />} />
                 <Route path="/battle-arena" element={<BattleArena />} />
                 <Route path="/mock-analysis/:attemptId" element={<MockAnalysis />} />
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
