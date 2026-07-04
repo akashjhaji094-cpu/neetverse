@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://sgmlggsgejdacztzmldb.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "neetverse-mcp",
+      "version": "0.1.0",
+      "title": "NEETVerse MCP"
+    },
+    "tools": [
+      {
+        "name": "list_subjects",
+        "title": "List subjects",
+        "description": "List all NEET subjects (Physics, Chemistry, Biology) available in NEETVerse.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_chapters",
+        "title": "List chapters",
+        "description": "List NEET chapters, optionally filtered by subject slug (physics, chemistry, biology).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "subject_slug": {
+              "type": "string",
+              "description": "Optional subject slug filter."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_random_question",
+        "title": "Get random practice question",
+        "description": "Fetch a random NEET practice question, optionally filtered by subject slug or chapter id.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "subject_slug": {
+              "type": "string",
+              "description": "Optional subject slug (physics/chemistry/biology)."
+            },
+            "chapter_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Optional chapter UUID."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_my_stats",
+        "title": "Get my study stats",
+        "description": "Get the signed-in user's NEETVerse practice stats: total attempts, accuracy, current streak.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
