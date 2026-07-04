@@ -311,6 +311,84 @@ export default function MockAnalysis() {
           </CardContent>
         </Card>
 
+        {overall.hasTimeData ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Timer className="h-5 w-5 text-primary" />Time Analysis</CardTitle>
+              <CardDescription>How you spent your time across subjects and questions</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                <StatCard icon={Clock} label="Avg Time / Question" value={overall.avgTimePerQuestionSeconds !== null ? `${overall.avgTimePerQuestionSeconds}s` : "—"} sublabel="NEET pace ≈ 60s" />
+                <StatCard icon={Gauge} label="Time Efficiency" value={overall.timeEfficiencyScore !== null ? `${overall.timeEfficiencyScore}/100` : "—"} />
+                <StatCard icon={Zap} label="Quick Guesses" value={quickGuesses.length} sublabel="<10s & wrong" tone={quickGuesses.length > 0 ? "danger" : "default"} />
+              </div>
+
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={subjects.filter(s => s.avgTimeSeconds !== null)} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="subject" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} label={{ value: 'sec/question', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="avgTimeSeconds" radius={[6, 6, 0, 0]}>
+                      {subjects.map((s) => (
+                        <Cell key={s.subjectId} fill={SUBJECT_COLORS[s.subject] || "hsl(var(--primary))"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {(slowestQuestions.length > 0 || quickGuesses.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {slowestQuestions.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Timer className="h-4 w-4 text-amber-600" />Took Longest</h4>
+                      <div className="space-y-2">
+                        {slowestQuestions.map((q) => (
+                          <div key={q.questionId} className="p-2.5 rounded-lg border text-xs space-y-1">
+                            <p className="text-muted-foreground line-clamp-2">{q.questionPreview}...</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">{q.subject} • {q.chapter}</span>
+                              <Badge variant="outline" className="text-amber-600 border-amber-300 shrink-0">{q.timeSeconds}s</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {quickGuesses.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Zap className="h-4 w-4 text-red-600" />Possible Guesses</h4>
+                      <div className="space-y-2">
+                        {quickGuesses.map((q) => (
+                          <div key={q.questionId} className="p-2.5 rounded-lg border text-xs space-y-1">
+                            <p className="text-muted-foreground line-clamp-2">{q.questionPreview}...</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">{q.subject} • {q.chapter}</span>
+                              <Badge variant="outline" className="text-red-600 border-red-300 shrink-0">{q.timeSeconds}s • wrong</Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="p-6 text-center">
+              <Timer className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                Time tracking wasn't available when you took this mock. Take a new one to see your pacing, time efficiency score, and slowest questions here.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-primary" />Progress Trend</CardTitle>
