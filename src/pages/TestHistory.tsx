@@ -129,15 +129,17 @@ const TestHistory = () => {
                         <span className="flex items-center gap-1 text-red-500"><XCircle className="h-3.5 w-3.5" />{h.wrong}</span>
                         <span className="flex items-center gap-1 text-muted-foreground"><MinusCircle className="h-3.5 w-3.5" />{h.unattempted}</span>
                       </div>
-                      <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
+                     <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />{formatTime(h.timeSpentSec)}
                       </div>
+                      {isMock && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+              );
+            })}
+          </div> 
         )}
       </div>
     </DashboardLayout>
