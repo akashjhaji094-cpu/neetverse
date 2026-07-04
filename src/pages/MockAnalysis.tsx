@@ -442,7 +442,6 @@ export default function MockAnalysis() {
             </CardContent>
           </Card>
         ) : (
-        ) : (
           <Card className="border-dashed">
             <CardContent className="p-6 text-center">
               <Timer className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
