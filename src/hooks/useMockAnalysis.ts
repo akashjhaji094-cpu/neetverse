@@ -54,6 +54,18 @@ export interface OverallAnalysis {
   startedAt: string;
   finishedAt: string | null;
   durationSeconds: number | null;
+  hasTimeData: boolean;
+  avgTimePerQuestionSeconds: number | null;
+  timeEfficiencyScore: number | null;
+}
+
+export interface TimeOutlierQuestion {
+  questionId: string;
+  questionPreview: string;
+  chapter: string;
+  subject: string;
+  timeSeconds: number;
+  isCorrect: boolean;
 }
 
 export interface MockTestAnalysis {
