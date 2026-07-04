@@ -83,6 +83,10 @@ export interface MockTestAnalysis {
   strongChapters: ChapterAnalysisRow[];
   slowestQuestions: TimeOutlierQuestion[];
   quickGuesses: TimeOutlierQuestion[];
+  topics: TopicAnalysisRow[];
+  weakTopics: TopicAnalysisRow[];
+  strongTopics: TopicAnalysisRow[];
+  mistakePatterns: MistakePatterns | null;
 }
 
 export function useMockAnalysis(attemptId: string | undefined) {
