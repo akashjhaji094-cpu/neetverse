@@ -38,6 +38,17 @@ export interface MistakePatterns {
 }
 
 export interface ChapterAnalysisRow {
+  chapterId: string;
+  chapter: string;
+  subject: string;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  total: number;
+  marks: number;
+  maxMarks: number;
+  accuracy: number;
+}
 
 export interface OverallAnalysis {
   totalQuestions: number;
