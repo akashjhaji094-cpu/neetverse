@@ -93,25 +93,24 @@ function formatMatchColumns(html: string): string {
   // Heuristic gate: only try if the stem hints at matching OR the label
   // pattern A..D followed by P..S / 1..4 is visibly present.
   const hasHint = /\b(match|column|list)\b/i.test(html);
-  const hasABCD = /(?:^|[a-z\d\s>(.\)])A[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])D[\.\)]\s*\S/.test(html);
-  const hasPQRS = /(?:^|[a-z\d\s>(.\)])P[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])S[\.\)]\s*\S/.test(html);
+  const hasABCD = /(?<![A-Za-z])A[\.\)]\s*\S/.test(html) && /(?<![A-Za-z])D[\.\)]\s*\S/.test(html);
+  const hasPQRS = /(?<![A-Za-z])P[\.\)]\s*\S/.test(html) && /(?<![A-Za-z])S[\.\)]\s*\S/.test(html);
   const has1234 =
-    /(?:^|[a-z\d\s>(.\)])1[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])4[\.\)]\s*\S/.test(html);
+    /(?<![A-Za-z0-9])1[\.\)]\s*\S/.test(html) && /(?<![A-Za-z0-9])4[\.\)]\s*\S/.test(html);
   if (!hasABCD || !(hasPQRS || has1234) || !hasHint) return html;
 
-  // Split off the stem: everything before the first "A." / "A)" / "(A)".
-  const firstAMatch = /(?:^|[a-z\d\s>(.\)])A[\.\)]\s*\S/.exec(html);
+  // Split off the stem: everything before the first "A." / "A)".
+  const firstAMatch = /(?<![A-Za-z])A[\.\)]\s*\S/.exec(html);
   if (!firstAMatch) return html;
-  // Advance one char if we consumed a leading boundary char.
-  const leadOffset = firstAMatch[0].startsWith("A") ? 0 : 1;
-  const firstA = firstAMatch.index + leadOffset;
+  const firstA = firstAMatch.index;
   let stem = html.slice(0, firstA).trim();
   const body = html.slice(firstA);
 
   // Extract labeled items. Labels: single uppercase A-D letters, or P-S letters,
   // or digits 1-4. Each item's text runs until the next label of ANY family.
-  // Label boundary: allow lowercase→uppercase concatenation ("FermiB.").
-  const labelBoundary = /(?:^|(?<=[a-z\d\s>(.\)]))(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s*(?=\S)/g;
+  // Label boundary: previous char must not be an English letter (allow $,},
+  // digits, whitespace, punctuation — covers "FermiB." and "$...$Q.").
+  const labelBoundary = /(?<![A-Za-z])(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s*(?=\S)/g;
 
   type Item = { label: string; text: string };
   const items: Item[] = [];
@@ -121,8 +120,7 @@ function formatMatchColumns(html: string): string {
   while ((m = re.exec(body)) !== null) {
     // m.index may sit at a boundary char (e.g. space before "B."); align to
     // the label itself so slice() returns text correctly.
-    const labelStart = body.indexOf(m[1] + (m[0].includes(".") ? "." : ")"), m.index);
-    matches.push({ label: m[1], index: labelStart, end: m.index + m[0].length });
+    matches.push({ label: m[1], index: m.index, end: m.index + m[0].length });
   }
   for (let i = 0; i < matches.length; i++) {
     const cur = matches[i];
