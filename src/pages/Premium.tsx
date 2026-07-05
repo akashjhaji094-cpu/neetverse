@@ -235,7 +235,7 @@ const Premium = () => {
             </button>
           </div>
           <p className="mt-5 text-sm" style={{ color: "#999" }}>
-            ✨ All new accounts start with a <strong>free trial</strong>. Upgrade anytime.
+            ✨ All new accounts start with a <strong>7-day free trial</strong>. Upgrade anytime.
           </p>
         </section>
 
