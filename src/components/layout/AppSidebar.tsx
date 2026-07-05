@@ -39,6 +39,7 @@ import {
   Brain,
   Send,
   TrendingUp,
+  ScanLine,
 } from 'lucide-react';
 import { SidebarChatbot } from './SidebarChatbot';
 
