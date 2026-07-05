@@ -1031,7 +1031,7 @@ export const OfflinePaperPreview = ({
           </div>
         </div>
 
-        <div className="px-[8mm] pt-[8mm] relative" style={{ pageBreakBefore: "always" }}>
+        <div className="px-[8mm] pt-[8mm] relative" style={{ pageBreakBefore: "always", minHeight: "297mm", width: "210mm", boxSizing: "border-box" }}>
           <div className="absolute top-[5mm] left-[5mm] w-[10mm] h-[10mm]">
             <div className="w-full h-full border-t-[3px] border-l-[3px] border-black" />
             <div className="absolute top-[1mm] left-[1mm] w-[4mm] h-[4mm] bg-black" />
