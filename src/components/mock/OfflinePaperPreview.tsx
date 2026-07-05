@@ -832,6 +832,12 @@ export const OfflinePaperPreview = ({
 
   return (
     <div className="min-h-screen bg-gray-100">
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 0; }
+          html, body { margin: 0 !important; padding: 0 !important; }
+        }
+      `}</style>
       <canvas ref={canvasRef} className="hidden" />
       <input
         ref={fileInputRef}
