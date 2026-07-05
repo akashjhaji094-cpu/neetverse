@@ -64,13 +64,15 @@ export function SubjectCards() {
           return (
             <Card
               key={subject.slug}
-              className="cursor-pointer card-hover overflow-hidden group"
+              className="cursor-pointer card-3d overflow-hidden group animate-tilt-in"
+              style={{ animationDelay: `${subjects.indexOf(subject) * 100}ms` }}
               onClick={() => navigate('/practice')}
             >
               <CardContent className="p-0">
-                <div className={`bg-gradient-to-r ${subject.gradient} p-4 text-white`}>
+                <div className={`bg-gradient-to-br ${subject.gradient} p-4 text-white relative overflow-hidden`}>
+                  <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/10 blur-xl group-hover:scale-150 transition-transform duration-500" />
                   <div className="flex items-center justify-between">
-                    <Icon className="h-8 w-8" />
+                    <Icon className="h-8 w-8 icon-3d" />
                     <Badge variant="secondary" className="bg-white/20 text-white hover:bg-white/30">
                       {subject.chapters} Chapters
                     </Badge>
