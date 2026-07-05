@@ -765,6 +765,8 @@ const submitTestMutation = useMutation({
       <PremiumPopup
   open={showPremiumPopup}
   onClose={() => setShowPremiumPopup(false)}
+  plan={limits?.plan}
+  limitType={premiumPopupLimitType}
 />
     </DashboardLayout>
   );
