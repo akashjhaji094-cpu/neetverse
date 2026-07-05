@@ -125,7 +125,15 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
       <div className="container-custom py-6 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
         <Card>
           <CardContent className="pt-6 space-y-6">
-            <div className="space-y-4">
+            <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-4"
+            >
               <div className="flex items-start gap-2">
                 <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
                 <div className="flex-1">
