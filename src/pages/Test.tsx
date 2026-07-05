@@ -427,6 +427,7 @@ const submitTestMutation = useMutation({
 
   const handleChooseOnline = () => {
   if (limits && !limits.canTakeOnline) {
+  setPremiumPopupLimitType('online');
   setShowPremiumPopup(true);
   return;
           }
@@ -435,6 +436,7 @@ const submitTestMutation = useMutation({
 
   const handleChooseOffline = async () => {
     if (limits && !limits.canTakeOffline) {
+  setPremiumPopupLimitType('offline');
   setShowPremiumPopup(true);
   return;
           }
