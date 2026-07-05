@@ -6,7 +6,7 @@ export type PlanTier = "free" | "premium" | "coaching";
 
 const LIMITS: Record<PlanTier, { online: number; offline: number }> = {
   free:     { online: 3, offline: 1 },
-  premium:  { online: 6, offline: 6 },
+  premium:  { online: Infinity, offline: 6 },
   // coaching tier not wired up yet — once a `batch_members` table exists,
   // detect membership in the queryFn below and switch plan to "coaching".
   coaching: { online: Infinity, offline: 15 },
