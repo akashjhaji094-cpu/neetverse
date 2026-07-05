@@ -7,6 +7,7 @@ import { Question } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, Flag, Bookmark } from "lucide-react";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TestInterfaceProps {
   questions: Question[];
