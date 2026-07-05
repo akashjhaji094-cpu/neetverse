@@ -151,7 +151,44 @@ All colors MUST be HSL.
 
 @layer components {
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+    transform-style: preserve-3d;
+  }
+
+  /* 3D perspective tilt: apply to any card/container for depth on hover */
+  .card-3d {
+    perspective: 1000px;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 0.4s ease;
+    will-change: transform;
+  }
+  .card-3d:hover {
+    transform: perspective(1000px) rotateX(4deg) rotateY(-6deg) translateY(-4px) scale(1.02);
+    box-shadow:
+      0 20px 40px -20px hsl(var(--primary) / 0.35),
+      0 8px 16px -8px hsl(220 15% 15% / 0.15);
+  }
+
+  /* Subtle floating animation */
+  .float-3d {
+    animation: float-y 6s ease-in-out infinite;
+  }
+
+  /* Sidebar item lift */
+  .lift-3d {
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2), background-color 0.2s;
+  }
+  .lift-3d:hover {
+    transform: translateX(4px) translateZ(0) scale(1.02);
+  }
+
+  /* Glowing outline on hover for interactive icons */
+  .icon-3d {
+    transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2), filter 0.3s;
+  }
+  .icon-3d:hover {
+    transform: rotateY(15deg) rotateX(-8deg) scale(1.1);
+    filter: drop-shadow(0 6px 12px hsl(var(--primary) / 0.5));
   }
   
   .text-gradient {
@@ -172,6 +209,18 @@ All colors MUST be HSL.
     @apply mx-auto max-w-7xl;
   }
 }
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-8px) }
+}
+
+@keyframes tilt-in {
+  from { opacity: 0; transform: perspective(1000px) rotateX(-10deg) translateY(20px) }
+  to { opacity: 1; transform: perspective(1000px) rotateX(0) translateY(0) }
+}
+
+.animate-tilt-in { animation: tilt-in 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 
 /* Print styles for offline question paper */
 @media print {
