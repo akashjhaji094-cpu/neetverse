@@ -133,6 +133,7 @@ const Test = () => {
   const { user } = useAuth();
   const { limits, refetch: refetchLimits } = useMockLimits();
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
+  const [premiumPopupLimitType, setPremiumPopupLimitType] = useState<"online" | "offline" | undefined>(undefined);
   const [testMode, setTestMode] = useState<'select' | 'custom-config' | 'bio-config' | 'choose-mode' | 'offline-preview' | 'testing' | 'results' | 'review'>('select');
   const [testType, setTestType] = useState<'custom' | 'full-bio' | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
