@@ -88,11 +88,7 @@ const Leaderboard = () => {
       return rows;
     },
   });
-      rows.sort((a, b) => b.totalScore - a.totalScore);
-      return rows;
-    },
-  });
-
+      
   const sortedByAvg = [...(leaders || [])].sort((a, b) => b.avgScore - a.avgScore);
   const sortedByBest = [...(leaders || [])].sort((a, b) => b.bestScore - a.bestScore);
 
