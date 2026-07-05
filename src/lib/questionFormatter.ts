@@ -17,10 +17,19 @@
  */
 
 const BOX_BASE =
-  "display:block;border-left:3px solid #000;background:#f3f3f3;padding:6px 10px;margin:6px 0;border-radius:2px;font-size:inherit;line-height:1.5;";
+  "display:block;border-left:4px solid hsl(var(--primary,222 47% 40%));background:rgba(59,130,246,0.06);padding:8px 12px;margin:8px 0;border-radius:6px;font-size:inherit;line-height:1.55;";
 
 const STEM_BASE =
-  "display:block;margin-bottom:8px;font-weight:500;";
+  "display:block;margin-bottom:10px;font-weight:500;";
+
+const TABLE_WRAP =
+  "display:block;overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch;";
+const TABLE_BASE =
+  "border-collapse:collapse;width:100%;min-width:320px;font-size:inherit;line-height:1.45;";
+const TH_BASE =
+  "border:1px solid #666;background:#eef2ff;padding:6px 10px;text-align:left;font-weight:600;width:50%;";
+const TD_BASE =
+  "border:1px solid #666;padding:6px 10px;vertical-align:top;";
 
 /** Normalize bullets / breaks so we can split reliably */
 function normalize(html: string): string {
@@ -36,7 +45,7 @@ function normalize(html: string): string {
 function formatStatementBlocks(html: string): string {
   // Match Statement-N / Assertion / Reason markers.
   const labeledRe =
-    /\b(Statement[\s-]*(?:I{1,3}|IV|[1-4])|Assertion(?:\s*\([A-Z]\))?|Reason(?:\s*\([A-Z]\))?)\s*[:.\)-]/i;
+    /\b(Statement[\s-]*(?:I{1,3}|IV|[1-4])|Assertion(?:\s*\([A-Z]\))?|Reason(?:\s*\([A-Z]\))?)\s*[:.\)\-]/i;
 
   // Fallback: bare roman-numeral list "I." "II." "III." (≥2 occurrences)
   // Often appears when a question mentions "the following statements:" then I./II./III.
@@ -65,7 +74,7 @@ function formatStatementBlocks(html: string): string {
     let label = parts[i];
     let body = (parts[i + 1] || "").trim();
     // remove leading colon / dot
-    body = body.replace(/^\s*[:.\)-]\s*/, "");
+    body = body.replace(/^\s*[:.\)\-]\s*/, "");
     if (!label) continue;
     // Normalise bare roman labels like "I." → "Statement I"
     const bareRoman = /^\s*(I{1,3}|IV)\s*[\.\)]?\s*$/i.exec(label);
@@ -76,73 +85,71 @@ function formatStatementBlocks(html: string): string {
 }
 
 /**
- * Match-the-column: detects "Column I" / "Column II" or "List I" / "List II"
- * and renders them as a side-by-side table.
+ * Match-the-column: detects a run of A/B/C/D items followed by a run of
+ * P/Q/R/S (or 1/2/3/4) items and renders them as a two-column table.
+ * Works whether or not the question uses the words "Column"/"List".
  */
 function formatMatchColumns(html: string): string {
-  if (!/(Column|List)\s*[-–—]?\s*I\b/i.test(html)) return html;
+  // Heuristic gate: only try if the stem hints at matching OR the label
+  // pattern A..D followed by P..S / 1..4 is visibly present.
+  const hasHint = /\b(match|column|list)\b/i.test(html);
+  const hasABCD = /(^|[\s>(.])A[\.\)]\s*\S/i.test(html) && /(^|[\s>(.])D[\.\)]\s*\S/i.test(html);
+  const hasPQRS = /(^|[\s>(.])P[\.\)]\s*\S/i.test(html) && /(^|[\s>(.])S[\.\)]\s*\S/i.test(html);
+  const has1234 =
+    /(^|[\s>(.])1[\.\)]\s*\S/.test(html) && /(^|[\s>(.])4[\.\)]\s*\S/.test(html);
+  if (!hasABCD || !(hasPQRS || has1234) || !hasHint) return html;
 
-  // Try to extract pairs like "(A) something" / "(P) something"
-  // Generic approach: pull all "(X) ...." up to next "(Y)" within Column blocks.
-  const colSplit = html.split(
-    /(Column\s*[-–—]?\s*II|List\s*[-–—]?\s*II)/i
-  );
-  if (colSplit.length < 2) return html;
+  // Split off the stem: everything before the first "A." / "A)" / "(A)".
+  const firstA = html.search(/(^|[\s>(.])A[\.\)]\s*\S/);
+  if (firstA < 0) return html;
+  // Preserve full stem text (includes any "Match ... Column I with Column II.").
+  let stem = html.slice(0, firstA).trim();
+  const body = html.slice(firstA);
 
-  const beforeColII = colSplit[0];
-  const afterColII = colSplit.slice(1).join("");
+  // Extract labeled items. Labels: single uppercase A-D letters, or P-S letters,
+  // or digits 1-4. Each item's text runs until the next label of ANY family.
+  const labelBoundary = /(?<=^|[\s>(.])(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s+/g;
 
-  // Pre-stem (text before "Column I")
-  const preMatch = beforeColII.split(/(Column\s*[-–—]?\s*I|List\s*[-–—]?\s*I)/i);
-  const stem = preMatch[0]?.trim() || "";
-  const colIBody = preMatch.slice(2).join("").trim();
+  type Item = { label: string; text: string };
+  const items: Item[] = [];
+  const matches: { label: string; index: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  const re = new RegExp(labelBoundary.source, "g");
+  while ((m = re.exec(body)) !== null) {
+    matches.push({ label: m[1], index: m.index, end: m.index + m[0].length });
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const cur = matches[i];
+    const next = matches[i + 1];
+    const text = body.slice(cur.end, next ? next.index : body.length).trim();
+    if (text) items.push({ label: cur.label.toUpperCase(), text });
+  }
 
-  const extractItems = (raw: string): { label: string; text: string }[] => {
-    const cleaned = raw
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/?(p|div|span)[^>]*>/gi, "\n");
-    const items: { label: string; text: string }[] = [];
-    const itemRe = /\(?([A-Za-z]|[ivxIVX]{1,4}|\d{1,2})\)\s*([\s\S]*?)(?=\n\s*\(?[A-Za-z]\)|\n\s*\(?\d+\)|\n\s*\(?[ivxIVX]+\)|$)/g;
-    let m;
-    while ((m = itemRe.exec(cleaned)) !== null) {
-      const label = m[1].trim();
-      const text = m[2].replace(/\n+/g, " ").trim();
-      if (text) items.push({ label, text });
-    }
-    return items;
-  };
+  const leftLabels = ["A", "B", "C", "D"];
+  const rightLabelsAlpha = ["P", "Q", "R", "S"];
+  const rightLabelsNum = ["1", "2", "3", "4"];
 
-  const left = extractItems(colIBody);
-  // afterColII may contain options too. Take only up to first "(1)"/"(a) (b) (c) (d)" option block
-  const rightRaw = afterColII.split(
-    /\n\s*\(?(?:1|a|A)\)\s*\(?(?:2|b|B)\)\s*/i
-  )[0];
-  const right = extractItems(rightRaw);
+  const left = items.filter((it) => leftLabels.includes(it.label));
+  let right = items.filter((it) => rightLabelsAlpha.includes(it.label));
+  if (right.length < 2) right = items.filter((it) => rightLabelsNum.includes(it.label));
 
   if (left.length < 2 || right.length < 2) return html;
 
   const rows = Math.max(left.length, right.length);
-  let table = `<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:inherit;">
-    <thead>
-      <tr>
-        <th style="border:1px solid #444;background:#f0f0f0;padding:4px 8px;width:50%;text-align:left;">Column I</th>
-        <th style="border:1px solid #444;background:#f0f0f0;padding:4px 8px;width:50%;text-align:left;">Column II</th>
-      </tr>
-    </thead><tbody>`;
-  for (let i = 0; i < rows; i++) {
-    const l = left[i];
-    const r = right[i];
-    table += `<tr>
-      <td style="border:1px solid #444;padding:4px 8px;vertical-align:top;">${
-        l ? `<b>(${l.label})</b> ${l.text}` : ""
-      }</td>
-      <td style="border:1px solid #444;padding:4px 8px;vertical-align:top;">${
-        r ? `<b>(${r.label})</b> ${r.text}` : ""
-      }</td>
-    </tr>`;
-  }
-  table += "</tbody></table>";
+  const cell = (it?: Item) =>
+    it ? `<b>${it.label}.</b> ${it.text}` : "";
 
+  let table = `<div style="${TABLE_WRAP}"><table style="${TABLE_BASE}"><thead><tr>` +
+    `<th style="${TH_BASE}">Column I</th>` +
+    `<th style="${TH_BASE}">Column II</th>` +
+    `</tr></thead><tbody>`;
+  for (let i = 0; i < rows; i++) {
+    table += `<tr><td style="${TD_BASE}">${cell(left[i])}</td><td style="${TD_BASE}">${cell(right[i])}</td></tr>`;
+  }
+  table += `</tbody></table></div>`;
+
+  // Clean up trailing "Choose the correct answer..." style phrases so they
+  // don't disappear — keep them in the stem area above the table.
   return (stem ? `<div style="${STEM_BASE}">${stem}</div>` : "") + table;
 }
 
