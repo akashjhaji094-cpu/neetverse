@@ -16,7 +16,7 @@ const TG = "https://t.me/Neetverseowner_bot?text=I%20want%20subscription";
 
 const COMPARISON = [
   { feature: "Practice Questions",     free: "Unlimited",  premium: "Unlimited"                    },
-  { feature: "Mock Tests (Online)",    free: "3 / week",   premium: "6 / week"                     },
+  { feature: "Mock Tests (Online)",    free: "3 / week",   premium: "Unlimited"                     },
   { feature: "Mock Tests (Offline)",   free: "1 / week",   premium: "6 / week"                     },
   { feature: "PYQ Access",             free: "Limited",    premium: "Full 20-Year PYQs"             },
   { feature: "Premium Test PDFs",      free: "❌",          premium: "Curated Sets (PW+Allen+Aakash)"},
@@ -27,10 +27,11 @@ const COMPARISON = [
 ];
 
 const FAQS: [string, string][] = [
-  ["How do I get premium?",            "Click the Telegram button → message us → we activate within minutes."],
+  ["How do I get premium?",            "Click the Telegram button → message us → we activate within minutes. Or refer friends for free premium — see below."],
   ["Is there a refund policy?",        "Due to digital nature, refunds aren't available. But we always help!"],
   ["How long does premium last?",      "1 month from activation. Renew anytime."],
   ["What's in Premium Test PDFs?",     "Curated papers based on 20-year PYQs + PW, Allen, Aakash — for NEET 2026."],
+  ["Can I get Premium for free?",      "Yes — refer 3 friends for 1 month free, 7 for 3 months, 15 for free till NEET 2027, or 30 for 2 years free. Get your link on the Account page."],
 ];
 
 const GoldBtn = ({ onClick, dark = false, children }: {
