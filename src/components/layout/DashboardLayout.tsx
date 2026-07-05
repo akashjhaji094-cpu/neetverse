@@ -13,7 +13,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-background">
       <AppSidebar />
       <main className={cn(
-        "transition-all duration-300 ml-16 lg:ml-60",
+        "transition-all duration-300 ml-0 lg:ml-60",
         "min-h-screen"
       )}>
         <TrialBanner />
