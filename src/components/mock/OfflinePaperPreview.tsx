@@ -1083,19 +1083,19 @@ export const OfflinePaperPreview = ({
             </div>
           )}
 
-          <div className="flex gap-[2px] flex-nowrap mx-[6mm]">
+          <div className="flex gap-2 flex-nowrap mx-[6mm] mt-3">
             {Array.from({ length: omrCols }).map((_, c) => {
               const start = c * omrPerCol;
               const end = Math.min(start + omrPerCol, totalQuestions);
               return (
                 <div key={c} className="flex-1 min-w-0">
-                  <table className="w-full border-collapse text-[7pt]">
+                  <table className="w-full border-collapse text-[9pt]">
                     <thead>
                       <tr>
                         {["Q", "A", "B", "C", "D"].map((h) => (
                           <th
                             key={h}
-                            className="bg-black text-white px-[1px] py-[2px] text-[6pt] border border-black font-black"
+                            className="bg-black text-white px-[2px] py-[4px] text-[8pt] border border-black font-black"
                           >
                             {h}
                           </th>
@@ -1105,13 +1105,13 @@ export const OfflinePaperPreview = ({
                     <tbody>
                       {Array.from({ length: end - start }).map((_, i) => (
                         <tr key={i} className={i % 5 === 4 ? "border-b-2 border-gray-400" : ""}>
-                          <td className="border border-gray-400 px-[1px] py-[0.5px] text-center font-black text-[6.5pt] w-[16px]" style={{ color: "#000" }}>
+                          <td className="border border-gray-400 px-[2px] py-[3px] text-center font-black text-[8.5pt] w-[20px]" style={{ color: "#000" }}>
                             {start + i + 1}
                           </td>
                           {[0, 1, 2, 3].map((b) => (
                             <td
                               key={b}
-                              className="border border-gray-400 px-[1px] py-[0.5px] text-center text-[7pt] w-[14px]"
+                              className="border border-gray-400 px-[2px] py-[3px] text-center text-[10pt] w-[20px]"
                             >
                               <span className="text-gray-400">◯</span>
                             </td>
@@ -1137,7 +1137,7 @@ export const OfflinePaperPreview = ({
           </div>
         </div>
 
-        <div className="px-[10mm] pt-[10mm]" style={{ pageBreakBefore: "always" }}>
+        <div className="px-[10mm] pt-[10mm]" style={{ pageBreakBefore: "always", minHeight: "297mm", width: "210mm", boxSizing: "border-box" }}>
           <div className="text-center pb-2 mb-3 border-b-[3px]" style={{ borderColor: "#000" }}>
             <div className="flex items-center justify-center gap-2">
               <img src={neetverseLogo} alt="NEETVerse" className="w-10 h-10 rounded-lg" />
