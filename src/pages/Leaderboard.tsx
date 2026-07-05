@@ -29,23 +29,14 @@ const Leaderboard = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("all");
 
-  // Uses a SECURITY DEFINER RPC because the `attempts` table's RLS policy
-  // ("Users can view their own attempts") only lets a regular user SELECT
-  // their own rows — a plain client-side query here would silently return
-  // nobody else's attempts, making the leaderboard show just yourself. The
-  // RPC computes the aggregate server-side and returns only the safe,
-  // already-aggregated fields (never raw per-question answers).
   const { data: leaders, isLoading } = useQuery({
-    queryKey: ["leaderboard-all-v4", period],
-    queryFn: async (): Promise<LeaderRow[]> => {
-      const { data, error } = await supabase.rpc(
-        "get_leaderboard" as any,
-        { p_period: period } as any
-      );
-      if (error) throw error;
-      return (data as unknown as LeaderRow[]) || [];
-    },
-  });
+    queryKey: ["leaderboard-all-v3", period],
+    queryFn: async () => {
+      let query = supabase
+        .from("attempts")
+        .select("id, user_id, type, finished_at, score")
+        .not("finished_at", "is", null);
+
 
       const cutoff = periodCutoffISO(period);
       if (cutoff) query = query.gte("finished_at", cutoff);
