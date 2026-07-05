@@ -93,22 +93,25 @@ function formatMatchColumns(html: string): string {
   // Heuristic gate: only try if the stem hints at matching OR the label
   // pattern A..D followed by P..S / 1..4 is visibly present.
   const hasHint = /\b(match|column|list)\b/i.test(html);
-  const hasABCD = /(^|[\s>(.])A[\.\)]\s*\S/i.test(html) && /(^|[\s>(.])D[\.\)]\s*\S/i.test(html);
-  const hasPQRS = /(^|[\s>(.])P[\.\)]\s*\S/i.test(html) && /(^|[\s>(.])S[\.\)]\s*\S/i.test(html);
+  const hasABCD = /(?:^|[a-z\d\s>(.\)])A[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])D[\.\)]\s*\S/.test(html);
+  const hasPQRS = /(?:^|[a-z\d\s>(.\)])P[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])S[\.\)]\s*\S/.test(html);
   const has1234 =
-    /(^|[\s>(.])1[\.\)]\s*\S/.test(html) && /(^|[\s>(.])4[\.\)]\s*\S/.test(html);
+    /(?:^|[a-z\d\s>(.\)])1[\.\)]\s*\S/.test(html) && /(?:^|[a-z\d\s>(.\)])4[\.\)]\s*\S/.test(html);
   if (!hasABCD || !(hasPQRS || has1234) || !hasHint) return html;
 
   // Split off the stem: everything before the first "A." / "A)" / "(A)".
-  const firstA = html.search(/(^|[\s>(.])A[\.\)]\s*\S/);
-  if (firstA < 0) return html;
-  // Preserve full stem text (includes any "Match ... Column I with Column II.").
+  const firstAMatch = /(?:^|[a-z\d\s>(.\)])A[\.\)]\s*\S/.exec(html);
+  if (!firstAMatch) return html;
+  // Advance one char if we consumed a leading boundary char.
+  const leadOffset = firstAMatch[0].startsWith("A") ? 0 : 1;
+  const firstA = firstAMatch.index + leadOffset;
   let stem = html.slice(0, firstA).trim();
   const body = html.slice(firstA);
 
   // Extract labeled items. Labels: single uppercase A-D letters, or P-S letters,
   // or digits 1-4. Each item's text runs until the next label of ANY family.
-  const labelBoundary = /(?<=^|[\s>(.])(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s+/g;
+  // Label boundary: allow lowercase→uppercase concatenation ("FermiB.").
+  const labelBoundary = /(?:^|(?<=[a-z\d\s>(.\)]))(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s*(?=\S)/g;
 
   type Item = { label: string; text: string };
   const items: Item[] = [];
@@ -116,11 +119,17 @@ function formatMatchColumns(html: string): string {
   let m: RegExpExecArray | null;
   const re = new RegExp(labelBoundary.source, "g");
   while ((m = re.exec(body)) !== null) {
-    matches.push({ label: m[1], index: m.index, end: m.index + m[0].length });
+    // m.index may sit at a boundary char (e.g. space before "B."); align to
+    // the label itself so slice() returns text correctly.
+    const labelStart = body.indexOf(m[1] + (m[0].includes(".") ? "." : ")"), m.index);
+    matches.push({ label: m[1], index: labelStart, end: m.index + m[0].length });
   }
   for (let i = 0; i < matches.length; i++) {
     const cur = matches[i];
     const next = matches[i + 1];
+    // For each item, strip any trailing lowercase char that "leaked" from the
+    // next item's boundary lookbehind (e.g. "Fermi" is fine, but if lookbehind
+    // matched the previous char, text may not include it — no-op here).
     const text = body.slice(cur.end, next ? next.index : body.length).trim();
     if (text) items.push({ label: cur.label.toUpperCase(), text });
   }
