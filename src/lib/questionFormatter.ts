@@ -93,14 +93,14 @@ function formatMatchColumns(html: string): string {
   // Heuristic gate: only try if the stem hints at matching OR the label
   // pattern A..D followed by P..S / 1..4 is visibly present.
   const hasHint = /\b(match|column|list)\b/i.test(html);
-  const hasABCD = /(?<![A-Za-z])A[\.\)]\s*\S/.test(html) && /(?<![A-Za-z])D[\.\)]\s*\S/.test(html);
-  const hasPQRS = /(?<![A-Za-z])P[\.\)]\s*\S/.test(html) && /(?<![A-Za-z])S[\.\)]\s*\S/.test(html);
+  const hasABCD = /(?<![A-Z])A[\.\)]\s*\S/.test(html) && /(?<![A-Z])D[\.\)]\s*\S/.test(html);
+  const hasPQRS = /(?<![A-Z])P[\.\)]\s*\S/.test(html) && /(?<![A-Z])S[\.\)]\s*\S/.test(html);
   const has1234 =
     /(?<![A-Za-z0-9])1[\.\)]\s*\S/.test(html) && /(?<![A-Za-z0-9])4[\.\)]\s*\S/.test(html);
   if (!hasABCD || !(hasPQRS || has1234) || !hasHint) return html;
 
   // Split off the stem: everything before the first "A." / "A)".
-  const firstAMatch = /(?<![A-Za-z])A[\.\)]\s*\S/.exec(html);
+  const firstAMatch = /(?<![A-Z])A[\.\)]\s*\S/.exec(html);
   if (!firstAMatch) return html;
   const firstA = firstAMatch.index;
   let stem = html.slice(0, firstA).trim();
@@ -110,7 +110,7 @@ function formatMatchColumns(html: string): string {
   // or digits 1-4. Each item's text runs until the next label of ANY family.
   // Label boundary: previous char must not be an English letter (allow $,},
   // digits, whitespace, punctuation — covers "FermiB." and "$...$Q.").
-  const labelBoundary = /(?<![A-Za-z])(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s*(?=\S)/g;
+  const labelBoundary = /(?<![A-Z])(A|B|C|D|P|Q|R|S|[1-4])[\.\)]\s*(?=\S)/g;
 
   type Item = { label: string; text: string };
   const items: Item[] = [];
