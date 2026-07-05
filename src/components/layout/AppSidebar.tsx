@@ -94,21 +94,14 @@ export function AppSidebar() {
         { title: "Dashboard", href: "/dashboard", icon: Home },
         { title: "Practice", href: "/practice", icon: BookOpen },
         { title: "Mock Tests", href: "/test", icon: TestTube },
+        { title: "Pending OMR", href: "/pending-omr", icon: ScanLine },
         { title: "PYQs", href: "/pyqs", icon: FileText },
         { title: "Notes & Books", href: "/notes", icon: FileText },
       ],
     },
     {
-      title: "AI & Adaptive",
-      items: [
-        { title: "Adaptive Learning", href: "/adaptive-learning", icon: Brain, new: true },
-        { title: "Battle Arena", href: "/battle-arena", icon: Swords, new: true },
-      ],
-    },
-    {
       title: "Progress",
       items: [
-        { title: "Mistake Book", href: "/mistake-book", icon: AlertTriangle },
         { title: "Leaderboard", href: "/leaderboard", icon: Trophy },
       ],
     },
