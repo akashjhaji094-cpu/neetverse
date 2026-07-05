@@ -176,13 +176,14 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                         {answers[currentQuestion.id] === index && '✓'}
                       </div>
                       <MathContent as="span" html={formatQuestionHtml(String(option))} className="text-sm" />
-                    </div>
+                  </div>
                   </button>
                 ))}
               </div>
-            </div>
+            </motion.div>
+            </AnimatePresence>
 
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex items-center justify-between pt-4 border-t">  
               <Button
                 variant="outline"
                 onClick={handlePrevious}
