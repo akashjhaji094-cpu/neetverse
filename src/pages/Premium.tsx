@@ -6,12 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import {
   Crown, Download, FileText, BookOpen,
-  Sparkles, Star, ChevronDown, ChevronUp, MessageCircle,
+  Sparkles, Star, ChevronDown, ChevronUp, MessageCircle, Gift,
 } from "lucide-react";
 import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { PremiumPopup } from "@/components/PremiumPopup";
 import { useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 const TG = "https://t.me/Neetverseowner_bot?text=I%20want%20subscription";
 
 const COMPARISON = [
