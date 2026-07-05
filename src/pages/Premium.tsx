@@ -48,6 +48,7 @@ const GoldBtn = ({ onClick, dark = false, children }: {
 
 const Premium = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [showAccessDialog, setShowAccessDialog]   = useState(false);
   const [showPremiumPopup, setShowPremiumPopup]   = useState(false);
   const [faq, setFaq]                             = useState<number | null>(null);
