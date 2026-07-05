@@ -267,6 +267,36 @@ const Premium = () => {
           </div>
         </section>
 
+        {/* ── REFERRAL ── */}
+        <section className="max-w-3xl mx-auto px-4 pb-14">
+          <div className="rounded-2xl p-8 text-center shadow-lg" style={{ background: "#fff", border: "2.5px solid #D4AF37" }}>
+            <Gift className="w-9 h-9 mx-auto mb-3" style={{ color: "#D4AF37" }} />
+            <h2 className="text-2xl font-bold mb-2" style={{ color: "#1A1A1A" }}>
+              Or Get It <span style={{ color: "#D4AF37" }}>100% Free</span> — Refer Friends
+            </h2>
+            <p className="text-sm mb-6" style={{ color: "#666" }}>
+              No payment ever needed. Share your referral link and unlock Premium automatically.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                ["3", "1 Month Free"],
+                ["7", "3 Months Free"],
+                ["15", "Till NEET 2027"],
+                ["30", "Next 2 NEETs"],
+              ].map(([count, reward]) => (
+                <div key={count} className="rounded-xl p-3" style={{ background: "#FFFDF0", border: "1.5px solid #F0DFA0" }}>
+                  <p className="text-2xl font-black" style={{ color: "#D4AF37" }}>{count}</p>
+                  <p className="text-[11px] font-medium" style={{ color: "#888" }}>friends → {reward}</p>
+                </div>
+              ))}
+            </div>
+            <GoldBtn onClick={() => navigate("/account")}>
+              <Gift className="w-5 h-5" />
+              Get My Referral Link →
+            </GoldBtn>
+          </div>
+        </section>
+
         {/* ── LOCKED CONTENT PREVIEW ── */}
         {(premiumContent?.tests?.length || 0) > 0 && (
           <section className="max-w-4xl mx-auto px-4 pb-14">
