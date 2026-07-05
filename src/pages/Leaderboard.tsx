@@ -19,70 +19,27 @@ interface LeaderRow {
 
 type Period = "week" | "month" | "all";
 
-function periodCutoffISO(period: Period): string | null {
-  if (period === "all") return null;
-  const days = period === "week" ? 7 : 30;
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
-
 const Leaderboard = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("all");
 
+  // Uses a SECURITY DEFINER RPC because the `attempts` table's RLS policy
+  // ("Users can view their own attempts") only lets a regular user SELECT
+  // their own rows — a plain client-side query here would silently return
+  // nobody else's attempts, making the leaderboard show just yourself. The
+  // RPC computes the aggregate server-side and returns only the safe,
+  // already-aggregated fields (never raw per-question answers).
   const { data: leaders, isLoading } = useQuery({
-    queryKey: ["leaderboard-all-v3", period],
-    queryFn: async () => {
-      let query = supabase
-        .from("attempts")
-        .select("id, user_id, type, finished_at, score")
-        .not("finished_at", "is", null);
-
-      const cutoff = periodCutoffISO(period);
-      if (cutoff) query = query.gte("finished_at", cutoff);
-
-      const { data: attempts } = await query;
-
-      if (!attempts || attempts.length === 0) return [];
-
-      // FIXED: previously this recomputed score with a DIFFERENT formula
-      // (+1 / -0.25) than the rest of the app. Every attempt already has a
-      // correctly-computed +4/-1 NEET score stored on it (Test.tsx,
-      // Practice.tsx, and the OMR scanner all write it the same way) — so
-      // we just sum that directly instead of recalculating it differently
-      // here, which was producing leaderboard numbers that didn't match
-      // what the student sees on their own Test History / Mock results.
-      const byUser = new Map<string, { total: number; count: number; best: number }>();
-      attempts.forEach((a: any) => {
-        const score = Number(a.score ?? 0);
-        const cur = byUser.get(a.user_id) || { total: 0, count: 0, best: -Infinity };
-        cur.total += score;
-        cur.count += 1;
-        cur.best = Math.max(cur.best, score);
-        byUser.set(a.user_id, cur);
-      });
-
-      const userIds = Array.from(byUser.keys());
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, name, email")
-        .in("id", userIds);
-
-      const profileMap = new Map(
-        (profiles || []).map((p) => [p.id, p.name || p.email?.split("@")[0] || "Aspirant"])
+    queryKey: ["leaderboard-all-v4", period],
+    queryFn: async (): Promise<LeaderRow[]> => {
+      const { data, error } = await supabase.rpc(
+        "get_leaderboard" as any,
+        { p_period: period } as any
       );
-
-      const rows: LeaderRow[] = userIds.map((uid) => {
-        const stats = byUser.get(uid)!;
-        return {
-          user_id: uid,
-          name: profileMap.get(uid) || "Aspirant",
-          totalScore: Math.round(stats.total * 100) / 100,
-          testsTaken: stats.count,
-          avgScore: Math.round((stats.total / stats.count) * 100) / 100,
-          bestScore: Math.round(stats.best * 100) / 100,
-        };
-      });
-
+      if (error) throw error;
+      return (data as unknown as LeaderRow[]) || [];
+    },
+  });
       rows.sort((a, b) => b.totalScore - a.totalScore);
       return rows;
     },
