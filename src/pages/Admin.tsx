@@ -7,8 +7,9 @@ import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
 import EmailCampaigns from "@/components/admin/email/EmailCampaigns"; // 1. नया इम्पोर्ट जोड़ा गया
+import { ReclassifyQuestions } from "@/components/admin/ReclassifyQuestions";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Mail } from "lucide-react"; // 1. Mail आइकॉन जोड़ा गया
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Mail, Wand2 } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -49,7 +50,7 @@ const Admin = () => {
 
           <Tabs defaultValue="html" className="w-full">
             {/* 6 की जगह grid-cols-7 किया गया है ताकि नया टैब सही से फिट हो सके */}
-            <TabsList className="grid w-full max-w-4xl grid-cols-7">
+            <TabsList className="grid w-full max-w-5xl grid-cols-8">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span className="hidden sm:inline">AI Import</span>
@@ -85,6 +86,11 @@ const Admin = () => {
                 <Mail className="h-4 w-4" />
                 <span className="hidden sm:inline">Email</span>
                 <span className="sm:hidden">Mail</span>
+              </TabsTrigger>
+              <TabsTrigger value="classify" className="flex items-center gap-2">
+                <Wand2 className="h-4 w-4" />
+                <span className="hidden sm:inline">AI Classify</span>
+                <span className="sm:hidden">Tag</span>
               </TabsTrigger>
             </TabsList>
 
@@ -137,6 +143,10 @@ const Admin = () => {
               {/* 3. नया TabsContent यहाँ जोड़ा गया है */}
               <TabsContent value="email" className="m-0">
                 <EmailCampaigns />
+              </TabsContent>
+
+              <TabsContent value="classify" className="m-0">
+                <ReclassifyQuestions />
               </TabsContent>
             </div>
           </Tabs>

@@ -153,14 +153,14 @@ export function AppSidebar() {
         to={item.href}
         onClick={(e) => handleNavClick(e, item.href)}
         className={cn(
-          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative",
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium lift-3d group relative",
           active
-            ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30 font-semibold"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
           collapsed && "justify-center px-2"
         )}
       >
-        <Icon className={cn("w-5 h-5 flex-shrink-0", active && "text-primary-foreground")} />
+        <Icon className={cn("w-5 h-5 flex-shrink-0 icon-3d", active && "text-primary-foreground")} />
         {!collapsed && (
           <>
             <span className="flex-1 text-left truncate">{item.title}</span>

@@ -45,11 +45,12 @@ export function QuickActions() {
         return (
           <Card 
             key={i} 
-            className="cursor-pointer hover:shadow-md transition-all hover:-translate-y-0.5"
+            className="cursor-pointer card-3d animate-tilt-in"
+            style={{ animationDelay: `${i * 80}ms` }}
             onClick={action.action}
           >
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={`p-2.5 rounded-lg ${action.bgColor}`}>
+              <div className={`p-2.5 rounded-lg ${action.bgColor} icon-3d`}>
                 <Icon className={`h-5 w-5 ${action.color}`} />
               </div>
               <div className="flex-1 min-w-0">
