@@ -34,7 +34,7 @@ export function ReclassifyQuestions() {
   const runOnce = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const res = await supabase.functions.invoke("reclassify-questions", {
-      body: { batch_size: 15 },
+      body: { batch_size: 35, loop_seconds: 30 },
       headers: session ? { Authorization: `Bearer ${session.access_token}` } : undefined,
     });
     if (res.error) throw new Error(res.error.message);
@@ -53,11 +53,21 @@ export function ReclassifyQuestions() {
           break;
         }
         if (r.error) throw new Error(r.error);
-        setProcessedSession((p) => p + (r.processed || 0));
-        setLogs((l) => [{ chapter: r.chapter, moved: r.moved, fallback: r.fallback, remaining: r.remaining_in_chapter, ts: Date.now() }, ...l].slice(0, 50));
+        const processed = r.processed || 0;
+        setProcessedSession((p) => p + processed);
+        const nextLogs = Array.isArray(r.chapters) && r.chapters.length > 0
+          ? r.chapters.map((c: any) => ({
+              chapter: c.chapter || "Chapter",
+              moved: c.moved || 0,
+              fallback: c.fallback || 0,
+              remaining: c.remaining ?? c.remaining_in_chapter ?? 0,
+              ts: Date.now(),
+            }))
+          : [{ chapter: r.chapter, moved: r.moved || 0, fallback: r.fallback || 0, remaining: r.remaining_in_chapter || 0, ts: Date.now() }];
+        setLogs((l) => [...nextLogs, ...l].slice(0, 50));
         await loadTotal();
         // small delay
-        await new Promise((res) => setTimeout(res, 400));
+        await new Promise((res) => setTimeout(res, 1000));
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
