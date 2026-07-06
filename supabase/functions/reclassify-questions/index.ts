@@ -112,7 +112,7 @@ ${items}`;
 
   let data: any = null;
   let lastError = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -129,7 +129,8 @@ ${items}`;
     if (res.ok) { data = await res.json(); break; }
     const t = await res.text().catch(() => "");
     lastError = `AI ${res.status}: ${t.slice(0, 160)}`;
-    if (res.status === 429 || res.status === 503) {
+    if (res.status === 429) break;
+    if (res.status === 503) {
       const wait = 1500 * (attempt + 1);
       await new Promise((r) => setTimeout(r, wait));
       continue;
