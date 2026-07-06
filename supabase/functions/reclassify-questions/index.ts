@@ -34,23 +34,30 @@ Respond STRICTLY as compact JSON: {"Q1":"<topic>","Q2":"<topic>",...}
 Questions:
 ${items}`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-    }),
-  });
-  if (!res.ok) {
+  let data: any = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (res.ok) { data = await res.json(); break; }
+    if (res.status === 429 || res.status === 503) {
+      const wait = 4000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
     const t = await res.text();
     throw new Error(`AI ${res.status}: ${t.slice(0, 200)}`);
   }
-  const data = await res.json();
+  if (!data) throw new Error("AI rate limited after retries");
   const content = data.choices?.[0]?.message?.content ?? "{}";
   try {
     return JSON.parse(content);
