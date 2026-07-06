@@ -34,23 +34,30 @@ Respond STRICTLY as compact JSON: {"Q1":"<topic>","Q2":"<topic>",...}
 Questions:
 ${items}`;
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-    }),
-  });
-  if (!res.ok) {
+  let data: any = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (res.ok) { data = await res.json(); break; }
+    if (res.status === 429 || res.status === 503) {
+      const wait = 4000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
     const t = await res.text();
     throw new Error(`AI ${res.status}: ${t.slice(0, 200)}`);
   }
-  const data = await res.json();
+  if (!data) throw new Error("AI rate limited after retries");
   const content = data.choices?.[0]?.message?.content ?? "{}";
   try {
     return JSON.parse(content);
@@ -65,16 +72,42 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { chapter_id, batch_size = 15 } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { chapter_id, batch_size = 40, loop_seconds = 0 } = body as any;
     const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // Auth check via caller JWT — only admins
+    // Auth: accept either LOVABLE_API_KEY bearer (server-to-server) OR an admin user JWT
     const authHeader = req.headers.get("Authorization") ?? "";
-    const jwt = authHeader.replace("Bearer ", "");
-    const { data: userData } = await sb.auth.getUser(jwt);
-    if (!userData?.user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const { data: role } = await sb.from("user_roles").select("role").eq("user_id", userData.user.id).eq("role", "admin").maybeSingle();
-    if (!role) return new Response(JSON.stringify({ error: "Not admin" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const token = authHeader.replace("Bearer ", "").trim();
+    let authorized = false;
+    if (token && token === LOVABLE_API_KEY) {
+      authorized = true;
+    } else if (token) {
+      const { data: userData } = await sb.auth.getUser(token);
+      if (userData?.user) {
+        const { data: role } = await sb
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userData.user.id)
+          .in("role", ["superadmin", "content_admin"])
+          .maybeSingle();
+        if (role) authorized = true;
+      }
+    }
+    if (!authorized) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    const deadline = loop_seconds > 0 ? Date.now() + loop_seconds * 1000 : 0;
+    const aggregate = { batches: 0, processed: 0, moved: 0, fallback: 0, chapters: [] as any[] };
+
+    // Runner: process one batch
+    async function runOneBatch(): Promise<any> {
+     {
+      // fall-through into original logic
+     }
+     return await processBatch();
+    }
+
+    async function processBatch() {
 
     // Determine target chapter(s). If no chapter_id, pick chapter with most "General" questions.
     let targetChapter: { id: string; name: string; general_topic_id: string } | null = null;
@@ -98,7 +131,7 @@ Deno.serve(async (req) => {
           break;
         }
       }
-      if (!targetChapter) return new Response(JSON.stringify({ done: true, message: "All chapters classified!" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (!targetChapter) return { done: true, message: "All chapters classified!" };
     }
 
     // Load available topics (exclude General)
@@ -108,7 +141,7 @@ Deno.serve(async (req) => {
       .eq("chapter_id", targetChapter.id)
       .neq("name", "General");
     if (!topics?.length) {
-      return new Response(JSON.stringify({ error: `No specific topics defined for chapter '${targetChapter.name}'. Add topics first.` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return { skip: true, chapter: targetChapter.name, reason: "no specific topics" };
     }
 
     // Fetch batch of questions currently tagged only as General
@@ -118,7 +151,7 @@ Deno.serve(async (req) => {
       .eq("topic_id", targetChapter.general_topic_id)
       .limit(batch_size);
     if (!qtRows?.length) {
-      return new Response(JSON.stringify({ done: true, chapter: targetChapter.name, message: "No pending questions in this chapter" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return { chapter: targetChapter.name, processed: 0, moved: 0, fallback: 0, remaining_in_chapter: 0 };
     }
 
     const qIds = qtRows.map((r) => r.question_id);
@@ -136,33 +169,47 @@ Deno.serve(async (req) => {
       const chosenName = (mapping[`Q${i + 1}`] || "").toString().trim();
       const topicId = topicByName.get(chosenName.toLowerCase());
       if (!topicId || chosenName.toLowerCase() === "general") {
-        // Mark as processed by inserting a self-loop? Instead, leave it - but we need to skip on next batch.
-        // Add tag to a fallback: use first topic to prevent infinite loop
         kept++;
-        // Move to first topic anyway to prevent re-processing
         const fallbackId = topics[0].id;
         await sb.from("question_topics").insert({ question_id: q.id, topic_id: fallbackId }).select();
         await sb.from("question_topics").delete().eq("question_id", q.id).eq("topic_id", targetChapter.general_topic_id);
         continue;
       }
-      // Insert new topic link
       await sb.from("question_topics").insert({ question_id: q.id, topic_id: topicId });
-      // Remove General link
       await sb.from("question_topics").delete().eq("question_id", q.id).eq("topic_id", targetChapter.general_topic_id);
       moved++;
     }
 
-    // Remaining count for this chapter
     const { count: remaining } = await sb.from("question_topics").select("question_id", { count: "exact", head: true }).eq("topic_id", targetChapter.general_topic_id);
 
-    return new Response(JSON.stringify({
+    return {
       chapter: targetChapter.name,
       chapter_id: targetChapter.id,
       processed: batch.length,
       moved,
       fallback: kept,
       remaining_in_chapter: remaining ?? 0,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    };
+    }
+
+    // Single batch path
+    if (deadline === 0) {
+      const r = await processBatch();
+      return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Loop until deadline / done
+    while (Date.now() < deadline) {
+      const r = await processBatch();
+      aggregate.batches++;
+      if (r.done) { (aggregate as any).done = true; (aggregate as any).message = r.message; break; }
+      if (r.skip) { aggregate.chapters.push(r); continue; }
+      aggregate.processed += r.processed || 0;
+      aggregate.moved += r.moved || 0;
+      aggregate.fallback += r.fallback || 0;
+      aggregate.chapters.push({ chapter: r.chapter, moved: r.moved, fallback: r.fallback, remaining: r.remaining_in_chapter });
+    }
+    return new Response(JSON.stringify(aggregate), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message || String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

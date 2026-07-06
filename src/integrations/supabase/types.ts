@@ -1715,6 +1715,8 @@ export type Database = {
           skill_match_score: number
         }[]
       }
+      get_admin_user_overview: { Args: never; Returns: Json }
+      get_leaderboard: { Args: { p_period?: string }; Returns: Json }
       get_mock_test_analysis: { Args: { p_attempt_id: string }; Returns: Json }
       get_question_counts_per_chapter: {
         Args: never
