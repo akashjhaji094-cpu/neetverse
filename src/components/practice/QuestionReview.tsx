@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Question } from "@/lib/supabase";
-import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
 
 interface QuestionReviewProps {
@@ -156,7 +156,7 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
                       <span className="font-semibold text-muted-foreground">
                         {String.fromCharCode(65 + idx)}.
                       </span>
-                      <MathContent as="span" html={formatQuestionHtml(String(option))} className="flex-1" />
+                      <MathContent as="span" html={formatOptionHtml(String(option))} className="flex-1" />
                       {currentQuestion.correct_option_index === idx && (
                         <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
                       )}
