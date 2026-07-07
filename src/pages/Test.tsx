@@ -95,8 +95,8 @@ function pickWithPriority(pool: Question[], want: number, history: Map<string, Q
     else unseen.push(q);
   });
 
-  const wantUnseen = Math.round(want * 0.7);
-  const wantWrong = Math.round(want * 0.2);
+  const wantUnseen = Math.round(want * 1);
+  const wantWrong = Math.round(want * 0);
   const wantRevision = Math.max(0, want - wantUnseen - wantWrong);
 
   const picked: Question[] = [];
