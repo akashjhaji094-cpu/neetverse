@@ -185,6 +185,10 @@ export default function MockAnalysis() {
               </p>
             </div>
           </div>
+          <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setShowReview(true)}>
+            <ListChecks className="h-4 w-4" />
+            <span className="hidden sm:inline">Review Questions</span>
+          </Button>
         </div>
 
         <Card className="overflow-hidden border-0 shadow-lg">
