@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMockAnalysis } from "@/hooks/useMockAnalysis";
 import { useMockProgress } from "@/hooks/useMockProgress";
+import { useAttemptQuestions } from "@/hooks/useAttemptQuestions";
+import { QuestionReview } from "@/components/practice/QuestionReview";
 import {
   ArrowLeft, Target, CheckCircle2, XCircle, MinusCircle,
   Clock, TrendingUp, TrendingDown, Sparkles, BookOpen, AlertTriangle,
