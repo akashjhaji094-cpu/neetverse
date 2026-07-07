@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Question } from "@/lib/supabase";
 import { ChevronLeft, ChevronRight, Flag, Bookmark } from "lucide-react";
-import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -175,7 +175,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
                       }`}>
                         {answers[currentQuestion.id] === index && '✓'}
                       </div>
-                      <MathContent as="span" html={formatQuestionHtml(String(option))} className="text-sm" />
+                      <MathContent as="span" html={formatOptionHtml(String(option))} className="text-sm" />
                   </div>
                   </button>
                 ))}
