@@ -12,7 +12,7 @@ import { QuestionReview } from "@/components/practice/QuestionReview";
 import {
   ArrowLeft, Target, CheckCircle2, XCircle, MinusCircle,
   Clock, TrendingUp, TrendingDown, Sparkles, BookOpen, AlertTriangle,
-  Timer, Gauge, Zap, Award, Layers, Brain, HelpCircle,
+  Timer, Gauge, Zap, Award, Layers, Brain, HelpCircle, ListChecks,
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
