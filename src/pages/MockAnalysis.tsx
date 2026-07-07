@@ -85,6 +85,8 @@ export default function MockAnalysis() {
   const navigate = useNavigate();
   const { data, isLoading, isError, error } = useMockAnalysis(attemptId);
   const { data: progress } = useMockProgress(10);
+  const [showReview, setShowReview] = useState(false);
+  const attemptQuestions = useAttemptQuestions(showReview ? attemptId : undefined);
 
   if (isLoading) {
     return (
