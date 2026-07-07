@@ -143,6 +143,33 @@ export default function MockAnalysis() {
     .filter((c) => c.correct + c.wrong > 0)
     .sort((a, b) => a.accuracy - b.accuracy);
 
+  if (showReview) {
+    if (attemptQuestions.isLoading) {
+      return (
+        <DashboardLayout>
+          <div className="p-8 text-center text-muted-foreground">Loading questions…</div>
+        </DashboardLayout>
+      );
+    }
+    if (attemptQuestions.isError || !attemptQuestions.data) {
+      return (
+        <DashboardLayout>
+          <div className="p-8 text-center space-y-3">
+            <p className="text-muted-foreground text-sm">Couldn't load questions for this attempt.</p>
+            <Button variant="outline" onClick={() => setShowReview(false)}>Back to Analysis</Button>
+          </div>
+        </DashboardLayout>
+      );
+    }
+    return (
+      <QuestionReview
+        questions={attemptQuestions.data.questions}
+        answers={attemptQuestions.data.answers}
+        onClose={() => setShowReview(false)}
+      />
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="p-4 lg:p-6 max-w-6xl mx-auto space-y-6 pb-16">
