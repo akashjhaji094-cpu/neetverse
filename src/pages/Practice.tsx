@@ -131,26 +131,71 @@ const Practice = () => {
       }
       if (!allQuestions || allQuestions.length === 0) throw new Error('No questions available');
 
-      let pool = allQuestions;
+      // Same seen/unseen/wrong priority as mock tests: 70% never-seen, 20%
+      // previously-wrong, 10% light revision — so repeated sessions on the
+      // same chapter/topic don't keep reshuffling the same small set.
+      let unseen = allQuestions, wrong: any[] = [], revision: any[] = [];
       if (user) {
-        const { data: correctAnswers } = await supabase
+        const { data: rows } = await supabase
           .from('attempt_answers')
-          .select('question_id, attempts!inner(user_id)')
-          .eq('is_correct', true)
+          .select('question_id, is_correct, attempts!inner(user_id)')
           .eq('attempts.user_id', user.id);
-        const correctIds = new Set((correctAnswers || []).map((a: any) => a.question_id));
-        const fresh = allQuestions.filter(q => !correctIds.has(q.id));
-        if (fresh.length >= count) pool = fresh;
+        const history = new Map<string, 'correct' | 'wrong'>();
+        (rows || []).forEach((r: any) => {
+          if (r.is_correct === true) history.set(r.question_id, 'correct');
+          else if (r.is_correct === false && history.get(r.question_id) !== 'correct') history.set(r.question_id, 'wrong');
+        });
+        unseen = []; wrong = []; revision = [];
+        allQuestions.forEach((q) => {
+          const status = history.get(q.id);
+          if (status === 'wrong') wrong.push(q);
+          else if (status === 'correct') revision.push(q);
+          else unseen.push(q);
+        });
       }
 
-      const shuffled = [...pool];
-      const randomValues = new Uint32Array(shuffled.length);
-      crypto.getRandomValues(randomValues);
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = randomValues[i] % (i + 1);
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const cryptoShuffle = <X,>(arr: X[]): X[] => {
+        const a = [...arr];
+        const rv = new Uint32Array(a.length);
+        crypto.getRandomValues(rv);
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = rv[i] % (i + 1);
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+      const take = (arr: any[], n: number) => cryptoShuffle(arr).slice(0, Math.max(0, n));
+
+      const wantUnseen = Math.round(count * 0.7);
+      const wantWrong = Math.round(count * 0.2);
+      const wantRevision = Math.max(0, count - wantUnseen - wantWrong);
+
+      const picked: any[] = [];
+      const gotUnseen = take(unseen, wantUnseen);
+      picked.push(...gotUnseen);
+      let shortfall = wantUnseen - gotUnseen.length;
+
+      const gotWrong = take(wrong, wantWrong);
+      picked.push(...gotWrong);
+      shortfall += wantWrong - gotWrong.length;
+
+      const gotRevision = take(revision, wantRevision);
+      picked.push(...gotRevision);
+      shortfall += wantRevision - gotRevision.length;
+
+      if (shortfall > 0) {
+        const usedIds = new Set(picked.map((q) => q.id));
+        for (const leftoverPool of [unseen, wrong, revision]) {
+          if (shortfall <= 0) break;
+          const leftover = leftoverPool.filter((q) => !usedIds.has(q.id));
+          const extra = take(leftover, shortfall);
+          picked.push(...extra);
+          extra.forEach((q) => usedIds.add(q.id));
+          shortfall -= extra.length;
+        }
       }
-      return shuffled.slice(0, count) as Question[];
+
+      return cryptoShuffle(picked).slice(0, count) as Question[];
     },
     onSuccess: (questions) => { setTestQuestions(questions); setShowTest(true); setSelectedChapter(null); },
     onError: () => { toast({ title: "Error", description: "Failed to load questions.", variant: "destructive" }); }
