@@ -11,12 +11,31 @@ import { usePerformanceData } from "@/hooks/usePerformanceData";
 import { BookX, Search, XCircle, MinusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { formatQuestionHtml } from "@/lib/questionFormatter";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { FeatureLockCard } from "@/components/FeatureLockCard";
+import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
 
 const PAGE_SIZE = 20;
 
 const MistakeBook = () => {
   const { data, isLoading } = usePerformanceData();
   const [search, setSearch] = useState("");
+  const access = useFeatureAccess();
+  const [showLockPopup, setShowLockPopup] = useState(false);
+
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Mistake Book"
+          description="Every wrong and skipped question across every test you've taken, searchable and filterable by subject."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Mistake Book" />
+      </DashboardLayout>
+    );
+  }
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "wrong" | "skipped">("all");
   const [page, setPage] = useState(1);
