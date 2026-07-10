@@ -12,18 +12,37 @@ import { PremiumAccessDialog } from "@/components/mock/PremiumAccessDialog";
 import { PremiumPopup } from "@/components/PremiumPopup";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { Sparkles as SparkleIcon } from "lucide-react";
 const TG = "https://t.me/Neetverseowner_bot?text=I%20want%20subscription";
 
 const COMPARISON = [
-  { feature: "Practice Questions",     free: "Unlimited",  premium: "Unlimited"                    },
-  { feature: "Mock Tests (Online)",    free: "3 / week",   premium: "Unlimited"                     },
-  { feature: "Mock Tests (Offline)",   free: "1 / week",   premium: "6 / week"                     },
-  { feature: "PYQ Access",             free: "Limited",    premium: "Full 20-Year PYQs"             },
-  { feature: "Premium Test PDFs",      free: "❌",          premium: "Curated Sets (PW+Allen+Aakash)"},
-  { feature: "Study Planners",         free: "❌",          premium: "Full Access"                   },
-  { feature: "Mistake Book",           free: "Basic",      premium: "Advanced"                      },
-  { feature: "Weak Chapter Analysis",  free: "Basic",      premium: "Advanced AI"                   },
-  { feature: "Support",                free: "Community",  premium: "⚡ Priority Telegram"           },
+  { feature: "Practice Questions",       free: "Unlimited",  premium: "Unlimited"                     },
+  { feature: "Mock Tests (Online)",      free: "3 / week",   premium: "Unlimited"                     },
+  { feature: "Mock Tests (Offline)",     free: "1 / week",   premium: "6 / week"                      },
+  { feature: "Detailed Mock Analysis",   free: "❌",          premium: "✅ Topic/chapter/rank/mistakes" },
+  { feature: "Test History",             free: "❌",          premium: "✅"                             },
+  { feature: "Revision Tool",            free: "❌",          premium: "✅"                             },
+  { feature: "Mistake Book",             free: "❌",          premium: "✅"                             },
+  { feature: "AI Question Explain",      free: "❌",          premium: "✅ Unlimited"                   },
+  { feature: "Pending OMR Vault",        free: "❌",          premium: "✅"                             },
+  { feature: "PYQ Access",               free: "Limited",    premium: "Full 20-Year PYQs"             },
+  { feature: "Premium Test PDFs",        free: "❌",          premium: "Curated Sets (PW+Allen+Aakash)"},
+  { feature: "Study Planners",           free: "❌",          premium: "Full Access"                   },
+  { feature: "Support",                  free: "Community",  premium: "⚡ Priority Telegram"           },
+];
+
+const UNLOCKED_FEATURES = [
+  "Unlimited Online Mock Tests",
+  "6 Offline Mock Tests / week",
+  "Detailed Mock Analysis — topic, chapter, rank & mistake patterns",
+  "Full Test History",
+  "Smart Revision Tool",
+  "Advanced Mistake Book",
+  "AI Question Explanations",
+  "Pending OMR Vault",
+  "Full 20-Year PYQ Access",
+  "Priority Telegram Support",
 ];
 
 const FAQS: [string, string][] = [
