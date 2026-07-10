@@ -12,12 +12,17 @@ import { motion, AnimatePresence } from "framer-motion";
 interface TestInterfaceProps {
   questions: Question[];
   onSubmit: (answers: Record<string, number | null>, timeSpent: Record<string, number>) => void;
+  /** If set, counts DOWN from this many minutes and auto-submits at 0. Omit for untimed practice. */
+  durationMinutes?: number;
 }
 
-export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
+export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInterfaceProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const totalSeconds = durationMinutes ? durationMinutes * 60 : null;
+  const timeRemaining = totalSeconds !== null ? Math.max(0, totalSeconds - timeElapsed) : null;
+  const autoSubmittedRef = useRef(false);
   const [marked, setMarked] = useState<Record<string, boolean>>({});
   const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
   // Per-question time spent, in whole seconds. Keyed by question id.
@@ -77,6 +82,15 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
     onSubmit(answers, finalTimeSpent);
   };
 
+  // Auto-submit the instant the countdown hits 0 — mirrors the real NEET exam.
+  useEffect(() => {
+    if (timeRemaining === 0 && !autoSubmittedRef.current) {
+      autoSubmittedRef.current = true;
+      handleSubmit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRemaining]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -112,7 +126,9 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
             <div className="text-sm text-muted-foreground">
               Question {currentIndex + 1} of {questions.length}
             </div>
-            <div className="text-sm font-medium">Time: {formatTime(timeElapsed)}</div>
+            <div className={`text-sm font-medium ${timeRemaining !== null && timeRemaining < 300 ? 'text-red-600 font-bold' : ''}`}>
+              Time: {formatTime(timeRemaining ?? timeElapsed)}
+            </div>
           </div>
           <Progress value={progress} className="h-2" />
           <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
