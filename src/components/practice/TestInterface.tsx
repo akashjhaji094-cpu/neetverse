@@ -228,7 +228,7 @@ export const TestInterface = ({ questions, onSubmit }: TestInterfaceProps) => {
         <Card className="lg:sticky lg:top-32 self-start max-h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
           <CardContent className="pt-4 pb-4 flex flex-col h-full">
             <h3 className="text-sm font-semibold mb-3">Question Palette</h3>
-            <div className="grid grid-cols-6 lg:grid-cols-5 gap-1.5 overflow-y-auto pr-1 flex-1">
+            <div className="grid grid-cols-6 lg:grid-cols-5 gap-1.5 overflow-y-auto pr-1 flex-1 min-h-0">
               {questions.map((_, idx) => {
                 const s = getStatus(idx);
                 return (
