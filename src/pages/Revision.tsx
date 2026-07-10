@@ -12,10 +12,29 @@ import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { RotateCcw, XCircle, MinusCircle, Sparkles } from "lucide-react";
+import { RotateCcw, XCircle, MinusCircle, Sparkles } from "lucide-react";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { FeatureLockCard } from "@/components/FeatureLockCard";
+import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
 
 const Revision = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const access = useFeatureAccess();
+  const [showLockPopup, setShowLockPopup] = useState(false);
+
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Revision"
+          description="Auto-generated sessions from only your wrong and unattempted questions — the fastest way to close gaps before NEET."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Revision" />
+      </DashboardLayout>
+    );
+  }
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
