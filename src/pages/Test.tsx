@@ -548,8 +548,9 @@ const submitTestMutation = useMutation({
   }
 
   if (testMode === 'testing') {
-    return <TestInterface questions={questions} onSubmit={handleTestSubmit} />;
-  }
+    const isBioOnly = testType === 'full-bio' && questions.length === 90;
+    return <TestInterface questions={questions} onSubmit={handleTestSubmit} durationMinutes={isBioOnly ? 60 : 180} />;
+          }
 
   if (testMode === 'review' && questions.length > 0) {
     return (
