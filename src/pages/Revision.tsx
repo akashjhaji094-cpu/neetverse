@@ -12,7 +12,6 @@ import { LoadingQuestions } from "@/components/mock/LoadingQuestions";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { RotateCcw, XCircle, MinusCircle, Sparkles } from "lucide-react";
-import { RotateCcw, XCircle, MinusCircle, Sparkles } from "lucide-react";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { FeatureLockCard } from "@/components/FeatureLockCard";
 import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
@@ -22,26 +21,12 @@ const Revision = () => {
   const { toast } = useToast();
   const access = useFeatureAccess();
   const [showLockPopup, setShowLockPopup] = useState(false);
-
-  if (!access.isLoading && !access.hasAccess) {
-    return (
-      <DashboardLayout>
-        <FeatureLockCard
-          featureName="Revision"
-          description="Auto-generated sessions from only your wrong and unattempted questions — the fastest way to close gaps before NEET."
-          onMount={() => setShowLockPopup(true)}
-        />
-        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Revision" />
-      </DashboardLayout>
-    );
-  }
   const [testQuestions, setTestQuestions] = useState<Question[]>([]);
   const [showTest, setShowTest] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [testAnswers, setTestAnswers] = useState<Record<string, number | null>>({});
   const [showReview, setShowReview] = useState(false);
 
-  // Get pending question ids: wrong or unattempted, excluding any ever-correct
   const { data: pendingIds, isLoading } = useQuery({
     queryKey: ["revision-pending", user?.id],
     queryFn: async () => {
@@ -59,7 +44,6 @@ const Revision = () => {
         else if (r.is_correct === false) wrong.add(r.question_id);
         else unattempted.add(r.question_id);
       });
-      // Exclude ever-correct
       correct.forEach((id) => { wrong.delete(id); unattempted.delete(id); });
       return { wrong: Array.from(wrong), unattempted: Array.from(unattempted) };
     },
@@ -73,8 +57,6 @@ const Revision = () => {
         mode === "unattempted" ? pendingIds?.unattempted || [] :
         [...(pendingIds?.wrong || []), ...(pendingIds?.unattempted || [])];
       if (ids.length === 0) throw new Error("No questions to revise");
-
-      // Chunk in 200s for safety
       const all: Question[] = [];
       for (let i = 0; i < ids.length; i += 200) {
         const { data, error } = await supabase
@@ -82,7 +64,6 @@ const Revision = () => {
         if (error) throw error;
         all.push(...((data || []) as Question[]));
       }
-      // Shuffle
       const arr = [...all];
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -122,6 +103,20 @@ const Revision = () => {
     onSuccess: (r) => { setTestResults(r); setTestAnswers(r.answers); setShowTest(false); },
     onError: () => toast({ title: "Error", description: "Failed to submit.", variant: "destructive" }),
   });
+
+  // Gate check moved here — AFTER every hook above, so hook count/order never changes.
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Revision"
+          description="Auto-generated sessions from only your wrong and unattempted questions — the fastest way to close gaps before NEET."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Revision" />
+      </DashboardLayout>
+    );
+  }
 
   if (startMutation.isPending) return <LoadingQuestions totalQuestions={testQuestions.length || 50} />;
   if (showReview && testQuestions.length > 0)
@@ -196,24 +191,13 @@ const Revision = () => {
               <Badge variant="secondary">+4 / -1</Badge>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <Button
-                variant="outline"
-                disabled={isLoading || wrongCount === 0}
-                onClick={() => startMutation.mutate("wrong")}
-              >
+              <Button variant="outline" disabled={isLoading || wrongCount === 0} onClick={() => startMutation.mutate("wrong")}>
                 Wrong Only ({wrongCount})
               </Button>
-              <Button
-                variant="outline"
-                disabled={isLoading || unattCount === 0}
-                onClick={() => startMutation.mutate("unattempted")}
-              >
+              <Button variant="outline" disabled={isLoading || unattCount === 0} onClick={() => startMutation.mutate("unattempted")}>
                 Unattempted ({unattCount})
               </Button>
-              <Button
-                disabled={isLoading || totalPending === 0}
-                onClick={() => startMutation.mutate("both")}
-              >
+              <Button disabled={isLoading || totalPending === 0} onClick={() => startMutation.mutate("both")}>
                 Both ({totalPending})
               </Button>
             </div>
