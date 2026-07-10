@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2, Download, Camera, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, Download, Camera, CheckCircle2, AlertCircle, Timer, Play } from "lucide-react";
+import { OfflineTestTimer } from "./OfflineTestTimer";
 import { Question } from "@/lib/supabase";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -46,8 +47,10 @@ export const OfflinePaperPreview = ({
   onBack,
   attemptId,
 }: OfflinePaperPreviewProps) => {
-  const [ready, setReady] = useState(false);
+ const [ready, setReady] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("Loading MathJax...");
+  const [showTimerPrompt, setShowTimerPrompt] = useState(false);
+  const [timerStarted, setTimerStarted] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scanResult, setScanResult] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
@@ -212,7 +215,10 @@ export const OfflinePaperPreview = ({
     return () => { cancelled = true; };
   }, []);
 
-  const handlePrint = useCallback(() => { window.print(); }, []);
+  const handlePrint = useCallback(() => {
+    window.print();
+    setShowTimerPrompt(true);
+  }, []);
 
   // ============= OMR SCANNER =============
   const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -601,6 +607,37 @@ export const OfflinePaperPreview = ({
 
   const omrCols = totalQuestions <= 90 ? 6 : 9;
   const omrPerCol = Math.ceil(totalQuestions / omrCols);
+  const offlineDurationMinutes = totalQuestions <= 90 ? 60 : 180;
+
+  if (timerStarted) {
+    return (
+      <OfflineTestTimer
+        durationMinutes={offlineDurationMinutes}
+        paperTitle={title}
+        onDone={() => { setTimerStarted(false); setShowTimerPrompt(false); }}
+      />
+    );
+  }
+
+  if (showTimerPrompt) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-5 max-w-sm">
+          <Timer className="h-14 w-14 text-primary mx-auto" />
+          <h2 className="text-2xl font-bold">Ready to Begin?</h2>
+          <p className="text-sm text-muted-foreground">
+            Your paper downloaded. Start the timer now to attempt it under real exam conditions — {offlineDurationMinutes === 60 ? "60 minutes" : "3 hours"}, just like the real NEET.
+          </p>
+          <Button size="lg" className="w-full gap-2" onClick={() => setTimerStarted(true)}>
+            <Play className="h-4 w-4" /> Start {offlineDurationMinutes === 60 ? "60-Minute" : "3-Hour"} Timer
+          </Button>
+          <Button variant="ghost" className="w-full" onClick={() => setShowTimerPrompt(false)}>
+            Skip — I'll time myself
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ===== Review screen =====
   if (showReview) {
