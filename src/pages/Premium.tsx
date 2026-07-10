@@ -72,20 +72,7 @@ const Premium = () => {
   const [showPremiumPopup, setShowPremiumPopup]   = useState(false);
   const [faq, setFaq]                             = useState<number | null>(null);
 
-  const { data: userAccess } = useQuery({
-    queryKey: ["user-premium-access", user?.id],
-    queryFn: async () => {
-      if (!user) return { hasAccess: false };
-      const { data: accessKeys } = await supabase
-        .from("premium_access_keys")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("is_active", true)
-        .limit(1);
-      return { hasAccess: (accessKeys?.length || 0) > 0 };
-    },
-    enabled: !!user,
-  });
+  const access = useFeatureAccess();
 
   const { data: premiumContent } = useQuery({
     queryKey: ["premium-content"],
@@ -96,8 +83,71 @@ const Premium = () => {
     },
   });
 
+  /* ────── TRIAL USER VIEW ────── */
+  if (access.isTrialActive) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 lg:p-6 space-y-6 max-w-3xl">
+          <div className="rounded-2xl p-6 text-white shadow-lg" style={{ background: "linear-gradient(135deg,#F97316,#FB923C)" }}>
+            <div className="flex items-center gap-3 mb-3">
+              <SparkleIcon className="h-7 w-7" />
+              <h1 className="text-2xl font-bold">Free Trial Active</h1>
+            </div>
+            <p className="text-lg font-semibold">
+              {access.trialDaysLeft === 1 ? "Last day" : `${access.trialDaysLeft} days left`} — every Premium feature is unlocked right now.
+            </p>
+            <p className="text-sm mt-1 text-white/90">After your trial ends, you'll drop to the Free plan below unless you upgrade.</p>
+          </div>
+
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Unlocked During Your Trial</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {UNLOCKED_FEATURES.map((f) => (
+                <div key={f} className="flex items-center gap-2 text-sm">
+                  <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: "#D4AF37" }} />
+                  <span>{f}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-center">
+            <GoldBtn onClick={() => window.open(TG, "_blank")}>
+              <MessageCircle className="w-5 h-5" />
+              Lock In Premium Before Trial Ends →
+            </GoldBtn>
+          </div>
+
+          <div className="pt-4">
+            <h2 className="text-lg font-bold text-center mb-4">What Happens After Your Trial (Free vs Premium)</h2>
+            <div className="rounded-2xl overflow-hidden shadow-lg" style={{ border: "2.5px solid #D4AF37" }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: "linear-gradient(90deg,#D4AF37,#F5C842)" }}>
+                    <th className="py-3 px-4 text-left font-bold" style={{ color: "#1A1A1A" }}>Feature</th>
+                    <th className="py-3 px-3 text-center font-bold" style={{ color: "#1A1A1A" }}>Free 🆓</th>
+                    <th className="py-3 px-3 text-center font-bold" style={{ color: "#1A1A1A" }}>Premium 👑</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON.map((row, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#FFFDF0" }}>
+                      <td className="py-2.5 px-4 font-medium" style={{ color: "#1A1A1A" }}>{row.feature}</td>
+                      <td className="py-2.5 px-3 text-center" style={{ color: "#888" }}>{row.free}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold" style={{ color: "#B8860B" }}>{row.premium}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   /* ────── PREMIUM USER VIEW ────── */
-  if (userAccess?.hasAccess) {
+  if (access.isPremium) {
     return (
       <DashboardLayout>
         <div className="p-4 lg:p-6 space-y-6">
@@ -119,6 +169,19 @@ const Premium = () => {
               <p className="text-muted-foreground">Your exclusive test series and study materials</p>
             </div>
           </div>
+
+          {/* What's unlocked */}
+          <Card style={{ border: "1.5px solid #D4AF37" }}>
+            <CardHeader><CardTitle className="text-lg">Everything You've Unlocked</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {UNLOCKED_FEATURES.map((f) => (
+                <div key={f} className="flex items-center gap-2 text-sm">
+                  <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: "#D4AF37" }} />
+                  <span>{f}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           {/* Tests */}
           {(premiumContent?.tests?.length || 0) > 0 && (
@@ -206,7 +269,7 @@ const Premium = () => {
     );
   }
 
-  /* ────── NON-PREMIUM MARKETING VIEW ────── */
+/* ────── FREE (NO TRIAL LEFT) MARKETING VIEW ────── */
   return (
     <DashboardLayout>
       <div style={{ background: "#FAFAF8", minHeight: "100vh" }}>
