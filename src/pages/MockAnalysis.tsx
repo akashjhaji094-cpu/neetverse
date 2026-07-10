@@ -10,6 +10,9 @@ import { useMockAnalysis } from "@/hooks/useMockAnalysis";
 import { useMockProgress } from "@/hooks/useMockProgress";
 import { useAttemptQuestions } from "@/hooks/useAttemptQuestions";
 import { QuestionReview } from "@/components/practice/QuestionReview";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { FeatureLockCard } from "@/components/FeatureLockCard";
+import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
 import {
   ArrowLeft, Target, CheckCircle2, XCircle, MinusCircle,
   Clock, TrendingUp, TrendingDown, Sparkles, BookOpen, AlertTriangle,
@@ -88,6 +91,21 @@ export default function MockAnalysis() {
   const { data: progress } = useMockProgress(10);
   const [showReview, setShowReview] = useState(false);
   const attemptQuestions = useAttemptQuestions(showReview ? attemptId : undefined);
+  const access = useFeatureAccess();
+  const [showLockPopup, setShowLockPopup] = useState(false);
+
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Detailed Mock Analysis"
+          description="Subject, chapter and topic-wise breakdowns, weak/strong areas, time analysis, rank and mistake patterns for every mock you take."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Detailed Mock Analysis" />
+      </DashboardLayout>
+    );
+  }
 
   if (isLoading) {
     return (
