@@ -9,10 +9,29 @@ import { usePerformanceData } from "@/hooks/usePerformanceData";
 import { History, Clock, CheckCircle2, XCircle, MinusCircle, TrendingUp, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { FeatureLockCard } from "@/components/FeatureLockCard";
+import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
+import { useState as useLockState } from "react";
 
 const TestHistory = () => {
   const navigate = useNavigate();
   const { data, isLoading } = usePerformanceData();
+  const access = useFeatureAccess();
+  const [showLockPopup, setShowLockPopup] = useLockState(false);
+
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Test History"
+          description="See every mock and practice test you've ever taken, with scores and quick links to full analysis."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Test History" />
+      </DashboardLayout>
+    );
+  }
   const [typeFilter, setTypeFilter] = useState<"all" | "practice" | "mock">("all");
 
   const history = data?.history || [];
