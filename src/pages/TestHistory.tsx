@@ -12,26 +12,12 @@ import { useNavigate } from "react-router-dom";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { FeatureLockCard } from "@/components/FeatureLockCard";
 import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
-import { useState as useLockState } from "react";
 
 const TestHistory = () => {
   const navigate = useNavigate();
   const { data, isLoading } = usePerformanceData();
   const access = useFeatureAccess();
-  const [showLockPopup, setShowLockPopup] = useLockState(false);
-
-  if (!access.isLoading && !access.hasAccess) {
-    return (
-      <DashboardLayout>
-        <FeatureLockCard
-          featureName="Test History"
-          description="See every mock and practice test you've ever taken, with scores and quick links to full analysis."
-          onMount={() => setShowLockPopup(true)}
-        />
-        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Test History" />
-      </DashboardLayout>
-    );
-  }
+  const [showLockPopup, setShowLockPopup] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "practice" | "mock">("all");
 
   const history = data?.history || [];
@@ -51,6 +37,20 @@ const TestHistory = () => {
     );
     return { totalTests, avgAccuracy, avgScore };
   }, [history]);
+
+  // Gate check moved here — AFTER every hook above, so hook count/order never changes.
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Test History"
+          description="See every mock and practice test you've ever taken, with scores and quick links to full analysis."
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Test History" />
+      </DashboardLayout>
+    );
+  }
 
   const formatTime = (sec: number | null) => {
     if (sec === null) return "—";
@@ -158,7 +158,7 @@ const TestHistory = () => {
               </Card>
               );
             })}
-          </div> 
+          </div>
         )}
       </div>
     </DashboardLayout>
