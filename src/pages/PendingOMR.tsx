@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Camera, FileText, Loader2, Inbox } from "lucide-react";
 import { format } from "date-fns";
 import { OfflinePaperPreview } from "@/components/mock/OfflinePaperPreview";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
+import { FeatureLockCard } from "@/components/FeatureLockCard";
+import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
 
 interface PendingAttempt {
   id: string;
@@ -21,6 +24,8 @@ interface PendingAttempt {
 const PendingOMR = () => {
   const { user } = useAuth();
   const [active, setActive] = useState<{ attemptId: string; questions: Question[]; testType: string; questionCount: number } | null>(null);
+  const access = useFeatureAccess();
+  const [showLockPopup, setShowLockPopup] = useState(false);
 
   const { data: pending, isLoading, refetch } = useQuery({
     queryKey: ["pending-omr", user?.id],
@@ -82,6 +87,19 @@ const PendingOMR = () => {
         attemptId={active.attemptId}
         onBack={() => { setActive(null); refetch(); }}
       />
+    );
+  }
+
+  if (!access.isLoading && !access.hasAccess) {
+    return (
+      <DashboardLayout>
+        <FeatureLockCard
+          featureName="Pending OMR Vault"
+          description="Come back anytime to scan and score any offline paper you've generated. (Scanning the paper you just took right now still works free — this vault is for revisiting older ones.)"
+          onMount={() => setShowLockPopup(true)}
+        />
+        <FeatureLockedPopup open={showLockPopup} onClose={() => setShowLockPopup(false)} featureName="Pending OMR Vault" />
+      </DashboardLayout>
     );
   }
 
