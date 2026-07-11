@@ -36,16 +36,29 @@ interface AccessKey {
   access_key: string;
   created_at: string;
   is_active: boolean;
+  expires_at: string | null;
   profiles: {
     email: string;
     name: string | null;
   };
 }
 
+const KEY_DURATION_OPTIONS = [
+  { value: "1", label: "1 Month" },
+  { value: "2", label: "2 Months" },
+  { value: "3", label: "3 Months" },
+  { value: "6", label: "6 Months" },
+  { value: "12", label: "12 Months" },
+  { value: "custom", label: "Custom Date" },
+  { value: "lifetime", label: "No Expiry (Lifetime)" },
+];
+
 export const PremiumUpload = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [accessKeys, setAccessKeys] = useState<AccessKey[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [keyDuration, setKeyDuration] = useState("1");
+  const [customExpiryDate, setCustomExpiryDate] = useState("2027-05-03");
   const [plannerTitle, setPlannerTitle] = useState("");
   const [plannerFile, setPlannerFile] = useState<File | null>(null);
   const [testTitle, setTestTitle] = useState("");
@@ -112,6 +125,17 @@ export const PremiumUpload = () => {
     return `PRM-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
   };
 
+  const computeExpiresAt = (): string | null => {
+    if (keyDuration === "lifetime") return null;
+    if (keyDuration === "custom") {
+      return customExpiryDate ? new Date(`${customExpiryDate}T23:59:59`).toISOString() : null;
+    }
+    const months = parseInt(keyDuration, 10);
+    const d = new Date();
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString();
+  };
+
   const handleGenerateKey = async () => {
     if (!selectedUserId) {
       toast.error("Please select a user");
@@ -132,6 +156,7 @@ export const PremiumUpload = () => {
       user_id: selectedUserId,
       access_key: newKey,
       created_by: authData.user.id,
+      expires_at: computeExpiresAt(),
     });
 
     if (error) {
@@ -322,6 +347,30 @@ export const PremiumUpload = () => {
                 ))}
               </select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="key-duration">Valid For</Label>
+              <select
+                id="key-duration"
+                value={keyDuration}
+                onChange={(e) => setKeyDuration(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {KEY_DURATION_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            {keyDuration === "custom" && (
+              <div className="space-y-2">
+                <Label htmlFor="key-custom-date">Expires On</Label>
+                <Input
+                  id="key-custom-date"
+                  type="date"
+                  value={customExpiryDate}
+                  onChange={(e) => setCustomExpiryDate(e.target.value)}
+                />
+              </div>
+            )}
             <Button onClick={handleGenerateKey} disabled={loading}>
               <Key className="h-4 w-4 mr-2" />
               Generate Access Key
@@ -343,6 +392,7 @@ export const PremiumUpload = () => {
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Access Key</TableHead>
+                <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -374,6 +424,16 @@ export const PremiumUpload = () => {
                         </Button>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">
+                        {key.expires_at
+                          ? new Date(key.expires_at) < new Date()
+                            ? <span className="text-red-500 font-medium">Expired {new Date(key.expires_at).toLocaleDateString()}</span>
+                            : new Date(key.expires_at).toLocaleDateString()
+                          : "Lifetime"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
