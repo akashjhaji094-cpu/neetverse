@@ -392,7 +392,7 @@ export const PremiumUpload = () => {
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Access Key</TableHead>
-                <TableHead>Expires</TableHead>
+                  <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -433,7 +433,6 @@ export const PremiumUpload = () => {
                           : "Lifetime"}
                       </span>
                     </TableCell>
-                    <TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
