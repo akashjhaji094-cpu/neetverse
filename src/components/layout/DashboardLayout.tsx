@@ -3,12 +3,14 @@ import { AppSidebar } from "./AppSidebar";
 import { cn } from "@/lib/utils";
 import { BroadcastOverlay } from "@/components/BroadcastOverlay";
 import { TrialBanner } from "@/components/TrialBanner";
+import { useResolvePendingReferral } from "@/hooks/useResolvePendingReferral";
 
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  useResolvePendingReferral();
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
