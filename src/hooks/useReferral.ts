@@ -12,11 +12,12 @@ function generateCode(seed: string) {
 export const REFERRAL_TIERS = [
   { count: 3,  reward: "1 Month Free Premium" },
   { count: 7,  reward: "3 Months Free Premium" },
-  { count: 15, reward: "Till NEET 2027 Free" },
-  { count: 30, reward: "Next 2 NEETs Free" },
+  { count: 15, reward: "6 Months Free Premium" },
+  { count: 30, reward: "1 Year Free Premium" },
 ];
 
-/** Use inside Account page / a ReferralCard to show code + stats */
+const PENDING_REFERRAL_KEY = "neetverse_pending_referral";
+
 export function useReferralCode() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -35,10 +36,8 @@ export function useReferralCode() {
     enabled: !!user,
   });
 
-  // Auto-generate a referral code the first time we see this user has none
   useEffect(() => {
     if (!user || !profile || profile.referral_code) return;
-
     const code = generateCode(profile.name || user.email || "NEET");
     supabase
       .from("profiles")
@@ -51,15 +50,10 @@ export function useReferralCode() {
     queryKey: ["referral-stats", user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data } = await supabase
-        .from("referrals")
-        .select("status")
-        .eq("referrer_id", user.id);
-
+      const { data } = await supabase.from("referrals").select("status").eq("referrer_id", user.id);
       const completed = (data || []).filter((r) => r.status === "completed").length;
       const pending = (data || []).filter((r) => r.status === "pending").length;
       const nextTier = REFERRAL_TIERS.find((t) => completed < t.count) ?? null;
-
       return { completed, pending, nextTier };
     },
     enabled: !!user,
@@ -78,12 +72,22 @@ export function useReferralCode() {
 }
 
 /**
- * Call ONCE right after a brand-new signup, passing the ?ref= code from the URL.
- * Retries briefly in case the new user's `profiles` row hasn't been created yet
- * by the DB trigger.
+ * Call right after signup with the ?ref= code from the URL.
+ *
+ * signUp() requires email confirmation, so there's no active session yet —
+ * auth.uid() is null and every write below gets silently rejected by RLS.
+ * This still tries immediately (in case confirmation is off for you), but
+ * ALSO stashes the code in localStorage so applyPendingReferralIfAny() can
+ * finish the job once the user has a real, confirmed session.
  */
 export async function applyReferralCode(referralCode: string, newUserId: string) {
   if (!referralCode) return;
+
+  try {
+    localStorage.setItem(PENDING_REFERRAL_KEY, JSON.stringify({ code: referralCode, userId: newUserId }));
+  } catch {
+    /* storage blocked — immediate attempt below is the only shot */
+  }
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const { data: referrer } = await supabase
@@ -93,12 +97,15 @@ export async function applyReferralCode(referralCode: string, newUserId: string)
       .maybeSingle();
 
     if (referrer && referrer.id !== newUserId) {
-      await supabase.from("profiles").update({ referred_by: referrer.id }).eq("id", newUserId);
-      await supabase.from("referrals").insert({
+      const { error: updateErr } = await supabase.from("profiles").update({ referred_by: referrer.id }).eq("id", newUserId);
+      const { error: insertErr } = await supabase.from("referrals").insert({
         referrer_id: referrer.id,
         referred_id: newUserId,
         status: "pending",
       });
+      if (!updateErr && !insertErr) {
+        try { localStorage.removeItem(PENDING_REFERRAL_KEY); } catch { /* ignore */ }
+      }
       return;
     }
     await new Promise((r) => setTimeout(r, 500));
@@ -106,9 +113,22 @@ export async function applyReferralCode(referralCode: string, newUserId: string)
 }
 
 /**
- * Call after ANY mock-related action completes (online submit, or offline paper
- * generated). Safe to call repeatedly — the DB function only rewards once.
+ * Wired into DashboardLayout (every authenticated page) via
+ * useResolvePendingReferral — runs once a confirmed session exists.
  */
+export async function applyPendingReferralIfAny(currentUserId: string) {
+  let stored: { code: string; userId: string } | null = null;
+  try {
+    const raw = localStorage.getItem(PENDING_REFERRAL_KEY);
+    if (raw) stored = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!stored || stored.userId !== currentUserId) return;
+  await applyReferralCode(stored.code, currentUserId);
+}
+
+/** Safe to call repeatedly — DB function only rewards once. */
 export async function tryCompleteReferral(userId: string) {
   await supabase.rpc("complete_referral_for_user", { p_user_id: userId });
 }
