@@ -363,8 +363,8 @@ const Premium = () => {
               {[
                 ["3", "1 Month Free"],
                 ["7", "3 Months Free"],
-                ["15", "Till NEET 2027"],
-                ["30", "Next 2 NEETs"],
+                ["15", "6 months Free"],
+                ["30", "Till NEET 2026 Free"],
               ].map(([count, reward]) => (
                 <div key={count} className="rounded-xl p-3" style={{ background: "#FFFDF0", border: "1.5px solid #F0DFA0" }}>
                   <p className="text-2xl font-black" style={{ color: "#D4AF37" }}>{count}</p>
