@@ -1,16 +1,8 @@
 /**
- * QP TO CBT — entry page (FULLY IMPLEMENTED: format selection + upload +
- * a real, working first pass of the detection pipeline against whatever
- * PDF the student uploads).
- *
- * What happens after "Files ready" here is intentionally the simplified
- * slice: it runs the real question-number detector across every page and
- * lists what it found. The full visual bounding-box capture editor (drag,
- * resize, Extend Capture, multi-touch) is NOT built in this file — see
- * README §4, "PARTIALLY IMPLEMENTED" / "ARCHITECTED FOR NEXT PHASE". This
- * page proves the upload -> parse -> detect pipeline is real and working
- * end-to-end on an actual PDF, without pretending the polished capture UI
- * exists yet.
+ * QP TO CBT — entry page. Updated for Phase 2: detected candidates are now
+ * actually saved as QuestionCapture + QuestionCaptureSegment records (Phase
+ * 1 only held them in React state), and there's a real next step —
+ * /qp-to-cbt/capture/:testId — instead of a dead-end preview grid.
  */
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,9 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { FileText, Files, Upload, Loader2, HardDrive, AlertTriangle } from "lucide-react";
+import { FileText, Files, Upload, Loader2, HardDrive, AlertTriangle, ArrowRight } from "lucide-react";
 
-import type { LocalPdfTest, SourcePdf } from "@/features/qp-to-cbt/types";
+import type { LocalPdfTest, SourcePdf, QuestionCapture, QuestionCaptureSegment } from "@/features/qp-to-cbt/types";
 import * as repo from "@/features/qp-to-cbt/storage/db";
 import { PdfDocumentManager } from "@/features/qp-to-cbt/pdf/pdfDocumentManager";
 import {
@@ -40,7 +32,7 @@ export default function QpToCbt() {
   const [stage, setStage] = useState<Stage>("choose_format");
   const [progressLabel, setProgressLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<QuestionNumberCandidate[]>([]);
+  const [detectedCount, setDetectedCount] = useState(0);
   const [pageCount, setPageCount] = useState(0);
   const [localTestId, setLocalTestId] = useState<string | null>(null);
 
@@ -90,8 +82,6 @@ export default function QpToCbt() {
         });
         setPageCount(manager.pageCount);
 
-        // No page cap, per spec — this loop genuinely runs across however
-        // many pages pdf.js reports, whether that's 8 or 200.
         const allCandidates: QuestionNumberCandidate[] = [];
         let expectedNext: number | null = null;
 
@@ -101,17 +91,55 @@ export default function QpToCbt() {
           const gutters = detectColumnGutters(layout);
           const bands = buildColumnBands(gutters);
           const pageCandidates = detectQuestionNumberCandidates(layout, bands, expectedNext);
-          const ordered = pageCandidates.sort((a, b) => compareReadingOrder(
-            { pageIndex: a.pageIndex, xRatio: a.xRatio, yRatio: a.yRatio, widthRatio: 0, heightRatio: 0 },
-            { pageIndex: b.pageIndex, xRatio: b.xRatio, yRatio: b.yRatio, widthRatio: 0, heightRatio: 0 },
-            bands
-          ));
+          const ordered = pageCandidates.sort((a, b) =>
+            compareReadingOrder(
+              { pageIndex: a.pageIndex, xRatio: a.xRatio, yRatio: a.yRatio, widthRatio: 0, heightRatio: 0 },
+              { pageIndex: b.pageIndex, xRatio: b.xRatio, yRatio: b.yRatio, widthRatio: 0, heightRatio: 0 },
+              bands
+            )
+          );
           allCandidates.push(...ordered);
           if (ordered.length > 0) expectedNext = ordered[ordered.length - 1].questionNumber + 1;
+
+          // Boundaries proposed per-page (each page's candidates only) —
+          // good enough for single-page questions; cross-page continuations
+          // are handled by "Extend Capture" on the capture review screen,
+          // not guessed here.
+          const regions = proposeCaptureBoundaries(ordered, bands);
+          for (const region of regions) {
+            const captureId = crypto.randomUUID();
+            const segmentId = crypto.randomUUID();
+            const capture: QuestionCapture = {
+              id: captureId,
+              localTestId: test.id,
+              questionNumber: region.questionNumber,
+              segmentIds: [segmentId],
+              subjectId: null,
+              chapterId: null,
+              topicAssignment: null,
+              reviewState: "pending_review",
+              warnings: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            const segment: QuestionCaptureSegment = {
+              id: segmentId,
+              questionCaptureId: captureId,
+              order: 0,
+              rect: region.rect,
+              ocrText: null,
+              ocrConfidence: null,
+              source: "auto_detected",
+              createdAt: new Date().toISOString(),
+            };
+            await repo.saveQuestionCapture(capture);
+            await repo.saveCaptureSegment(segment);
+          }
         }
 
         manager.dispose();
-        setCandidates(allCandidates);
+        await repo.saveLocalPdfTest({ ...test, questionCount: allCandidates.length, updatedAt: new Date().toISOString() });
+        setDetectedCount(allCandidates.length);
         setStage("detected");
       } catch (err: any) {
         console.error("QP TO CBT detection failed:", err);
@@ -197,7 +225,7 @@ export default function QpToCbt() {
               </label>
               {format === "separate_pdfs" && (
                 <p className="text-xs text-muted-foreground">
-                  You'll upload the Answer Key PDF next, after the question paper is processed.
+                  You'll upload the Answer Key PDF on the next screen, after the question paper is processed.
                 </p>
               )}
             </CardContent>
@@ -235,42 +263,24 @@ export default function QpToCbt() {
               </div>
             )}
             <Card>
-              <CardContent className="p-5 flex items-center justify-between flex-wrap gap-2">
+              <CardContent className="p-5 flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h3 className="font-semibold">{candidates.length} questions detected</h3>
-                  <p className="text-xs text-muted-foreground">Across {pageCount} pages — review before continuing.</p>
+                  <h3 className="font-semibold">{detectedCount} questions detected</h3>
+                  <p className="text-xs text-muted-foreground">Across {pageCount} pages — review and correct next.</p>
                 </div>
                 <Badge variant="secondary">Auto-detected, unreviewed</Badge>
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-              {candidates.map((c, i) => (
-                <div
-                  key={`${c.pageIndex}-${c.yRatio}-${i}`}
-                  className="border rounded-lg p-2 text-center text-xs"
-                  title={`Page ${c.pageIndex + 1}, column ${c.column + 1}, confidence ${Math.round(c.confidence * 100)}%`}
-                >
-                  <div className="font-semibold">Q{c.questionNumber}</div>
-                  <div className={`h-1 rounded-full mt-1 ${c.confidence >= 0.7 ? "bg-green-500" : "bg-amber-500"}`} />
-                </div>
-              ))}
-            </div>
-
-            <Card className="bg-muted/30">
-              <CardContent className="p-4 text-xs text-muted-foreground space-y-1">
-                <p>
-                  This is the raw detection pass — the visual capture editor (drag to adjust each
-                  region, Extend Capture for split questions, manual capture) is the next phase of
-                  this feature and isn't wired into this screen yet. Local test id:{" "}
-                  <code className="text-[10px]">{localTestId}</code>
-                </p>
-              </CardContent>
-            </Card>
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => navigate(`/qp-to-cbt/capture/${localTestId}`)}
+            >
+              Review Captures <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
           </div>
         )}
       </div>
     </DashboardLayout>
   );
 }
-
