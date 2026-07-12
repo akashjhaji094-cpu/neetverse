@@ -36,6 +36,13 @@ const AdaptiveLearning = lazy(() => import("./pages/AdaptiveLearning"));
 const BattleArena = lazy(() => import("./pages/BattleArena"));
 const MockAnalysis = lazy(() => import("./pages/MockAnalysis"));
 const QpToCbt = lazy(() => import("./pages/QpToCbt"));
+
+// QP to CBT Phase 2 Lazy Imports
+const QpToCbtCapture = lazy(() => import("./pages/QpToCbtCapture"));
+const QpToCbtAnswerKey = lazy(() => import("./pages/QpToCbtAnswerKey"));
+const QpToCbtTake = lazy(() => import("./pages/QpToCbtTake"));
+const QpToCbtResults = lazy(() => import("./pages/QpToCbtResults"));
+
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
 const PageLoader = () => (
@@ -98,7 +105,14 @@ const App = () => (
                 <Route path="/adaptive-learning" element={<AdaptiveLearning />} />
                 <Route path="/battle-arena" element={<BattleArena />} />
                 <Route path="/mock-analysis/:attemptId" element={<MockAnalysis />} />
+                
+                {/* QP to CBT Routes */}
                 <Route path="/qp-to-cbt" element={<QpToCbt />} />
+                <Route path="/qp-to-cbt/capture/:testId" element={<QpToCbtCapture />} />
+                <Route path="/qp-to-cbt/answer-key/:testId" element={<QpToCbtAnswerKey />} />
+                <Route path="/qp-to-cbt/take/:testId" element={<QpToCbtTake />} />
+                <Route path="/qp-to-cbt/results/:attemptId" element={<QpToCbtResults />} />
+
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
