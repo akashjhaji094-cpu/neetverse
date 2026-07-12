@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "idb": "^8.0.0",
+    "tesseract.js": "^5.1.1",
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/mcp-js": "^0.20.0",
     "@radix-ui/react-accordion": "^1.2.11",
