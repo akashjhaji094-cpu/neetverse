@@ -9,13 +9,21 @@ import { Question } from "@/lib/supabase";
 import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
 
-interface QuestionReviewProps {
-  questions: Question[];
+// EDIT 1 (Part A): Upgraded interface to support Generic types extending core validation contract
+interface QuestionReviewProps<Q extends { id: string; correct_option_index: number | null } = Question> {
+  questions: Q[];
   answers: Record<string, number | null>;
   onClose: () => void;
+  renderQuestion?: (question: Q, userAnswer: number | null) => React.ReactNode;
 }
 
-export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewProps) => {
+// EDIT 1 (Part B): Component functional implementation declared using standard generic parameter binding
+export const QuestionReview = <Q extends { id: string; correct_option_index: number | null } = Question>({ 
+  questions, 
+  answers, 
+  onClose,
+  renderQuestion 
+}: QuestionReviewProps<Q>) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentQuestion = questions[currentIndex];
   const userAnswer = answers[currentQuestion.id];
@@ -130,57 +138,65 @@ export const QuestionReview = ({ questions, answers, onClose }: QuestionReviewPr
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Question Text */}
-              <MathContent
-                html={formatQuestionHtml(currentQuestion.question_text)}
-                className="text-base leading-relaxed neet-question"
-              />
+              
+              {/* EDIT 2: Conditionally render custom processing layouts or default back to standard viewports */}
+              {renderQuestion ? (
+                renderQuestion(currentQuestion, userAnswer ?? null)
+              ) : (
+                <>
+                  {/* Question Text */}
+                  <MathContent
+                    html={formatQuestionHtml(currentQuestion.question_text)}
+                    className="text-base leading-relaxed neet-question"
+                  />
 
-              {/* Question Images */}
-              {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {(currentQuestion.images as string[]).map((img, idx) => (
-                    <img key={idx} src={img} alt={`Question ${idx + 1}`} className="max-h-48 rounded border" />
-                  ))}
-                </div>
-              )}
-
-              {/* Options */}
-              <div className="space-y-3">
-                {options.map((option, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-lg border-2 ${getOptionClass(idx)}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="font-semibold text-muted-foreground">
-                        {String.fromCharCode(65 + idx)}.
-                      </span>
-                      <MathContent as="span" html={formatOptionHtml(String(option))} className="flex-1" />
-                      {currentQuestion.correct_option_index === idx && (
-                        <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      )}
-                      {userAnswer === idx && currentQuestion.correct_option_index !== idx && (
-                        <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                      )}
+                  {/* Question Images */}
+                  {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {(currentQuestion.images as string[]).map((img, idx) => (
+                        <img key={idx} src={img} alt={`Question ${idx + 1}`} className="max-h-48 rounded border" />
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
+                  )}
 
-              {/* Explanation */}
-              {currentQuestion.explanation && (
-                <Card className="bg-primary/5 border-primary/20">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-primary">Explanation</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <MathContent html={formatQuestionHtml(currentQuestion.explanation)} className="text-sm" />
-                  </CardContent>
-                </Card>
+                  {/* Options */}
+                  <div className="space-y-3">
+                    {options.map((option, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-4 rounded-lg border-2 ${getOptionClass(idx)}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="font-semibold text-muted-foreground">
+                            {String.fromCharCode(65 + idx)}.
+                          </span>
+                          <MathContent as="span" html={formatOptionHtml(String(option))} className="flex-1" />
+                          {currentQuestion.correct_option_index === idx && (
+                            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          )}
+                          {userAnswer === idx && currentQuestion.correct_option_index !== idx && (
+                            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Explanation */}
+                  {currentQuestion.explanation && (
+                    <Card className="bg-primary/5 border-primary/20">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-primary">Explanation</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <MathContent html={formatQuestionHtml(currentQuestion.explanation)} className="text-sm" />
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
 
-              {/* Navigation */}
+              {/* Navigation — Always remains accessible below render boundaries */}
               <div className="flex justify-between pt-4">
                 <Button
                   variant="outline"
