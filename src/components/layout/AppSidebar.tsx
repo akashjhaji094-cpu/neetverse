@@ -40,6 +40,7 @@ import {
   Send,
   TrendingUp,
   ScanLine,
+  FileScan,
 } from 'lucide-react';
 import { SidebarChatbot } from './SidebarChatbot';
 
@@ -97,6 +98,7 @@ export function AppSidebar() {
         { title: "Pending OMR", href: "/pending-omr", icon: ScanLine },
         { title: "PYQs", href: "/pyqs", icon: FileText },
         { title: "Notes & Books", href: "/notes", icon: FileText },
+        { title: "QP TO CBT", href: "/qp-to-cbt", icon: FileScan, new: true },
       ],
     },
     {
