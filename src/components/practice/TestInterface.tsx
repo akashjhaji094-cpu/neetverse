@@ -9,24 +9,42 @@ import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
 import { motion, AnimatePresence } from "framer-motion";
 
-interface TestInterfaceProps {
-  questions: Question[];
+// EDIT 1: Generic type definition supporting either standard Supabase Question or customized variants
+interface TestInterfaceProps<Q extends { id: string } = Question> {
+  questions: Q[];
   onSubmit: (answers: Record<string, number | null>, timeSpent: Record<string, number>) => void;
   /** If set, counts DOWN from this many minutes and auto-submits at 0. Omit for untimed practice. */
   durationMinutes?: number;
+  renderQuestion?: (question: Q, selected: number | null, onSelect: (index: number) => void) => React.ReactNode;
+  initialState?: { 
+    answers: Record<string, number | null>; 
+    marked: Record<string, boolean>; 
+    timeElapsedSeconds: number; 
+    currentIndex: number; 
+    questionTimeSpent?: Record<string, number> 
+  };
 }
 
-export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInterfaceProps) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number | null>>({});
-  const [timeElapsed, setTimeElapsed] = useState(0);
+// EDIT 2 (Part A): Component signature updated to use Generic Q parameter and destructure new props
+export const TestInterface = <Q extends { id: string } = Question>({ 
+  questions, 
+  onSubmit, 
+  durationMinutes, 
+  renderQuestion, 
+  initialState 
+}: TestInterfaceProps<Q>) => {
+  
+  // EDIT 2 (Part B): State initialization pulling from initialState defaults when available
+  const [currentIndex, setCurrentIndex] = useState(initialState?.currentIndex ?? 0);
+  const [answers, setAnswers] = useState<Record<string, number | null>>(initialState?.answers ?? {});
+  const [timeElapsed, setTimeElapsed] = useState(initialState?.timeElapsedSeconds ?? 0);
+  const [marked, setMarked] = useState<Record<string, boolean>>(initialState?.marked ?? {});
+  const [questionTimeSpent, setQuestionTimeSpent] = useState<Record<string, number>>(initialState?.questionTimeSpent ?? {});
+
   const totalSeconds = durationMinutes ? durationMinutes * 60 : null;
   const timeRemaining = totalSeconds !== null ? Math.max(0, totalSeconds - timeElapsed) : null;
   const autoSubmittedRef = useRef(false);
-  const [marked, setMarked] = useState<Record<string, boolean>>({});
-  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
-  // Per-question time spent, in whole seconds. Keyed by question id.
-  const [questionTimeSpent, setQuestionTimeSpent] = useState<Record<string, number>>({});
+  const [visited, setVisited] = useState<Record<number, boolean>>({ [initialState?.currentIndex ?? 0]: true });
   const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -50,11 +68,6 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
     }));
   };
 
-  // Adds however long we've been sitting on the current question to its
-  // running total, then resets the clock. Call right before the visible
-  // question changes (Next / Previous / palette jump / submit), and use
-  // the RETURNED map immediately — questionTimeSpent state won't be
-  // updated yet in the same tick.
   const commitCurrentQuestionTime = () => {
     const q = questions[currentIndex];
     if (!q) return questionTimeSpent;
@@ -82,7 +95,6 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
     onSubmit(answers, finalTimeSpent);
   };
 
-  // Auto-submit the instant the countdown hits 0 — mirrors the real NEET exam.
   useEffect(() => {
     if (timeRemaining === 0 && !autoSubmittedRef.current) {
       autoSubmittedRef.current = true;
@@ -97,7 +109,7 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const answeredCount = Object.keys(answers).length;
+  const answeredCount = Object.keys(answers).filter(key => answers[key] !== null).length;
 
   const getStatus = (idx: number) => {
     const q = questions[idx];
@@ -142,61 +154,68 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
         <Card>
           <CardContent className="pt-6 space-y-6">
             <AnimatePresence mode="wait">
-            <motion.div
-              key={currentIndex}
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
-              transition={{ duration: 0.25 }}
-              className="space-y-4"
-            >
-              <div className="flex items-start gap-2">
-                <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
-                <div className="flex-1">
-                  <MathContent
-                    html={formatQuestionHtml(currentQuestion.question_text)}
-                    className="text-base leading-relaxed neet-question"
-                  />
-                  {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      {currentQuestion.images.map((url, idx) => (
-                        <img
-                          key={idx}
-                          src={url}
-                          alt={`Question image ${idx + 1}`}
-                          className="max-w-full h-auto rounded-lg border"
+              <motion.div
+                key={currentIndex}
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-4"
+              >
+                {/* EDIT 3: Render either the custom capture node or default to the standard Supabase layout */}
+                {renderQuestion ? (
+                  renderQuestion(currentQuestion, answers[currentQuestion.id] ?? null, handleAnswer)
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold text-sm">Q{currentIndex + 1}.</span>
+                      <div className="flex-1">
+                        <MathContent
+                          html={formatQuestionHtml(currentQuestion.question_text || '')}
+                          className="text-base leading-relaxed neet-question"
                         />
+                        {currentQuestion.images && Array.isArray(currentQuestion.images) && currentQuestion.images.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {currentQuestion.images.map((url, idx) => (
+                              <img
+                                key={idx}
+                                src={url}
+                                alt={`Question image ${idx + 1}`}
+                                className="max-w-full h-auto rounded-lg border"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pl-6">
+                      {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleAnswer(index)}
+                          className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                            answers[currentQuestion.id] === index
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                              answers[currentQuestion.id] === index
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border'
+                            }`}>
+                              {answers[currentQuestion.id] === index && '✓'}
+                            </div>
+                            <MathContent as="span" html={formatOptionHtml(String(option))} className="text-sm" />
+                          </div>
+                        </button>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2 pl-6">
-                {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleAnswer(index)}
-                    className={`w-full text-left p-4 rounded-lg border transition-colors ${
-                      answers[currentQuestion.id] === index
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/50 hover:bg-accent'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        answers[currentQuestion.id] === index
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border'
-                      }`}>
-                        {answers[currentQuestion.id] === index && '✓'}
-                      </div>
-                      <MathContent as="span" html={formatOptionHtml(String(option))} className="text-sm" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
+                  </>
+                )}
+              </motion.div>
             </AnimatePresence>
 
             <div className="flex items-center justify-between pt-4 border-t">
@@ -240,11 +259,7 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
           </CardContent>
         </Card>
 
-        {/* Question Palette — ONLY change from your original: CardContent
-            now uses flex-1 min-h-0 instead of h-full. As a flex child of a
-            flex-col Card, h-full doesn't reliably resolve; flex-1+min-h-0
-            is what actually lets the grid below shrink to available space
-            and scroll instead of overflowing past the Card's max-height. */}
+        {/* Question Palette — Kept intact with flex-1 min-h-0 for proper relative column scrolling */}
         <Card className="lg:sticky lg:top-32 self-start max-h-[calc(100vh-9rem)] overflow-hidden flex flex-col">
           <CardContent className="pt-4 pb-4 flex flex-col flex-1 min-h-0">
             <h3 className="text-sm font-semibold mb-3 flex-shrink-0">Question Palette</h3>
@@ -277,3 +292,4 @@ export const TestInterface = ({ questions, onSubmit, durationMinutes }: TestInte
     </div>
   );
 };
+      
