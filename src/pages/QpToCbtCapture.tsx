@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, AlertTriangle, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, AlertTriangle, ArrowRight, Link2 } from "lucide-react";
 
 import type { LocalPdfTest, QuestionCapture, QuestionCaptureSegment, NormalizedRect } from "@/features/qp-to-cbt/types";
 import * as repo from "@/features/qp-to-cbt/storage/db";
@@ -36,6 +36,11 @@ export default function QpToCbtCapture() {
   const [segmentsByCaptureId, setSegmentsByCaptureId] = useState<Record<string, QuestionCaptureSegment[]>>({});
   const [selectedCaptureId, setSelectedCaptureId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
+  // When true, the next box drawn becomes a NEW SEGMENT on the currently
+  // selected question (Q4 -> Q4.1/Q4.2/...) instead of a brand new question.
+  // This is "Extend Capture" — for a question that continues in another
+  // column/page, or has a diagram elsewhere on the page.
+  const [extendMode, setExtendMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // ---- Load test, PDF, and existing captures ----
@@ -137,6 +142,38 @@ export default function QpToCbtCapture() {
 
   const handleBoxCreate = async (rect: NormalizedRect) => {
     if (!test) return;
+
+    // ---- Extend Capture: add a segment to the currently selected question ----
+    if (extendMode && selectedCaptureId) {
+      const capture = captures.find((c) => c.id === selectedCaptureId);
+      if (!capture) return;
+      const existingSegments = segmentsByCaptureId[selectedCaptureId] ?? [];
+      const segment: QuestionCaptureSegment = {
+        id: crypto.randomUUID(),
+        questionCaptureId: selectedCaptureId,
+        order: existingSegments.length,
+        rect: { ...rect, pageIndex },
+        ocrText: null,
+        ocrConfidence: null,
+        source: "extended",
+        createdAt: new Date().toISOString(),
+      };
+      await repo.saveCaptureSegment(segment);
+      const updatedCapture = {
+        ...capture,
+        segmentIds: [...capture.segmentIds, segment.id],
+        updatedAt: new Date().toISOString(),
+      };
+      await repo.saveQuestionCapture(updatedCapture);
+
+      setSegmentsByCaptureId((prev) => ({ ...prev, [selectedCaptureId]: [...existingSegments, segment] }));
+      setCaptures((prev) => prev.map((c) => (c.id === selectedCaptureId ? updatedCapture : c)));
+      setExtendMode(false);
+      setDrawMode(false);
+      return;
+    }
+
+    // ---- Normal manual capture: a brand new question ----
     const questionNumber = nextDefaultQuestionNumber(allQuestionNumbers);
     const captureId = crypto.randomUUID();
     const segmentId = crypto.randomUUID();
@@ -172,6 +209,25 @@ export default function QpToCbtCapture() {
     setSegmentsByCaptureId((prev) => ({ ...prev, [captureId]: [segment] }));
     setSelectedCaptureId(captureId);
     setDrawMode(false);
+  };
+
+  const handleDeleteSegment = async (captureId: string, segmentId: string) => {
+    const capture = captures.find((c) => c.id === captureId);
+    if (!capture) return;
+    const remaining = (segmentsByCaptureId[captureId] ?? []).filter((s) => s.id !== segmentId);
+    if (remaining.length === 0) {
+      // Deleting the last segment deletes the whole question — a question
+      // with zero regions isn't meaningful.
+      await handleDelete(captureId);
+      return;
+    }
+    await repo.deleteCaptureSegment(segmentId);
+    const renumbered = remaining.map((s, i) => ({ ...s, order: i }));
+    for (const s of renumbered) await repo.saveCaptureSegment(s);
+    const updatedCapture = { ...capture, segmentIds: renumbered.map((s) => s.id), updatedAt: new Date().toISOString() };
+    await repo.saveQuestionCapture(updatedCapture);
+    setSegmentsByCaptureId((prev) => ({ ...prev, [captureId]: renumbered }));
+    setCaptures((prev) => prev.map((c) => (c.id === captureId ? updatedCapture : c)));
   };
 
   const handleRenumber = async (captureId: string, newNumber: number) => {
@@ -264,10 +320,37 @@ export default function QpToCbtCapture() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <Button size="sm" variant={drawMode ? "default" : "outline"} onClick={() => setDrawMode((d) => !d)}>
-                <Plus className="h-4 w-4 mr-1" /> Capture Question
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={extendMode ? "default" : "outline"}
+                  disabled={!selectedCaptureId}
+                  onClick={() => {
+                    setExtendMode((e) => !e);
+                    setDrawMode(true);
+                  }}
+                  title={selectedCaptureId ? "Draw the next region for this question" : "Select a question first"}
+                >
+                  <Link2 className="h-4 w-4 mr-1" /> Extend Capture
+                </Button>
+                <Button
+                  size="sm"
+                  variant={drawMode && !extendMode ? "default" : "outline"}
+                  onClick={() => {
+                    setDrawMode((d) => !d);
+                    setExtendMode(false);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Capture Question
+                </Button>
+              </div>
             </div>
+            {extendMode && (
+              <p className="text-xs text-primary bg-primary/5 rounded-lg p-2">
+                Draw the next region for Q{captures.find((c) => c.id === selectedCaptureId)?.questionNumber} — can be
+                on this page or any other page/column.
+              </p>
+            )}
 
             <CaptureCanvas
               pageCanvas={pageCanvas}
@@ -304,6 +387,28 @@ export default function QpToCbtCapture() {
                   <Badge variant={selectedCapture.reviewState === "confirmed" ? "default" : "secondary"}>
                     {selectedCapture.reviewState === "confirmed" ? "Confirmed" : "Pending review"}
                   </Badge>
+
+                  {(segmentsByCaptureId[selectedCapture.id]?.length ?? 0) > 1 && (
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">
+                        {segmentsByCaptureId[selectedCapture.id].length} segments (rendered in this order)
+                      </label>
+                      {segmentsByCaptureId[selectedCapture.id]
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((seg, i) => (
+                          <div key={seg.id} className="flex items-center justify-between text-xs border rounded px-2 py-1">
+                            <button className="text-left" onClick={() => setPageIndex(seg.rect.pageIndex)}>
+                              Q{selectedCapture.questionNumber}.{i} — page {seg.rect.pageIndex + 1}
+                            </button>
+                            <button onClick={() => handleDeleteSegment(selectedCapture.id, seg.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     {selectedCapture.reviewState !== "confirmed" && (
                       <Button size="sm" className="flex-1" onClick={() => handleConfirm(selectedCapture.id)}>
@@ -351,4 +456,3 @@ export default function QpToCbtCapture() {
     </DashboardLayout>
   );
 }
-
