@@ -1,19 +1,18 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
 
-User-agent: *
-Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /account
+Disallow: /settings
+Disallow: /practice
+Disallow: /test
+Disallow: /pyqs
+Disallow: /notes
+Disallow: /progress
+Disallow: /leaderboard
+Disallow: /notifications
+Disallow: /adaptive-learning
+Disallow: /battle-arena
 
-Sitemap: https://neetverse.vercel.app/sitemap.xml
+Sitemap: https://neetverse.site/sitemap.xml
