@@ -22,6 +22,7 @@ import {
   type QuestionNumberCandidate,
 } from "@/features/qp-to-cbt/detection/questionNumberDetector";
 import { buildColumnBands, compareReadingOrder } from "@/features/qp-to-cbt/capture/coordinates";
+import { OcrWorkerManager, ocrPageToTextLayout } from "@/features/qp-to-cbt/ocr/ocrWorkerManager";
 
 type AnswerKeyFormat = "same_pdf" | "separate_pdfs";
 type Stage = "choose_format" | "upload" | "detecting" | "detected" | "error";
@@ -84,10 +85,27 @@ export default function QpToCbt() {
 
         const allCandidates: QuestionNumberCandidate[] = [];
         let expectedNext: number | null = null;
+        let ocrManager: OcrWorkerManager | null = null;
+        let usedOcrFallback = false;
 
         for (let pageIndex = 0; pageIndex < manager.pageCount; pageIndex++) {
           setProgressLabel(`Scanning page ${pageIndex + 1} of ${manager.pageCount}`);
-          const layout = await manager.getPageTextLayout(pageIndex);
+          let layout = await manager.getPageTextLayout(pageIndex);
+
+          if (!layout.hasTextLayer) {
+            // No extractable text layer — this page is a scanned image, not
+            // native text. Fall back to OCR instead of silently finding
+            // zero questions on it, which is what caused this PDF to detect
+            // 0 questions before this fix.
+            usedOcrFallback = true;
+            setProgressLabel(`Page ${pageIndex + 1} has no text layer — running OCR (slower)…`);
+            if (!ocrManager) ocrManager = new OcrWorkerManager();
+            const pageCanvasForOcr = await manager.renderPageWindow(pageIndex);
+            layout = await ocrPageToTextLayout(ocrManager, pageCanvasForOcr, pageIndex, (p) =>
+              setProgressLabel(`OCR page ${pageIndex + 1}: ${Math.round(p.progress * 100)}%`)
+            );
+          }
+
           const gutters = detectColumnGutters(layout);
           const bands = buildColumnBands(gutters);
           const pageCandidates = detectQuestionNumberCandidates(layout, bands, expectedNext);
@@ -101,10 +119,6 @@ export default function QpToCbt() {
           allCandidates.push(...ordered);
           if (ordered.length > 0) expectedNext = ordered[ordered.length - 1].questionNumber + 1;
 
-          // Boundaries proposed per-page (each page's candidates only) —
-          // good enough for single-page questions; cross-page continuations
-          // are handled by "Extend Capture" on the capture review screen,
-          // not guessed here.
           const regions = proposeCaptureBoundaries(ordered, bands);
           for (const region of regions) {
             const captureId = crypto.randomUUID();
@@ -138,8 +152,14 @@ export default function QpToCbt() {
         }
 
         manager.dispose();
+        await ocrManager?.dispose();
         await repo.saveLocalPdfTest({ ...test, questionCount: allCandidates.length, updatedAt: new Date().toISOString() });
         setDetectedCount(allCandidates.length);
+        if (usedOcrFallback) {
+          setErrorMessage(
+            "Some pages had no selectable text (scanned images), so OCR was used instead — double-check those question boundaries carefully on the next screen, OCR is less precise than native PDF text."
+          );
+        }
         setStage("detected");
       } catch (err: any) {
         console.error("QP TO CBT detection failed:", err);
@@ -284,3 +304,4 @@ export default function QpToCbt() {
     </DashboardLayout>
   );
 }
+
