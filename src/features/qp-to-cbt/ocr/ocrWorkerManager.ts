@@ -92,14 +92,20 @@ export class OcrWorkerManager {
   }
 
   async recognizeCanvas(canvas: HTMLCanvasElement, onProgress?: (e: OcrProgressEvent) => void): Promise<OcrResult> {
+    const { data } = await this.recognizeCanvasRaw(canvas, onProgress);
+    return { text: data.text.trim(), confidence: Math.max(0, Math.min(1, data.confidence / 100)) };
+  }
+
+  /** Same as recognizeCanvas but returns Tesseract's full result, including
+   * per-word bounding boxes — needed by ocrPageToTextLayout below to fake up
+   * a PageTextLayout for pages with no real PDF text layer. */
+  async recognizeCanvasRaw(canvas: HTMLCanvasElement, onProgress?: (e: OcrProgressEvent) => void) {
     this.currentJobCancelled = false;
     await this.ensureInitialized(onProgress);
     if (!this.worker) throw new Error("OCR worker failed to initialize");
-
-    const { data } = await this.worker.recognize(canvas);
+    const result = await this.worker.recognize(canvas);
     if (this.currentJobCancelled) throw new OcrCancelledError();
-
-    return { text: data.text.trim(), confidence: Math.max(0, Math.min(1, data.confidence / 100)) };
+    return result;
   }
 
   /** Best-effort cooperative cancellation — Tesseract.js doesn't expose
@@ -166,5 +172,38 @@ export async function runBatchOcr(
   }
   onProgress({ completed: targets.length, total: targets.length, currentLabel: "Done" });
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Scanned-PDF fallback: OCR a whole page and shape the result to look like
+// PageTextLayout, so questionNumberDetector.ts and answerKeyParser.ts work
+// completely unchanged whether their input came from pdf.js's real text
+// layer or from OCR. This is the fix for "zero questions detected" on
+// scanned/image-only question papers, which have no extractable text layer
+// at all — the previous version silently returned [] for those pages
+// instead of falling back to this.
+// ---------------------------------------------------------------------------
+
+export async function ocrPageToTextLayout(
+  manager: OcrWorkerManager,
+  pageCanvas: HTMLCanvasElement,
+  pageIndex: number,
+  onProgress?: (e: OcrProgressEvent) => void
+): Promise<import("../pdf/pdfDocumentManager").PageTextLayout> {
+  const raw: any = await manager.recognizeCanvasRaw(pageCanvas, onProgress);
+  const words: any[] = raw?.data?.words ?? [];
+
+  const items = words
+    .filter((w) => w.text && w.text.trim().length > 0 && w.bbox)
+    .map((w) => ({
+      str: w.text as string,
+      xRatio: w.bbox.x0 / pageCanvas.width,
+      yRatio: w.bbox.y0 / pageCanvas.height,
+      widthRatio: (w.bbox.x1 - w.bbox.x0) / pageCanvas.width,
+      heightRatio: (w.bbox.y1 - w.bbox.y0) / pageCanvas.height,
+      fontName: "",
+    }));
+
+  return { pageIndex, items, hasTextLayer: items.length > 0 };
 }
 
