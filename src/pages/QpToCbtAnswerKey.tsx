@@ -18,6 +18,7 @@ import type { LocalPdfTest, SourcePdf, AnswerKeyEntry, AnswerOption } from "@/fe
 import * as repo from "@/features/qp-to-cbt/storage/db";
 import { PdfDocumentManager } from "@/features/qp-to-cbt/pdf/pdfDocumentManager";
 import { parseAnswerKeyFromPages, summarizeAnswerKeyReview } from "@/features/qp-to-cbt/answer-key/answerKeyParser";
+import { OcrWorkerManager, ocrPageToTextLayout } from "@/features/qp-to-cbt/ocr/ocrWorkerManager";
 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
@@ -43,11 +44,22 @@ export default function QpToCbtAnswerKey() {
     const manager = await PdfDocumentManager.load(bytes);
 
     const layouts = [];
+    let ocrManager: OcrWorkerManager | null = null;
     for (let i = 0; i < manager.pageCount; i++) {
       setProgressLabel(`Scanning page ${i + 1} of ${manager.pageCount} for the answer key…`);
-      layouts.push(await manager.getPageTextLayout(i));
+      let layout = await manager.getPageTextLayout(i);
+      if (!layout.hasTextLayer) {
+        setProgressLabel(`Page ${i + 1} has no text layer — running OCR (slower)…`);
+        if (!ocrManager) ocrManager = new OcrWorkerManager();
+        const canvas = await manager.renderPageWindow(i);
+        layout = await ocrPageToTextLayout(ocrManager, canvas, i, (p) =>
+          setProgressLabel(`OCR page ${i + 1}: ${Math.round(p.progress * 100)}%`)
+        );
+      }
+      layouts.push(layout);
     }
     manager.dispose();
+    await ocrManager?.dispose();
 
     const { entries: parsed } = parseAnswerKeyFromPages(layouts);
     const withTestId = parsed.map((e) => ({ ...e, localTestId: t.id }));
@@ -262,4 +274,3 @@ export default function QpToCbtAnswerKey() {
     </DashboardLayout>
   );
 }
-
