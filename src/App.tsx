@@ -35,7 +35,12 @@ const Premium = lazy(() => import("./pages/Premium"));
 const AdaptiveLearning = lazy(() => import("./pages/AdaptiveLearning"));
 const BattleArena = lazy(() => import("./pages/BattleArena"));
 const MockAnalysis = lazy(() => import("./pages/MockAnalysis"));
+const Neet2027 = lazy(() => import("./pages/seo/Neet2027"));
+const NeetMockTest = lazy(() => import("./pages/seo/NeetMockTest"));
+const NeetPyq = lazy(() => import("./pages/seo/NeetPyq"));
+const SubjectPage = lazy(() => import("./pages/seo/SubjectPage"));
 const QpToCbt = lazy(() => import("./pages/QpToCbt"));
+
 
 // QP to CBT Phase 2 Lazy Imports
 const QpToCbtCapture = lazy(() => import("./pages/QpToCbtCapture"));
@@ -105,6 +110,37 @@ const App = () => (
                 <Route path="/adaptive-learning" element={<AdaptiveLearning />} />
                 <Route path="/battle-arena" element={<BattleArena />} />
                 <Route path="/mock-analysis/:attemptId" element={<MockAnalysis />} />
+
+                {/* Public SEO pages */}
+                <Route path="/neet-2027" element={<Neet2027 />} />
+                <Route path="/neet-mock-test" element={<NeetMockTest />} />
+                <Route path="/neet-pyq" element={<NeetPyq />} />
+                <Route path="/biology" element={<SubjectPage subjectSlug="biology" />} />
+                <Route path="/physics" element={<SubjectPage subjectSlug="physics" />} />
+                <Route path="/chemistry" element={<SubjectPage subjectSlug="chemistry" />} />
+
+                {/* Redirects — overlapping search intent consolidated onto one canonical page each */}
+                <Route path="/neet-preparation" element={<Navigate to="/neet-2027" replace />} />
+                <Route path="/neet-study-plan" element={<Navigate to="/neet-2027" replace />} />
+                <Route path="/neet-revision-strategy" element={<Navigate to="/neet-2027" replace />} />
+                <Route path="/neet-2027-mock-test" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/free-neet-mock-test" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-online-test-series" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-omr-practice" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-cbt-practice" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-performance-analysis" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-revision-tool" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-test-analysis" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-question-bank" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-practice-questions" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-mcq-practice" element={<Navigate to="/neet-mock-test" replace />} />
+                <Route path="/neet-biology-questions" element={<Navigate to="/biology" replace />} />
+                <Route path="/neet-physics-questions" element={<Navigate to="/physics" replace />} />
+                <Route path="/neet-chemistry-questions" element={<Navigate to="/chemistry" replace />} />
+                <Route path="/neet-previous-year-questions" element={<Navigate to="/neet-pyq" replace />} />
+                <Route path="/neet-biology-pyq" element={<Navigate to="/neet-pyq" replace />} />
+                <Route path="/neet-physics-pyq" element={<Navigate to="/neet-pyq" replace />} />
+                <Route path="/neet-chemistry-pyq" element={<Navigate to="/neet-pyq" replace />} />
                 
                 {/* QP to CBT Routes */}
                 <Route path="/qp-to-cbt" element={<QpToCbt />} />
