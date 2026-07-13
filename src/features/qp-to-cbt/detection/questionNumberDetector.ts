@@ -16,7 +16,15 @@ import type { NormalizedRect } from "../types";
 import { buildColumnBands, columnForRect, type ColumnBand } from "../capture/coordinates";
 
 const LINE_Y_TOLERANCE = 0.006; // items within this yRatio of each other are "the same line"
-const COLUMN_LEFT_EDGE_TOLERANCE = 0.03; // how close to a column's left edge a number must start
+// NOTE (fixed after real-world zero-detection reports): this used to also
+// require a match to sit within a few % of its column's absolute left edge.
+// Real PDFs have page margins — question numbers routinely sit 5-12% in
+// from x=0, not ~0%. Combined with the old regex requiring a literal space
+// character after "1." (PDF text extraction frequently omits the space
+// glyph and relies on positioning alone), that old logic rejected nearly
+// everything. Left-alignment is now informational only (used for column
+// assignment), not a hard accept/reject gate — the regex anchored to the
+// start of each line's text is the real signal.
 const MIN_GUTTER_WIDTH_RATIO = 0.02; // minimum empty-band width to call it a real gutter
 
 // ---------------------------------------------------------------------------
@@ -84,8 +92,10 @@ export function detectColumnGutters(layout: PageTextLayout): number[] {
 const NUMBER_PATTERNS: RegExp[] = [
   /^Q\s*\.?\s*(\d{1,3})\s*[.)\-:]?\s*/i, // Q1.  Q.1  Q 1  Q. 1
   /^Question\s+(\d{1,3})\b\s*[.)\-:]?\s*/i, // Question 1
-  /^(\d{1,3})\s*[.)\-]\s+/, // 1.   1)   1 -   (requires trailing space so we don't
-  // match "1.5 m/s" style numeric values mid-sentence)
+  /^(\d{1,3})\s*[.)\-]\s*(?!\d)/, // 1.  1)  1 -   — (?!\d) rejects "1.5" (decimal)
+  // without requiring a literal space, since PDFs frequently glue "1." and
+  // the next word together in the extracted text stream even when they're
+  // visually separated on the page.
 ];
 
 function matchQuestionNumber(text: string): number | null {
@@ -144,9 +154,6 @@ export function detectQuestionNumberCandidates(
       { pageIndex: layout.pageIndex, xRatio: firstItem.xRatio, yRatio: line.yRatio, widthRatio: 0, heightRatio: 0 },
       bands
     );
-    const band = bands[column];
-    const distanceFromColumnLeft = firstItem.xRatio - (band?.xStartRatio ?? 0);
-    if (distanceFromColumnLeft > COLUMN_LEFT_EDGE_TOLERANCE) continue; // not left-aligned in its column — unlikely to be a question start
 
     const questionNumber = matchQuestionNumber(leadingText(line));
     if (questionNumber === null) continue;
