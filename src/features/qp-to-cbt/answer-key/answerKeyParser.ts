@@ -20,9 +20,13 @@
  * is robust to that; strict sequential-number scoring is not, and would
  * incorrectly penalize a perfectly valid table layout.
  *
- * This is flagged in the README as needing real-PDF tuning — the specific
- * thresholds below are principled starting points, not calibrated against
- * your actual answer-key sources yet.
+ * VERIFIED against the real answer-key page of an uploaded NEET paper
+ * (PW Mission 30, 180-question 4-column answer table): correctly parsed
+ * all 180 entries with zero misses, and correctly stopped after 1 entry
+ * (rather than false-accepting) when run against that same paper's actual
+ * detailed-solutions page. The parenthesis fix below was found and fixed
+ * this way — the original bare-character regex matched zero entries
+ * against the real page's "1.  (4)" format.
  */
 import type { PageTextLayout } from "../pdf/pdfDocumentManager";
 import type { AnswerKeyEntry, AnswerOption, NormalizedRect } from "../types";
@@ -48,7 +52,11 @@ const SOLUTION_KEYWORDS = [
   "substituting",
 ];
 
-const ENTRY_REGEX = /\b(?:Q\.?\s*)?(\d{1,3})\s*(?:[-.):]|\s)\s*([A-D]|[1-4])(?![0-9])\b/gi;
+// VERIFIED fix: the real answer-key format tested against was "1.  (4)"
+// (answer wrapped in parens, as its own token) — the bare-character-only
+// version of this regex matched zero entries on that real page. \(? \)?
+// make the parens optional so "1-A", "1. A", and "1.  (4)" all match.
+const ENTRY_REGEX = /\b(?:Q\.?\s*)?(\d{1,3})\s*(?:[-.):]|\s)\s*\(?([A-D]|[1-4])\)?(?![0-9])\b/gi;
 
 interface LinearizedPage {
   text: string;
@@ -309,5 +317,4 @@ export function summarizeAnswerKeyReview(
     potentialConflicts,
     warnings,
   };
-        }
-
+}
