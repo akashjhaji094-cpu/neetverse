@@ -110,19 +110,23 @@ export default async function handler(req: any, res: any) {
   const now = new Date();
   const nowIso = now.toISOString();
 
-  const { data: settings } = await supabase.from("telegram_bot_settings").select("*").eq("id", true).maybeSingle();
-  
-  // Directly return the settings object for testing/debugging
-  return res.status(200).json(settings);
+  const { data: settings, error } = await supabase
+    .from("telegram_bot_settings")
+    .select("*");
 
-  if (!settings || !settings.is_active) {
+  return res.status(200).json({
+    settings,
+    error,
+  });
+
+  if (!settings || !(settings as any).is_active) {
     return res.status(200).json({ skipped: true, reason: "inactive" });
   }
 
   const result: Record<string, boolean> = { questionPosted: false, promotionPosted: false };
 
   // ---- QUESTION job ----
-  const qJitterMs = (settings.question_interval_minutes + (Math.random() * 30 - 15)) * 60_000;
+  const qJitterMs = ((settings as any).question_interval_minutes + (Math.random() * 30 - 15)) * 60_000;
   const { data: claimedQ } = await supabase
     .from("telegram_bot_settings")
     .update({ next_question_due_at: new Date(now.getTime() + qJitterMs).toISOString(), updated_at: nowIso })
@@ -184,7 +188,7 @@ export default async function handler(req: any, res: any) {
   }
 
   // ---- PROMOTION job ----
-  const pJitterMs = (settings.promotion_interval_minutes + (Math.random() * 40 - 20)) * 60_000;
+  const pJitterMs = ((settings as any).promotion_interval_minutes + (Math.random() * 40 - 20)) * 60_000;
   const { data: claimedP } = await supabase
     .from("telegram_bot_settings")
     .update({ next_promotion_due_at: new Date(now.getTime() + pJitterMs).toISOString(), updated_at: nowIso })
@@ -202,4 +206,4 @@ export default async function handler(req: any, res: any) {
   }
 
   return res.status(200).json(result);
-  }
+}
