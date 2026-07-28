@@ -102,7 +102,6 @@ function generatePromoText(): string {
 }
 
 export default async function handler(req: any, res: any) {
-export default async function handler(req: any, res: any) {
   if (!SUPABASE_URL || !SUPABASE_KEY || !BOT_TOKEN || !CHANNEL_ID) {
     return res.status(200).json({
       skipped: true,
