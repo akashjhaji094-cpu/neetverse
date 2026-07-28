@@ -28,19 +28,16 @@ function stripHtml(s: string): string {
   return String(s || "").replace(/<[^>]*>/g, "").trim();
 }
 
-// ---- Lightweight LaTeX -> Unicode. No image-rendering fallback on purpose
-// (that needs extra native-binary packages that can fail a build you can't
-// debug from a phone) — anything left unconverted just has its backslash
-// commands stripped, so nothing broken/raw ever gets posted. ----
+// ---- Lightweight LaTeX -> Unicode ----
 const SUP: Record<string, string> = { "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","+":"⁺","-":"⁻","n":"ⁿ" };
 const SUB: Record<string, string> = { "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","+":"₊","-":"₋" };
 const SYM: Record<string, string> = { "\\rightarrow":"→","\\to":"→","\\times":"×","\\div":"÷","\\pm":"±","\\degree":"°","\\circ":"°","\\alpha":"α","\\beta":"β","\\gamma":"γ","\\delta":"δ","\\Delta":"Δ","\\lambda":"λ","\\mu":"μ","\\pi":"π","\\theta":"θ","\\infty":"∞","\\leq":"≤","\\geq":"≥","\\neq":"≠","\\cdot":"·","\\sqrt":"√" };
 
 function mathToUnicode(text: string): string {
-  let out = stripHtml(text).replace(/\$\$?|\\\(|\\\)|\\\[|\\\]/g, "");
-  out = out.replace(/\^\{([^}]+)\}/g, (_, g) => [...g].map((c: string) => SUP[c] ?? c).join(""));
+  let out = stripHtml(text).replace(/\$\$?|\\/g, "");
+  out = out.replace(/\^{([^}]+)}/g, (_, g) => [...g].map((c: string) => SUP[c] ?? c).join(""));
   out = out.replace(/\^(\S)/g, (_, c) => SUP[c] ?? c);
-  out = out.replace(/_\{([^}]+)\}/g, (_, g) => [...g].map((c: string) => SUB[c] ?? c).join(""));
+  out = out.replace(/_{([^}]+)}/g, (_, g) => [...g].map((c: string) => SUB[c] ?? c).join(""));
   out = out.replace(/_(\S)/g, (_, c) => SUB[c] ?? c);
   for (const [tex, sym] of Object.entries(SYM)) out = out.split(tex).join(sym);
   out = out.replace(/\\[a-zA-Z]+/g, "");
@@ -114,14 +111,17 @@ export default async function handler(req: any, res: any) {
   const nowIso = now.toISOString();
 
   const { data: settings } = await supabase.from("telegram_bot_settings").select("*").eq("id", true).maybeSingle();
+  
+  // Directly return the settings object for testing/debugging
+  return res.status(200).json(settings);
+
   if (!settings || !settings.is_active) {
     return res.status(200).json({ skipped: true, reason: "inactive" });
   }
 
   const result: Record<string, boolean> = { questionPosted: false, promotionPosted: false };
 
-  // ---- QUESTION job: atomic claim — a conditional UPDATE...WHERE that
-  // only succeeds for exactly one caller, even under concurrent visits.
+  // ---- QUESTION job ----
   const qJitterMs = (settings.question_interval_minutes + (Math.random() * 30 - 15)) * 60_000;
   const { data: claimedQ } = await supabase
     .from("telegram_bot_settings")
@@ -135,55 +135,55 @@ export default async function handler(req: any, res: any) {
       const { data: recentlyPosted } = await supabase.from("telegram_posted_questions").select("question_id").gte("posted_at", cooldownIso);
       const excludeIds = (recentlyPosted || []).map((r: any) => r.question_id);
 
-      const { count } = await supabase.from("questions").select("id", { count: "exact", head: true });
-      const poolSize = Math.max(1, (count || 1) - excludeIds.length);
-      const offset = Math.floor(Math.random() * poolSize);
+      const { count } = await supabase.from("questions").select("id", { count: "exact", head: true });  
+      const poolSize = Math.max(1, (count || 1) - excludeIds.length);  
+      const offset = Math.floor(Math.random() * poolSize);  
 
-      let q = supabase.from("questions")
-        .select(`id, question_text, options, correct_option_index, explanation, images, chapters(name), subjects(name)`)
-        .range(offset, offset);
-      if (excludeIds.length > 0) q = q.not("id", "in", `(${excludeIds.join(",")})`);
-      const { data: rows } = await q;
-      let row: any = rows?.[0];
+      let q = supabase.from("questions")  
+        .select(`id, question_text, options, correct_option_index, explanation, images, chapters(name), subjects(name)`)  
+        .range(offset, offset);  
+      if (excludeIds.length > 0) q = q.not("id", "in", `(${excludeIds.join(",")})`);  
+      const { data: rows } = await q;  
+      let row: any = rows?.[0];  
 
-      if (!row) {
-        const { data: fb } = await supabase.from("telegram_posted_questions").select("question_id").order("posted_at", { ascending: true }).limit(1);
-        if (fb?.[0]) {
-          const { data: fbQ } = await supabase.from("questions")
-            .select(`id, question_text, options, correct_option_index, explanation, images, chapters(name), subjects(name)`)
-            .eq("id", fb[0].question_id).maybeSingle();
-          row = fbQ;
-        }
-      }
+      if (!row) {  
+        const { data: fb } = await supabase.from("telegram_posted_questions").select("question_id").order("posted_at", { ascending: true }).limit(1);  
+        if (fb?.[0]) {  
+          const { data: fbQ } = await supabase.from("questions")  
+            .select(`id, question_text, options, correct_option_index, explanation, images, chapters(name), subjects(name)`)  
+            .eq("id", fb[0].question_id).maybeSingle();  
+          row = fbQ;  
+        }  
+      }  
 
-      if (row) {
-        const questionText = mathToUnicode(row.question_text);
-        const options = (row.options || []).map((o: string) => mathToUnicode(o));
-        const tag = [row.subjects?.name, row.chapters?.name].filter(Boolean).join(" • ");
-        const hasImage = row.images && row.images.length > 0;
-        const optionsShort = options.every((o: string) => o.length <= 100);
+      if (row) {  
+        const questionText = mathToUnicode(row.question_text);  
+        const options = (row.options || []).map((o: string) => mathToUnicode(o));  
+        const tag = [row.subjects?.name, row.chapters?.name].filter(Boolean).join(" • ");  
+        const hasImage = row.images && row.images.length > 0;  
+        const optionsShort = options.every((o: string) => o.length <= 100);  
 
-        if (!hasImage && optionsShort) {
-          await sendQuizPoll(questionText, options, row.correct_option_index, row.explanation ? mathToUnicode(row.explanation) : undefined);
-        } else if (hasImage) {
-          await sendPhotoWithCaption(row.images[0], `🧠 <b>NEETVerse Daily Question</b>${tag ? `\n<i>${tag}</i>` : ""}\n\n${questionText}`);
-          const optMsg = options.map((o: string, i: number) => `🔘 <b>${String.fromCharCode(65 + i)}.</b> ${o}`).join("\n");
-          await sendText(`${optMsg}\n\n🔥 Practice full CBT on:\n${NEETVERSE_URL}`);
-        } else {
-          const optMsg = options.map((o: string, i: number) => `🔘 <b>${String.fromCharCode(65 + i)}.</b> ${o}`).join("\n");
-          await sendText(`🧠 <b>NEETVerse Daily Question</b>${tag ? `\n<i>${tag}</i>` : ""}\n\n${questionText}\n\n${optMsg}\n\n🔥 Practice full CBT on:\n${NEETVERSE_URL}`);
-        }
+        if (!hasImage && optionsShort) {  
+          await sendQuizPoll(questionText, options, row.correct_option_index, row.explanation ? mathToUnicode(row.explanation) : undefined);  
+        } else if (hasImage) {  
+          await sendPhotoWithCaption(row.images[0], `🧠 <b>NEETVerse Daily Question</b>${tag ? `\n<i>${tag}</i>` : ""}\n\n${questionText}`);  
+          const optMsg = options.map((o: string, i: number) => `🔘 <b>${String.fromCharCode(65 + i)}.</b> ${o}`).join("\n");  
+          await sendText(`${optMsg}\n\n🔥 Practice full CBT on:\n${NEETVERSE_URL}`);  
+        } else {  
+          const optMsg = options.map((o: string, i: number) => `🔘 <b>${String.fromCharCode(65 + i)}.</b> ${o}`).join("\n");  
+          await sendText(`🧠 <b>NEETVerse Daily Question</b>${tag ? `\n<i>${tag}</i>` : ""}\n\n${questionText}\n\n${optMsg}\n\n🔥 Practice full CBT on:\n${NEETVERSE_URL}`);  
+        }  
 
-        await supabase.from("telegram_posted_questions").insert({ question_id: row.id });
-        await supabase.from("telegram_post_log").insert({ type: "question", status: "success", detail: row.id });
-        result.questionPosted = true;
-      }
-    } catch (err: any) {
-      await supabase.from("telegram_post_log").insert({ type: "question", status: "failed", detail: String(err?.message || err) });
+        await supabase.from("telegram_posted_questions").insert({ question_id: row.id });  
+        await supabase.from("telegram_post_log").insert({ type: "question", status: "success", detail: row.id });  
+        result.questionPosted = true;  
+      }  
+    } catch (err: any) {  
+      await supabase.from("telegram_post_log").insert({ type: "question", status: "failed", detail: String(err?.message || err) });  
     }
   }
 
-  // ---- PROMOTION job: same atomic-claim pattern ----
+  // ---- PROMOTION job ----
   const pJitterMs = (settings.promotion_interval_minutes + (Math.random() * 40 - 20)) * 60_000;
   const { data: claimedP } = await supabase
     .from("telegram_bot_settings")
@@ -202,4 +202,4 @@ export default async function handler(req: any, res: any) {
   }
 
   return res.status(200).json(result);
-}
+  }
