@@ -102,12 +102,13 @@ function generatePromoText(): string {
 }
 
 export default async function handler(req: any, res: any) {
-  return res.status(200).json({
-  SUPABASE_URL: SUPABASE_URL ? "YES" : "NO",
-  SUPABASE_KEY: SUPABASE_KEY ? "YES" : "NO",
-  BOT_TOKEN: BOT_TOKEN ? "YES" : "NO",
-  CHANNEL_ID: CHANNEL_ID ? "YES" : "NO",
-});
+export default async function handler(req: any, res: any) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !BOT_TOKEN || !CHANNEL_ID) {
+    return res.status(200).json({
+      skipped: true,
+      reason: "not_configured",
+    });
+  }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
   const now = new Date();
