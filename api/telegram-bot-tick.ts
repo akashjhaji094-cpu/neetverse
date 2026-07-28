@@ -96,9 +96,12 @@ function generatePromoText(): string {
 }
 
 export default async function handler(req: any, res: any) {
-  if (!SUPABASE_URL || !SUPABASE_KEY || !BOT_TOKEN || !CHANNEL_ID) {
-    return res.status(200).json({ skipped: true, reason: "not_configured" });
-  }
+  return res.status(200).json({
+  SUPABASE_URL: process.env.VITE_SUPABASE_URL ? "YES" : "NO",
+  SUPABASE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY ? "YES" : "NO",
+  BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? "YES" : "NO",
+  CHANNEL_ID: process.env.TELEGRAM_CHANNEL_ID ? "YES" : "NO",
+});
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
   const now = new Date();
