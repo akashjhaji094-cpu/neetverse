@@ -103,10 +103,10 @@ function generatePromoText(): string {
 
 export default async function handler(req: any, res: any) {
   return res.status(200).json({
-  SUPABASE_URL: process.env.VITE_SUPABASE_URL ? "YES" : "NO",
-  SUPABASE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY ? "YES" : "NO",
-  BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? "YES" : "NO",
-  CHANNEL_ID: process.env.TELEGRAM_CHANNEL_ID ? "YES" : "NO",
+  SUPABASE_URL: SUPABASE_URL ? "YES" : "NO",
+  SUPABASE_KEY: SUPABASE_KEY ? "YES" : "NO",
+  BOT_TOKEN: BOT_TOKEN ? "YES" : "NO",
+  CHANNEL_ID: CHANNEL_ID ? "YES" : "NO",
 });
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
