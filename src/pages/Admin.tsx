@@ -6,11 +6,9 @@ import { PremiumUpload } from "@/components/admin/PremiumUpload";
 import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
-import EmailCampaigns from "@/components/admin/email/EmailCampaigns"; // 1. नया इम्पोर्ट जोड़ा गया
-import { ReclassifyQuestions } from "@/components/admin/ReclassifyQuestions";
-import { UsersPanel } from "@/components/admin/UsersPanel";
+import { TelegramBotManager } from "@/components/admin/TelegramBotManager";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Mail, Wand2, Users } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -50,8 +48,7 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            {/* 6 की जगह grid-cols-7 किया गया है ताकि नया टैब सही से फिट हो सके */}
-            <TabsList className="grid w-full max-w-5xl grid-cols-9">
+            <TabsList className="grid w-full max-w-4xl grid-cols-7">
               <TabsTrigger value="html" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 <span className="hidden sm:inline">AI Import</span>
@@ -82,21 +79,10 @@ const Admin = () => {
                 <span className="hidden sm:inline">PYQS</span>
                 <span className="sm:hidden">PYQ</span>
               </TabsTrigger>
-              {/* 2. नया TabsTrigger यहाँ जोड़ा गया है */}
-              <TabsTrigger value="email" className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                <span className="hidden sm:inline">Email</span>
-                <span className="sm:hidden">Mail</span>
-              </TabsTrigger>
-              <TabsTrigger value="classify" className="flex items-center gap-2">
-                <Wand2 className="h-4 w-4" />
-                <span className="hidden sm:inline">AI Classify</span>
-                <span className="sm:hidden">Tag</span>
-              </TabsTrigger>
-              <TabsTrigger value="users" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Users</span>
-                <span className="sm:hidden">Users</span>
+              <TabsTrigger value="telegram" className="flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                <span className="hidden sm:inline">Telegram Bot</span>
+                <span className="sm:hidden">Bot</span>
               </TabsTrigger>
             </TabsList>
 
@@ -146,17 +132,8 @@ const Admin = () => {
                 <PyqsUpload />
               </TabsContent>
 
-              {/* 3. नया TabsContent यहाँ जोड़ा गया है */}
-              <TabsContent value="email" className="m-0">
-                <EmailCampaigns />
-              </TabsContent>
-
-              <TabsContent value="classify" className="m-0">
-                <ReclassifyQuestions />
-              </TabsContent>
-
-              <TabsContent value="users" className="m-0">
-                <UsersPanel />
+              <TabsContent value="telegram" className="m-0">
+                <TelegramBotManager />
               </TabsContent>
             </div>
           </Tabs>
