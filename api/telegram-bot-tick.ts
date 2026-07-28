@@ -3,7 +3,6 @@ export default function handler(req, res) {
     hello: "AKASH_TEST_123456"
   });
 }
-
 // api/telegram-bot-tick.ts — Vercel serverless function.
 // Called by every visitor's browser (throttled, harmless) AND does the
 // actual posting. Safe because only ONE caller can ever "win" the atomic
