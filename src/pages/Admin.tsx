@@ -7,7 +7,7 @@ import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
 import { TelegramBotManager } from "@/components/admin/TelegramBotManager";
-import EmailCampaigns from "@/pages/admin/EmailCampaigns";
+import EmailCampaigns from "@/components/admin/email/EmailCampaigns";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send, Mail } from "lucide-react";
 
