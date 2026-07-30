@@ -36,29 +36,16 @@ interface AccessKey {
   access_key: string;
   created_at: string;
   is_active: boolean;
-  expires_at: string | null;
   profiles: {
     email: string;
     name: string | null;
   };
 }
 
-const KEY_DURATION_OPTIONS = [
-  { value: "1", label: "1 Month" },
-  { value: "2", label: "2 Months" },
-  { value: "3", label: "3 Months" },
-  { value: "6", label: "6 Months" },
-  { value: "12", label: "12 Months" },
-  { value: "custom", label: "Custom Date" },
-  { value: "lifetime", label: "No Expiry (Lifetime)" },
-];
-
 export const PremiumUpload = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [accessKeys, setAccessKeys] = useState<AccessKey[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [keyDuration, setKeyDuration] = useState("1");
-  const [customExpiryDate, setCustomExpiryDate] = useState("2027-05-03");
   const [plannerTitle, setPlannerTitle] = useState("");
   const [plannerFile, setPlannerFile] = useState<File | null>(null);
   const [testTitle, setTestTitle] = useState("");
@@ -100,7 +87,6 @@ export const PremiumUpload = () => {
       return;
     }
 
-    // Fetch profiles separately
     if (data && data.length > 0) {
       const userIds = data.map((key) => key.user_id);
       const { data: profiles } = await supabase
@@ -109,7 +95,7 @@ export const PremiumUpload = () => {
         .in("id", userIds);
 
       const profilesMap = new Map(profiles?.map((p) => [p.id, p]));
-      
+
       const keysWithProfiles = data.map((key) => ({
         ...key,
         profiles: profilesMap.get(key.user_id) || { email: "Unknown", name: "Unknown" }
@@ -125,17 +111,13 @@ export const PremiumUpload = () => {
     return `PRM-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
   };
 
-  const computeExpiresAt = (): string | null => {
-    if (keyDuration === "lifetime") return null;
-    if (keyDuration === "custom") {
-      return customExpiryDate ? new Date(`${customExpiryDate}T23:59:59`).toISOString() : null;
-    }
-    const months = parseInt(keyDuration, 10);
-    const d = new Date();
-    d.setMonth(d.getMonth() + months);
-    return d.toISOString();
-  };
-
+  // FIXED — root cause of the "trial overrides premium" bug:
+  // Granting an admin key previously left any pre-existing trial row
+  // (created automatically at signup) still active, so two rows coexisted
+  // with no defined precedence. Now, granting a premium key explicitly
+  // supersedes any trial/referral row for that user in the SAME action —
+  // from the moment of grant, the admin key is the ONLY active row, so
+  // there is no ambiguity about which one is "real" ever again.
   const handleGenerateKey = async () => {
     if (!selectedUserId) {
       toast.error("Please select a user");
@@ -152,18 +134,34 @@ export const PremiumUpload = () => {
       return;
     }
 
+    // Step 1: deactivate any existing active keys for this user (trial,
+    // referral, or a previous admin grant) so the new grant is unambiguous.
+    const { error: deactivateError } = await supabase
+      .from("premium_access_keys")
+      .update({ is_active: false })
+      .eq("user_id", selectedUserId)
+      .eq("is_active", true);
+
+    if (deactivateError) {
+      toast.error("Failed to supersede existing access: " + deactivateError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Step 2: insert the new admin-granted key — no expires_at, so it
+    // never lapses on its own, and nothing else is active to conflict with it.
     const { error } = await supabase.from("premium_access_keys").insert({
       user_id: selectedUserId,
       access_key: newKey,
       created_by: authData.user.id,
-      expires_at: computeExpiresAt(),
+      is_active: true,
     });
 
     if (error) {
       toast.error("Failed to generate access key: " + error.message);
       console.error(error);
     } else {
-      toast.success("Access key generated successfully!");
+      toast.success("Access key generated — any prior trial was superseded.");
       fetchAccessKeys();
       setSelectedUserId("");
     }
@@ -179,7 +177,6 @@ export const PremiumUpload = () => {
 
     setLoading(true);
 
-    // Upload file to storage
     const fileExt = plannerFile.name.split(".").pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `planners/${fileName}`;
@@ -232,7 +229,6 @@ export const PremiumUpload = () => {
 
     setLoading(true);
 
-    // Upload file to storage
     const fileExt = testFile.name.split(".").pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `premium-tests/${fileName}`;
@@ -288,41 +284,65 @@ export const PremiumUpload = () => {
     setTimeout(() => setCopiedKey(""), 2000);
   };
 
-  const toggleKeyStatus = async (keyId: string, currentStatus: boolean) => {
+  // FIXED — the other half of the same root cause: deactivating a key
+  // previously only touched THAT one row. If a trial row (or any other
+  // row) was separately still active underneath it, the user silently
+  // kept premium access — looking exactly like "deactivate didn't work."
+  // An explicit admin deactivation now means "this user is no longer
+  // premium," full stop — it clears every active row for that user, not
+  // just the one that was clicked.
+  const toggleKeyStatus = async (keyId: string, currentStatus: boolean, userId: string) => {
+    if (currentStatus) {
+      // Deactivating: clear ALL active premium rows for this user (trial,
+      // referral, any other admin key) so no stale row keeps them premium.
+      const { error } = await supabase
+        .from("premium_access_keys")
+        .update({ is_active: false })
+        .eq("user_id", userId)
+        .eq("is_active", true);
+
+      if (error) {
+        toast.error("Failed to deactivate: " + error.message);
+      } else {
+        toast.success("Premium access fully removed for this user.");
+        fetchAccessKeys();
+      }
+      return;
+    }
+
+    // Re-activating a specific key — just that one row.
     const { error } = await supabase
       .from("premium_access_keys")
-      .update({ is_active: !currentStatus })
+      .update({ is_active: true })
       .eq("id", keyId);
 
     if (error) {
       toast.error("Failed to update key status");
       console.error(error);
     } else {
-      toast.success(`Key ${!currentStatus ? "activated" : "deactivated"}`);
+      toast.success("Key activated");
       fetchAccessKeys();
     }
   };
 
   return (
     <Tabs defaultValue="access-keys" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="access-keys">
+      <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto sm:h-10 gap-1 sm:gap-0">
+        <TabsTrigger value="access-keys" className="w-full justify-start sm:justify-center">
           <Key className="h-4 w-4 mr-2" />
           Access Keys
         </TabsTrigger>
-        <TabsTrigger value="premium-tests">
+        <TabsTrigger value="premium-tests" className="w-full justify-start sm:justify-center">
           <FileText className="h-4 w-4 mr-2" />
           Premium Tests
         </TabsTrigger>
-        <TabsTrigger value="planners">
+        <TabsTrigger value="planners" className="w-full justify-start sm:justify-center">
           <BookOpen className="h-4 w-4 mr-2" />
           Study Planners
         </TabsTrigger>
       </TabsList>
 
-      {/* Access Keys Tab */}
       <TabsContent value="access-keys" className="space-y-6">
-        {/* Generate Access Key Section */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -347,38 +367,16 @@ export const PremiumUpload = () => {
                 ))}
               </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="key-duration">Valid For</Label>
-              <select
-                id="key-duration"
-                value={keyDuration}
-                onChange={(e) => setKeyDuration(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {KEY_DURATION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            {keyDuration === "custom" && (
-              <div className="space-y-2">
-                <Label htmlFor="key-custom-date">Expires On</Label>
-                <Input
-                  id="key-custom-date"
-                  type="date"
-                  value={customExpiryDate}
-                  onChange={(e) => setCustomExpiryDate(e.target.value)}
-                />
-              </div>
-            )}
-            <Button onClick={handleGenerateKey} disabled={loading}>
+            <p className="text-xs text-muted-foreground">
+              Granting a key automatically supersedes any active trial for this user — no manual cleanup needed.
+            </p>
+            <Button onClick={handleGenerateKey} disabled={loading} className="w-full sm:w-auto">
               <Key className="h-4 w-4 mr-2" />
               Generate Access Key
             </Button>
           </CardContent>
         </Card>
 
-        {/* Access Keys List */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -386,13 +384,12 @@ export const PremiumUpload = () => {
               Active Access Keys
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Access Key</TableHead>
-                  <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -425,15 +422,6 @@ export const PremiumUpload = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {key.expires_at
-                          ? new Date(key.expires_at) < new Date()
-                            ? <span className="text-red-500 font-medium">Expired {new Date(key.expires_at).toLocaleDateString()}</span>
-                            : new Date(key.expires_at).toLocaleDateString()
-                          : "Lifetime"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${
                           key.is_active
@@ -448,7 +436,7 @@ export const PremiumUpload = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => toggleKeyStatus(key.id, key.is_active)}
+                        onClick={() => toggleKeyStatus(key.id, key.is_active, key.user_id)}
                       >
                         {key.is_active ? "Deactivate" : "Activate"}
                       </Button>
@@ -461,7 +449,6 @@ export const PremiumUpload = () => {
         </Card>
       </TabsContent>
 
-      {/* Premium Tests Tab */}
       <TabsContent value="premium-tests" className="space-y-6">
         <Card>
           <CardHeader>
@@ -509,7 +496,7 @@ export const PremiumUpload = () => {
                   ))}
               </select>
               <p className="text-xs text-muted-foreground">
-                {selectedAccessKey === "all" 
+                {selectedAccessKey === "all"
                   ? "Available to all users with any active access key"
                   : "Only users with this access key can view/download this test"}
               </p>
@@ -526,7 +513,7 @@ export const PremiumUpload = () => {
                 Upload PDF test files. Users need access key to download.
               </p>
             </div>
-            <Button onClick={handleUploadPremiumTest} disabled={loading}>
+            <Button onClick={handleUploadPremiumTest} disabled={loading} className="w-full sm:w-auto">
               <Upload className="h-4 w-4 mr-2" />
               Upload Premium Test
             </Button>
@@ -534,7 +521,6 @@ export const PremiumUpload = () => {
         </Card>
       </TabsContent>
 
-      {/* Planners Tab */}
       <TabsContent value="planners" className="space-y-6">
         <Card>
           <CardHeader>
@@ -570,7 +556,7 @@ export const PremiumUpload = () => {
                 Upload PDF study planners for all users (publicly accessible)
               </p>
             </div>
-            <Button onClick={handleUploadPlanner} disabled={loading}>
+            <Button onClick={handleUploadPlanner} disabled={loading} className="w-full sm:w-auto">
               <Upload className="h-4 w-4 mr-2" />
               Upload Planner
             </Button>
