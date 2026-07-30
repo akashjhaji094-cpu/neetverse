@@ -7,8 +7,9 @@ import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
 import { TelegramBotManager } from "@/components/admin/TelegramBotManager";
+import EmailCampaigns from "@/pages/admin/EmailCampaigns";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send, Mail } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -48,41 +49,41 @@ const Admin = () => {
           </header>
 
           <Tabs defaultValue="html" className="w-full">
-            <TabsList className="grid w-full max-w-4xl grid-cols-7">
-              <TabsTrigger value="html" className="flex items-center gap-2">
-                <Brain className="h-4 w-4" />
-                <span className="hidden sm:inline">AI Import</span>
-                <span className="sm:hidden">AI</span>
+            {/* Mobile: every tab on its own full-width row, no horizontal
+                squeezing. Desktop (sm and up): back to a normal inline row,
+                unchanged from before. */}
+            <TabsList className="grid grid-cols-1 sm:flex sm:flex-wrap w-full sm:w-auto h-auto gap-1 sm:gap-0 p-1">
+              <TabsTrigger value="html" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Brain className="h-4 w-4 shrink-0" />
+                <span>AI Import</span>
               </TabsTrigger>
-              <TabsTrigger value="resources" className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                <span className="hidden sm:inline">Free Resources</span>
-                <span className="sm:hidden">Resources</span>
+              <TabsTrigger value="resources" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <BookOpen className="h-4 w-4 shrink-0" />
+                <span>Free Resources</span>
               </TabsTrigger>
-              <TabsTrigger value="premium" className="flex items-center gap-2">
-                <Crown className="h-4 w-4" />
-                <span className="hidden sm:inline">Premium Tests</span>
-                <span className="sm:hidden">Premium</span>
+              <TabsTrigger value="premium" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Crown className="h-4 w-4 shrink-0" />
+                <span>Premium Tests</span>
               </TabsTrigger>
-              <TabsTrigger value="cleaner" className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline">Clean DB</span>
-                <span className="sm:hidden">Clean</span>
+              <TabsTrigger value="cleaner" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span>Clean DB</span>
               </TabsTrigger>
-              <TabsTrigger value="broadcast" className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4" />
-                <span className="hidden sm:inline">Broadcast</span>
-                <span className="sm:hidden">Msg</span>
+              <TabsTrigger value="broadcast" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Megaphone className="h-4 w-4 shrink-0" />
+                <span>Broadcast</span>
               </TabsTrigger>
-              <TabsTrigger value="pyqs" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">PYQS</span>
-                <span className="sm:hidden">PYQ</span>
+              <TabsTrigger value="pyqs" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <FileText className="h-4 w-4 shrink-0" />
+                <span>PYQS</span>
               </TabsTrigger>
-              <TabsTrigger value="telegram" className="flex items-center gap-2">
-                <Send className="h-4 w-4" />
-                <span className="hidden sm:inline">Telegram Bot</span>
-                <span className="sm:hidden">Bot</span>
+              <TabsTrigger value="email" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span>Email Campaigns</span>
+              </TabsTrigger>
+              <TabsTrigger value="telegram" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Send className="h-4 w-4 shrink-0" />
+                <span>Telegram Bot</span>
               </TabsTrigger>
             </TabsList>
 
@@ -130,6 +131,10 @@ const Admin = () => {
 
               <TabsContent value="pyqs" className="m-0">
                 <PyqsUpload />
+              </TabsContent>
+
+              <TabsContent value="email" className="m-0">
+                <EmailCampaigns />
               </TabsContent>
 
               <TabsContent value="telegram" className="m-0">
