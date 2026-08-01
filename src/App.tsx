@@ -50,6 +50,15 @@ const QpToCbtResults = lazy(() => import("./pages/QpToCbtResults"));
 
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
 
+const QpGate = ({ children }: { children: React.ReactNode }) => (
+  <PaidOnlyGate
+    featureName="QP TO CBT"
+    description="Turn any question paper PDF into a full AI-powered CBT mock test, with auto question capture, answer-key detection and deep analysis."
+  >
+    {children}
+  </PaidOnlyGate>
+);
+
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="space-y-4 w-full max-w-md px-4">
