@@ -19,6 +19,7 @@ import * as repo from "@/features/qp-to-cbt/storage/db";
 import { PdfDocumentManager } from "@/features/qp-to-cbt/pdf/pdfDocumentManager";
 import { parseAnswerKeyFromPages, summarizeAnswerKeyReview } from "@/features/qp-to-cbt/answer-key/answerKeyParser";
 import { OcrWorkerManager, ocrPageToTextLayout } from "@/features/qp-to-cbt/ocr/ocrWorkerManager";
+import { aiParseAnswerKey } from "@/features/qp-to-cbt/ai/aiAssist";
 
 const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
@@ -62,7 +63,22 @@ export default function QpToCbtAnswerKey() {
     await ocrManager?.dispose();
 
     const { entries: parsed } = parseAnswerKeyFromPages(layouts);
-    const withTestId = parsed.map((e) => ({ ...e, localTestId: t.id }));
+    let withTestId = parsed.map((e) => ({ ...e, localTestId: t.id }));
+
+    // AI fallback — key printed as a grid/table the regex parser can't read.
+    if (withTestId.filter((e) => e.option !== null).length === 0) {
+      setProgressLabel("Standard parser found nothing — asking AI to read the answer key…");
+      try {
+        const text = layouts
+          .map((l) => (l.items || []).map((i: { text: string }) => i.text).join(" "))
+          .join("\n");
+        const aiEntries = await aiParseAnswerKey(text, t.id);
+        if (aiEntries.length > 0) withTestId = aiEntries;
+      } catch (err) {
+        console.error("AI answer-key parse failed:", err);
+      }
+    }
+
     await repo.saveAnswerKeyEntries(withTestId);
     setEntries(withTestId);
     setLoading(false);
