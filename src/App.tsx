@@ -143,11 +143,11 @@ const App = () => (
                 <Route path="/neet-chemistry-pyq" element={<Navigate to="/neet-pyq" replace />} />
                 
                 {/* QP to CBT Routes */}
-                <Route path="/qp-to-cbt" element={<QpToCbt />} />
-                <Route path="/qp-to-cbt/capture/:testId" element={<QpToCbtCapture />} />
-                <Route path="/qp-to-cbt/answer-key/:testId" element={<QpToCbtAnswerKey />} />
-                <Route path="/qp-to-cbt/take/:testId" element={<QpToCbtTake />} />
-                <Route path="/qp-to-cbt/results/:attemptId" element={<QpToCbtResults />} />
+                <Route path="/qp-to-cbt" element={<QpGate><QpToCbt /></QpGate>} />
+                <Route path="/qp-to-cbt/capture/:testId" element={<QpGate><QpToCbtCapture /></QpGate>} />
+                <Route path="/qp-to-cbt/answer-key/:testId" element={<QpGate><QpToCbtAnswerKey /></QpGate>} />
+                <Route path="/qp-to-cbt/take/:testId" element={<QpGate><QpToCbtTake /></QpGate>} />
+                <Route path="/qp-to-cbt/results/:attemptId" element={<QpGate><QpToCbtResults /></QpGate>} />
 
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />
