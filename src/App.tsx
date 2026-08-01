@@ -40,6 +40,7 @@ const NeetMockTest = lazy(() => import("./pages/seo/NeetMockTest"));
 const NeetPyq = lazy(() => import("./pages/seo/NeetPyq"));
 const SubjectPage = lazy(() => import("./pages/seo/SubjectPage"));
 const QpToCbt = lazy(() => import("./pages/QpToCbt"));
+import { PaidOnlyGate } from "@/components/PaidOnlyGate";
 
 
 // QP to CBT Phase 2 Lazy Imports
