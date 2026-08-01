@@ -23,6 +23,7 @@ import {
 } from "@/features/qp-to-cbt/detection/questionNumberDetector";
 import { buildColumnBands, compareReadingOrder } from "@/features/qp-to-cbt/capture/coordinates";
 import { OcrWorkerManager, ocrPageToTextLayout } from "@/features/qp-to-cbt/ocr/ocrWorkerManager";
+import { aiDetectQuestionsOnPage } from "@/features/qp-to-cbt/ai/aiAssist";
 
 type AnswerKeyFormat = "same_pdf" | "separate_pdfs";
 type Stage = "choose_format" | "upload" | "detecting" | "detected" | "error";
@@ -163,8 +164,63 @@ export default function QpToCbt() {
 
         manager.dispose();
         await ocrManager?.dispose();
-        await repo.saveLocalPdfTest({ ...test, questionCount: allCandidates.length, updatedAt: new Date().toISOString() });
-        setDetectedCount(allCandidates.length);
+
+        let totalDetected = allCandidates.length;
+
+        // AI fallback — when the deterministic detector finds (almost)
+        // nothing, the layout is unusual or the page is a scan. Ask the AI
+        // vision model to locate the questions instead.
+        if (totalDetected < Math.max(3, Math.round(manager.pageCount * 0.5))) {
+          try {
+            const aiManager = await PdfDocumentManager.load(await file.arrayBuffer());
+            let aiCount = 0;
+            for (let pageIndex = 0; pageIndex < aiManager.pageCount; pageIndex++) {
+              setProgressLabel(`AI reading page ${pageIndex + 1} of ${aiManager.pageCount}…`);
+              const canvas = await aiManager.renderPageWindow(pageIndex);
+              const regions = await aiDetectQuestionsOnPage(canvas, pageIndex);
+              for (const region of regions) {
+                const captureId = crypto.randomUUID();
+                const segmentId = crypto.randomUUID();
+                await repo.saveQuestionCapture({
+                  id: captureId,
+                  localTestId: test.id,
+                  questionNumber: region.questionNumber,
+                  segmentIds: [segmentId],
+                  subjectId: null,
+                  chapterId: null,
+                  topicAssignment: null,
+                  reviewState: "pending_review",
+                  warnings: ["Detected by AI — verify the boundaries."],
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                });
+                await repo.saveCaptureSegment({
+                  id: segmentId,
+                  questionCaptureId: captureId,
+                  order: 0,
+                  rect: region.rect,
+                  ocrText: null,
+                  ocrConfidence: null,
+                  source: "auto_detected",
+                  createdAt: new Date().toISOString(),
+                });
+                aiCount++;
+              }
+            }
+            aiManager.dispose();
+            if (aiCount > 0) {
+              totalDetected += aiCount;
+              setErrorMessage(
+                `AI located ${aiCount} question${aiCount === 1 ? "" : "s"} that the standard detector missed — please verify the boundaries on the next screen.`
+              );
+            }
+          } catch (aiErr) {
+            console.error("AI detection fallback failed:", aiErr);
+          }
+        }
+
+        await repo.saveLocalPdfTest({ ...test, questionCount: totalDetected, updatedAt: new Date().toISOString() });
+        setDetectedCount(totalDetected);
         if (usedOcrFallback) {
           setErrorMessage(
             "Some pages had no selectable text (scanned images), so OCR was used instead — double-check those question boundaries carefully on the next screen, OCR is less precise than native PDF text."
