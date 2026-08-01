@@ -143,9 +143,21 @@ export default function QpToCbtResults() {
           </p>
         )}
 
-        <RollupTable title="By Subject" rows={analytics.bySubject} names={names.subjects} />
-        <RollupTable title="By Chapter" rows={analytics.byChapter} names={names.chapters} />
-        <RollupTable title="By Topic (weakest first)" rows={analytics.byTopic} names={names.topics} />
+        <RollupTable
+          title="By Subject"
+          rows={analytics.bySubject.map((r) => ({ ...r, id: r.subjectId }))}
+          names={names.subjects}
+        />
+        <RollupTable
+          title="By Chapter"
+          rows={analytics.byChapter.map((r) => ({ ...r, id: r.chapterId }))}
+          names={names.chapters}
+        />
+        <RollupTable
+          title="By Topic (weakest first)"
+          rows={analytics.byTopic.map((r) => ({ ...r, id: r.topicId }))}
+          names={names.topics}
+        />
 
         <Button variant="outline" className="w-full" onClick={() => navigate("/qp-to-cbt")}>
           Convert another paper
