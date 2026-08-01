@@ -296,7 +296,7 @@ const Premium = () => {
             <div className="flex items-end gap-2 mb-1">
               <span className="text-2xl line-through font-semibold" style={{ color: "#EF4444" }}>₹999</span>
               <span className="text-6xl font-black leading-none" style={{ color: "#D4AF37" }}>₹499</span>
-              <span className="text-base mb-1" style={{ color: "#999" }}>/month</span>
+              <span className="text-base mb-1" style={{ color: "#999" }}>/year</span>
             </div>
             <p className="text-sm font-bold" style={{ color: "#E07000" }}>
               🔥 Early Bird — Only for first <strong>999 students</strong>

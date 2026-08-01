@@ -78,7 +78,7 @@ export function PremiumPopup({ open, onClose, plan = "free", limitType }: Premiu
           <div className="flex items-end justify-center gap-2 mb-5">
             <span className="text-xl line-through font-semibold" style={{ color: "#EF4444" }}>₹999</span>
             <span className="text-5xl font-black leading-none" style={{ color: "#D4AF37" }}>₹499</span>
-            <span className="text-sm mb-1" style={{ color: "#999" }}>/month</span>
+            <span className="text-sm mb-1" style={{ color: "#999" }}>/year</span>
           </div>
 
           <button
