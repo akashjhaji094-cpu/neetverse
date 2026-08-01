@@ -4,7 +4,7 @@
  * (scanned papers, unusual layouts, image-only answer keys).
  */
 import { supabase } from "@/integrations/supabase/client";
-import type { AnswerKeyEntry, AnswerOption, CaptureRect } from "@/features/qp-to-cbt/types";
+import type { AnswerKeyEntry, AnswerOption, NormalizedRect } from "@/features/qp-to-cbt/types";
 
 async function invoke(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("qp-ai-assist", { body });
@@ -14,7 +14,7 @@ async function invoke(body: Record<string, unknown>) {
 
 export interface AiQuestionRegion {
   questionNumber: number;
-  rect: CaptureRect;
+  rect: NormalizedRect;
 }
 
 /** Detect question regions on one rendered page image. */
@@ -35,7 +35,7 @@ export async function aiDetectQuestionsOnPage(
         yRatio: clamp(r.y),
         widthRatio: clamp(r.width),
         heightRatio: clamp(r.height),
-      } as CaptureRect,
+      } as NormalizedRect,
     }))
     .filter((r) => r.rect.widthRatio > 0.02 && r.rect.heightRatio > 0.01);
 }
