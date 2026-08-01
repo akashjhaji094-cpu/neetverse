@@ -229,6 +229,13 @@ export type Database = {
             referencedRelation: "questions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "attempt_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       attempts: {
@@ -514,6 +521,13 @@ export type Database = {
             columns: ["question_id"]
             isOneToOne: false
             referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "battle_room_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
             referencedColumns: ["id"]
           },
           {
@@ -1269,6 +1283,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "question_topics_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "question_topics_topic_id_fkey"
             columns: ["topic_id"]
             isOneToOne: false
@@ -1286,10 +1307,13 @@ export type Database = {
           created_at: string
           difficulty: Database["public"]["Enums"]["difficulty_level"] | null
           explanation: string | null
+          explanation_image_url: string | null
           id: string
           images: Json | null
+          option_images: Json | null
           options: Json
           question_text: string
+          question_type: string
           raw_html: string | null
           source_file: string | null
           subject_id: string
@@ -1303,10 +1327,13 @@ export type Database = {
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
           explanation?: string | null
+          explanation_image_url?: string | null
           id?: string
           images?: Json | null
+          option_images?: Json | null
           options: Json
           question_text: string
+          question_type?: string
           raw_html?: string | null
           source_file?: string | null
           subject_id: string
@@ -1320,10 +1347,13 @@ export type Database = {
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
           explanation?: string | null
+          explanation_image_url?: string | null
           id?: string
           images?: Json | null
+          option_images?: Json | null
           options?: Json
           question_text?: string
+          question_type?: string
           raw_html?: string | null
           source_file?: string | null
           subject_id?: string
@@ -1411,6 +1441,93 @@ export type Database = {
           slug?: string
         }
         Relationships: []
+      }
+      telegram_bot_settings: {
+        Row: {
+          id: boolean
+          is_active: boolean
+          next_promotion_due_at: string
+          next_question_due_at: string
+          promotion_interval_minutes: number
+          question_interval_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          is_active?: boolean
+          next_promotion_due_at?: string
+          next_question_due_at?: string
+          promotion_interval_minutes?: number
+          question_interval_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          is_active?: boolean
+          next_promotion_due_at?: string
+          next_question_due_at?: string
+          promotion_interval_minutes?: number
+          question_interval_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      telegram_post_log: {
+        Row: {
+          created_at: string
+          detail: string | null
+          id: string
+          status: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          status: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          detail?: string | null
+          id?: string
+          status?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      telegram_posted_questions: {
+        Row: {
+          id: string
+          posted_at: string
+          question_id: string
+        }
+        Insert: {
+          id?: string
+          posted_at?: string
+          question_id: string
+        }
+        Update: {
+          id?: string
+          posted_at?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_posted_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_posted_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       topics: {
         Row: {
@@ -1650,7 +1767,107 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      pyq_questions_public: {
+        Row: {
+          chapter_id: string | null
+          created_at: string | null
+          id: string | null
+          image_url: string | null
+          page_number: number | null
+          paper_id: string | null
+          subject_id: string | null
+        }
+        Insert: {
+          chapter_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          image_url?: string | null
+          page_number?: number | null
+          paper_id?: string | null
+          subject_id?: string | null
+        }
+        Update: {
+          chapter_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          image_url?: string | null
+          page_number?: number | null
+          paper_id?: string | null
+          subject_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pyq_questions_paper_id_fkey"
+            columns: ["paper_id"]
+            isOneToOne: false
+            referencedRelation: "pyq_papers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questions_public: {
+        Row: {
+          bloom_level: number | null
+          chapter_id: string | null
+          concept_tags: string[] | null
+          created_at: string | null
+          difficulty: Database["public"]["Enums"]["difficulty_level"] | null
+          id: string | null
+          images: Json | null
+          options: Json | null
+          question_text: string | null
+          raw_html: string | null
+          source_file: string | null
+          subject_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bloom_level?: number | null
+          chapter_id?: string | null
+          concept_tags?: string[] | null
+          created_at?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          id?: string | null
+          images?: Json | null
+          options?: Json | null
+          question_text?: string | null
+          raw_html?: string | null
+          source_file?: string | null
+          subject_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bloom_level?: number | null
+          chapter_id?: string | null
+          concept_tags?: string[] | null
+          created_at?: string | null
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          id?: string | null
+          images?: Json | null
+          options?: Json | null
+          question_text?: string | null
+          raw_html?: string | null
+          source_file?: string | null
+          subject_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       battle_advance_question: { Args: { p_room_id: string }; Returns: number }
@@ -1733,6 +1950,20 @@ export type Database = {
         }[]
       }
       get_user_mock_progress: { Args: { p_limit?: number }; Returns: Json }
+      grade_questions: {
+        Args: {
+          p_question_ids: string[]
+          p_selected_options: number[]
+          p_source?: string
+        }
+        Returns: {
+          correct_option_index: number
+          explanation: string
+          is_correct: boolean
+          question_id: string
+          selected_option: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

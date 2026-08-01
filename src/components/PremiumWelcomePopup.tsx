@@ -56,7 +56,7 @@ export function PremiumWelcomePopup() {
           <p className="text-sm mb-5" style={{ color: "#555" }}>
             Explore all features. Upgrade to{" "}
             <strong style={{ color: "#D4AF37" }}>Premium</strong> anytime for
-            just <strong>₹199/month</strong> — early bird price for first{" "}
+            just <strong>₹499/year</strong> — early bird price for first{" "}
             <strong>999 students</strong>.
           </p>
 

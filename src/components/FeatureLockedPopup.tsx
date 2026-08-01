@@ -31,7 +31,7 @@ export function FeatureLockedPopup({ open, onClose, featureName }: FeatureLocked
             className="w-full py-3 rounded-xl font-bold mb-3 flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-md"
             style={{ background: "linear-gradient(135deg,#D4AF37,#F5C842)", color: "#1A1A1A" }}
           >
-            <Crown className="w-4 h-4" /> Upgrade — ₹199/month
+            <Crown className="w-4 h-4" /> Upgrade — ₹499/year
           </button>
           <button onClick={onClose} className="w-full py-2.5 rounded-xl text-sm border hover:bg-gray-50 transition-colors" style={{ borderColor: "#E0E0E0", color: "#777" }}>
             Maybe Later

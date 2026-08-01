@@ -40,6 +40,7 @@ const NeetMockTest = lazy(() => import("./pages/seo/NeetMockTest"));
 const NeetPyq = lazy(() => import("./pages/seo/NeetPyq"));
 const SubjectPage = lazy(() => import("./pages/seo/SubjectPage"));
 const QpToCbt = lazy(() => import("./pages/QpToCbt"));
+import { PaidOnlyGate } from "@/components/PaidOnlyGate";
 
 
 // QP to CBT Phase 2 Lazy Imports
@@ -49,6 +50,15 @@ const QpToCbtTake = lazy(() => import("./pages/QpToCbtTake"));
 const QpToCbtResults = lazy(() => import("./pages/QpToCbtResults"));
 
 const OAuthConsent = lazy(() => import("./pages/OAuthConsent"));
+
+const QpGate = ({ children }: { children: React.ReactNode }) => (
+  <PaidOnlyGate
+    featureName="QP TO CBT"
+    description="Turn any question paper PDF into a full AI-powered CBT mock test, with auto question capture, answer-key detection and deep analysis."
+  >
+    {children}
+  </PaidOnlyGate>
+);
 
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -143,11 +153,11 @@ const App = () => (
                 <Route path="/neet-chemistry-pyq" element={<Navigate to="/neet-pyq" replace />} />
                 
                 {/* QP to CBT Routes */}
-                <Route path="/qp-to-cbt" element={<QpToCbt />} />
-                <Route path="/qp-to-cbt/capture/:testId" element={<QpToCbtCapture />} />
-                <Route path="/qp-to-cbt/answer-key/:testId" element={<QpToCbtAnswerKey />} />
-                <Route path="/qp-to-cbt/take/:testId" element={<QpToCbtTake />} />
-                <Route path="/qp-to-cbt/results/:attemptId" element={<QpToCbtResults />} />
+                <Route path="/qp-to-cbt" element={<QpGate><QpToCbt /></QpGate>} />
+                <Route path="/qp-to-cbt/capture/:testId" element={<QpGate><QpToCbtCapture /></QpGate>} />
+                <Route path="/qp-to-cbt/answer-key/:testId" element={<QpGate><QpToCbtAnswerKey /></QpGate>} />
+                <Route path="/qp-to-cbt/take/:testId" element={<QpGate><QpToCbtTake /></QpGate>} />
+                <Route path="/qp-to-cbt/results/:attemptId" element={<QpGate><QpToCbtResults /></QpGate>} />
 
                 <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="*" element={<NotFound />} />

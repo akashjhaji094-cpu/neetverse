@@ -294,9 +294,9 @@ const Premium = () => {
             className="inline-flex flex-col items-center rounded-2xl px-10 py-7 mb-6 shadow-xl"
             style={{ background: "#fff", border: "2.5px solid #D4AF37" }}>
             <div className="flex items-end gap-2 mb-1">
-              <span className="text-2xl line-through font-semibold" style={{ color: "#EF4444" }}>₹499</span>
-              <span className="text-6xl font-black leading-none" style={{ color: "#D4AF37" }}>₹199</span>
-              <span className="text-base mb-1" style={{ color: "#999" }}>/month</span>
+              <span className="text-2xl line-through font-semibold" style={{ color: "#EF4444" }}>₹999</span>
+              <span className="text-6xl font-black leading-none" style={{ color: "#D4AF37" }}>₹499</span>
+              <span className="text-base mb-1" style={{ color: "#999" }}>/year</span>
             </div>
             <p className="text-sm font-bold" style={{ color: "#E07000" }}>
               🔥 Early Bird — Only for first <strong>999 students</strong>
@@ -427,7 +427,7 @@ const Premium = () => {
             {[
               ["This platform helped me revise all 20 years of PYQs in just 1 month!", "Rahul S."],
               ["Premium mock tests feel exactly like the real NEET paper. 100% recommended!", "Priya M."],
-              ["Best ₹199 I ever spent for NEET prep. Absolutely worth every rupee!", "Amit K."],
+              ["Best ₹499 I ever spent for NEET prep. Absolutely worth every rupee!", "Amit K."],
             ].map(([text, name], i) => (
               <div key={i} className="rounded-2xl p-6 shadow-md"
                 style={{ background: "#fff", border: "2px solid #D4AF37" }}>
@@ -478,7 +478,7 @@ const Premium = () => {
               🚀 Join 999 early birds and crack NEET 2026!
             </h2>
             <p className="mb-6" style={{ color: "rgba(26,26,26,0.7)" }}>
-              Limited slots — once 999 is full, price goes back to ₹499.
+              Limited slots — once 999 is full, price goes back to ₹999.
             </p>
             <GoldBtn onClick={() => window.open(TG, "_blank")} dark>
               <MessageCircle className="w-5 h-5" />

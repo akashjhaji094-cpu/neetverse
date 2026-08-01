@@ -11,7 +11,6 @@ import { usePerformanceData } from "@/hooks/usePerformanceData";
 import { BookX, Search, XCircle, MinusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
-import { formatQuestionHtml } from "@/lib/questionFormatter";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { FeatureLockCard } from "@/components/FeatureLockCard";
 import { FeatureLockedPopup } from "@/components/FeatureLockedPopup";
