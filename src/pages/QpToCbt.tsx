@@ -190,7 +190,14 @@ export default function QpToCbt() {
                   chapterId: null,
                   topicAssignment: null,
                   reviewState: "pending_review",
-                  warnings: ["Detected by AI — verify the boundaries."],
+                  warnings: [
+                    {
+                      id: crypto.randomUUID(),
+                      type: "unreviewed_segments",
+                      message: "Detected by AI — verify the boundaries.",
+                      dismissed: false,
+                    },
+                  ],
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
                 });
