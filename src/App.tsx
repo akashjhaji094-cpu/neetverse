@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 
 // Eager load critical pages
 import Landing from "./pages/Landing";
@@ -164,6 +165,7 @@ const App = () => (
               </Routes>
             </Suspense>
           </BrowserRouter>
+          <VercelAnalytics />
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
