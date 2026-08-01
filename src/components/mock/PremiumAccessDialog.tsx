@@ -120,7 +120,7 @@ export const PremiumAccessDialog = ({
             <p>Enter your premium access key to unlock exclusive test content.</p>
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm">
               <p className="font-semibold text-yellow-800 dark:text-yellow-200">
-                💰 Get Premium Access for only ₹199!
+                💰 Get Premium Access for only ₹499!
               </p>
               <p className="text-yellow-700 dark:text-yellow-300 mt-1">
                 Contact on Telegram: <a href="https://t.me/Neetverseowner_bot?text=I%20want%20subscription" target="_blank" rel="noopener noreferrer" className="underline font-medium">@Neetverseowner_bot</a>

@@ -76,8 +76,8 @@ export function PremiumPopup({ open, onClose, plan = "free", limitType }: Premiu
           </p>
 
           <div className="flex items-end justify-center gap-2 mb-5">
-            <span className="text-xl line-through font-semibold" style={{ color: "#EF4444" }}>₹499</span>
-            <span className="text-5xl font-black leading-none" style={{ color: "#D4AF37" }}>₹199</span>
+            <span className="text-xl line-through font-semibold" style={{ color: "#EF4444" }}>₹999</span>
+            <span className="text-5xl font-black leading-none" style={{ color: "#D4AF37" }}>₹499</span>
             <span className="text-sm mb-1" style={{ color: "#999" }}>/month</span>
           </div>
 
@@ -87,7 +87,7 @@ export function PremiumPopup({ open, onClose, plan = "free", limitType }: Premiu
             style={{ background: "linear-gradient(135deg,#D4AF37,#F5C842)", color: "#1A1A1A" }}
           >
             <MessageCircle className="w-4 h-4" />
-            Upgrade — ₹199/month
+            Upgrade — ₹499/year
           </button>
 
           <Link
