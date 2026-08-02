@@ -478,6 +478,14 @@ const ActiveAdaptiveSession = ({
                 </motion.div>
               )}
 
+              {showExplanation && (
+                <ExplanationBlock
+                  key={currentQ.question.id}
+                  questionId={currentQ.question.id}
+                  fallback={currentQ.question.explanation ?? null}
+                />
+              )}
+
               <div className="flex justify-end">
                 {!showExplanation ? (
                   <Button
