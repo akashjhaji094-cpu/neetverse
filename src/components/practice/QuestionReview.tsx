@@ -8,6 +8,7 @@ import { CheckCircle2, XCircle, MinusCircle, ChevronLeft, ChevronRight, ArrowLef
 import { Question } from "@/lib/supabase";
 import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { MathContent } from "@/components/MathContent";
+import { ExplanationBlock } from "@/components/ExplanationBlock";
 
 // EDIT 1 (Part A): Upgraded interface to support Generic types extending core validation contract
 interface QuestionReviewProps<Q extends { id: string; correct_option_index: number | null } = Question> {
@@ -182,17 +183,12 @@ export const QuestionReview = <Q extends { id: string; correct_option_index: num
                     ))}
                   </div>
 
-                  {/* Explanation */}
-                  {currentQuestion.explanation && (
-                    <Card className="bg-primary/5 border-primary/20">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-primary">Explanation</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <MathContent html={formatQuestionHtml(currentQuestion.explanation)} className="text-sm" />
-                      </CardContent>
-                    </Card>
-                  )}
+                  {/* Explanation — AI-generated + cached, trial/premium only */}
+                  <ExplanationBlock
+                    key={currentQuestion.id}
+                    questionId={currentQuestion.id}
+                    fallback={(currentQuestion as any).explanation ?? null}
+                  />
                 </>
               )}
 
