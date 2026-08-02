@@ -1316,6 +1316,7 @@ export type Database = {
           question_type: string
           raw_html: string | null
           source_file: string | null
+          structured_data: Json | null
           subject_id: string
           updated_at: string
         }
@@ -1336,6 +1337,7 @@ export type Database = {
           question_type?: string
           raw_html?: string | null
           source_file?: string | null
+          structured_data?: Json | null
           subject_id: string
           updated_at?: string
         }
@@ -1356,6 +1358,7 @@ export type Database = {
           question_type?: string
           raw_html?: string | null
           source_file?: string | null
+          structured_data?: Json | null
           subject_id?: string
           updated_at?: string
         }
