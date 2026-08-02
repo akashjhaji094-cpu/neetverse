@@ -1255,6 +1255,36 @@ export type Database = {
           },
         ]
       }
+      question_explanations: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          model: string | null
+          question_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          question_id: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          question_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       question_topics: {
         Row: {
           confidence: number
