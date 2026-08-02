@@ -1255,6 +1255,36 @@ export type Database = {
           },
         ]
       }
+      question_explanations: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          model: string | null
+          question_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          question_id: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          model?: string | null
+          question_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       question_topics: {
         Row: {
           confidence: number
@@ -1316,6 +1346,7 @@ export type Database = {
           question_type: string
           raw_html: string | null
           source_file: string | null
+          structured_data: Json | null
           subject_id: string
           updated_at: string
         }
@@ -1336,6 +1367,7 @@ export type Database = {
           question_type?: string
           raw_html?: string | null
           source_file?: string | null
+          structured_data?: Json | null
           subject_id: string
           updated_at?: string
         }
@@ -1356,6 +1388,7 @@ export type Database = {
           question_type?: string
           raw_html?: string | null
           source_file?: string | null
+          structured_data?: Json | null
           subject_id?: string
           updated_at?: string
         }
