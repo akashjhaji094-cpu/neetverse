@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { useMathJax } from '@/hooks/useMathJax';
 import { formatQuestionHtml } from '@/lib/questionFormatter';
 import { SafeImage, ImageGrid } from '@/components/SafeImage';
+import { ExplanationBlock } from '@/components/ExplanationBlock';
 import { selectAdaptiveQuestions, updateSkillLevel, SelectedQuestion } from '@/lib/adaptiveEngine';
 import {
   Brain, Target, TrendingUp, Zap, BookOpen, Trophy, Clock, ChevronRight,
