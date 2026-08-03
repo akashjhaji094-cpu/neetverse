@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -18,7 +17,6 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import {
-  Menu,
   Home,
   BookOpen,
   TestTube,
