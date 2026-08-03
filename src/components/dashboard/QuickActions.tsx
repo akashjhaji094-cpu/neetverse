@@ -39,18 +39,18 @@ export function QuickActions() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
       {actions.map((action, i) => {
         const Icon = action.icon;
         return (
           <Card 
             key={i} 
-            className="cursor-pointer card-3d animate-tilt-in"
+            className="cursor-pointer rounded-2xl border-border/60 shadow-soft tap hover:shadow-card"
             style={{ animationDelay: `${i * 80}ms` }}
             onClick={action.action}
           >
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={`p-2.5 rounded-lg ${action.bgColor} icon-3d`}>
+              <div className={`p-2.5 rounded-xl ${action.bgColor}`}>
                 <Icon className={`h-5 w-5 ${action.color}`} />
               </div>
               <div className="flex-1 min-w-0">
