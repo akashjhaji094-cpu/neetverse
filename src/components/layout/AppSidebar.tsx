@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -18,7 +17,6 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import {
-  Menu,
   Home,
   BookOpen,
   TestTube,
@@ -374,20 +372,6 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* Mobile Toggle */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="h-10 w-10">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-64">
-            {SidebarContent}
-          </SheetContent>
-        </Sheet>
-      </div>
-
       {/* Desktop Sidebar */}
       <div className="hidden lg:block fixed left-0 top-0 h-screen z-40">
         {SidebarContent}

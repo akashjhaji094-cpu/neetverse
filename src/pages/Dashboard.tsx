@@ -8,8 +8,6 @@ import { TestSeriesWidget } from "@/components/dashboard/TestSeriesWidget";
 import { PerformanceOverview } from "@/components/dashboard/PerformanceOverview";
 import { NeetCountdown } from "@/components/dashboard/NeetCountdown";
 import { useEffect } from "react";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PremiumWelcomePopup } from "@/components/PremiumWelcomePopup";
 
 const Dashboard = () => {
@@ -35,26 +33,17 @@ const Dashboard = () => {
   const userName = user?.user_metadata?.name || 'Student';
 
   return (
-    <DashboardLayout>
+    <DashboardLayout title="Home">
       <PremiumWelcomePopup />
-      <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl lg:text-2xl font-bold">
-              Hello, <span className="text-primary">{userName}</span>
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Let's Continue Your Preparation.
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            onClick={() => navigate('/notifications')}
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
+      <div className="p-4 lg:p-6 space-y-5 max-w-5xl">
+        <div className="rounded-2xl bg-[image:var(--gradient-primary)] p-5 text-primary-foreground shadow-elegant">
+          <p className="text-xs font-medium uppercase tracking-widest text-primary-foreground/70">
+            Welcome back
+          </p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight">Hello, {userName} 👋</h1>
+          <p className="mt-1 text-sm text-primary-foreground/85">
+            Let's continue your NEET preparation today.
+          </p>
         </div>
 
         <NeetCountdown />
