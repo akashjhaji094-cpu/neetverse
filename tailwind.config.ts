@@ -23,6 +23,7 @@ export default {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
           glow: "hsl(var(--primary-glow))",
+          soft: "hsl(var(--primary-soft))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -71,6 +72,13 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        "2xl": "calc(var(--radius) + 0.5rem)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-sm)",
+        card: "var(--shadow-md)",
+        elevated: "var(--shadow-lg)",
+        elegant: "var(--shadow-elegant)",
       },
       keyframes: {
         "accordion-down": {
