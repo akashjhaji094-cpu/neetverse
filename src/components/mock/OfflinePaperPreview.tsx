@@ -993,16 +993,20 @@ export const OfflinePaperPreview = ({
               <Camera className="h-4 w-4" />
               Scan OMR
             </Button>
-            <Button onClick={handlePrint} disabled={!ready} className="gap-2">
-              {ready ? (
+            <Button variant="outline" onClick={handlePrint} disabled={!ready} size="sm" className="gap-2 hidden sm:inline-flex">
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button onClick={handleDownloadPdf} disabled={!ready || downloading} className="gap-2">
+              {ready && !downloading ? (
                 <>
                   <Download className="h-4 w-4" />
-                  Download / Print PDF
+                  Download PDF
                 </>
               ) : (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Preparing...
+                  {downloading ? "Generating PDF..." : "Preparing..."}
                 </>
               )}
             </Button>
