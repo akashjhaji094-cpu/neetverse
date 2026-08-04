@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface SubjectGroup {
   name: string;
