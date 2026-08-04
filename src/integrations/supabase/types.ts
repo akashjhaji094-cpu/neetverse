@@ -1336,6 +1336,7 @@ export type Database = {
           correct_option_index: number | null
           created_at: string
           difficulty: Database["public"]["Enums"]["difficulty_level"] | null
+          difficulty_reviewed_at: string | null
           explanation: string | null
           explanation_image_url: string | null
           id: string
@@ -1357,6 +1358,7 @@ export type Database = {
           correct_option_index?: number | null
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          difficulty_reviewed_at?: string | null
           explanation?: string | null
           explanation_image_url?: string | null
           id?: string
@@ -1378,6 +1380,7 @@ export type Database = {
           correct_option_index?: number | null
           created_at?: string
           difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          difficulty_reviewed_at?: string | null
           explanation?: string | null
           explanation_image_url?: string | null
           id?: string
