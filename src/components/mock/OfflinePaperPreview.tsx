@@ -69,6 +69,7 @@ export const OfflinePaperPreview = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+ const queryClient = useQueryClient();
 
   const labels = ["A", "B", "C", "D"];
 
