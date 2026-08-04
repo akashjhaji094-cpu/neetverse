@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useMockLimits } from "@/hooks/useMockLimits";
@@ -131,6 +131,7 @@ function pickWithPriority(pool: Question[], want: number, history: Map<string, Q
 
 const Test = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { limits, refetch: refetchLimits } = useMockLimits();
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const [premiumPopupLimitType, setPremiumPopupLimitType] = useState<"online" | "offline" | undefined>(undefined);
