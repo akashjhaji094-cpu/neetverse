@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import neetverseLogo from "@/assets/neetverse-logo.jpg";
 import { formatQuestionHtml } from "@/lib/questionFormatter";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface SubjectGroup {
   name: string;
@@ -58,6 +59,7 @@ export const OfflinePaperPreview = ({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [detectedAnswers, setDetectedAnswers] = useState<(number | null)[]>([]);
   const [showReview, setShowReview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [confidenceMap, setConfidenceMap] = useState<number[]>([]);
   const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
   const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
@@ -67,6 +69,7 @@ export const OfflinePaperPreview = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+ const queryClient = useQueryClient();
 
   const labels = ["A", "B", "C", "D"];
 
@@ -219,6 +222,71 @@ export const OfflinePaperPreview = ({
     window.print();
     setShowTimerPrompt(true);
   }, []);
+
+  /**
+   * True "Download PDF" — renders the on-screen paper to an A4 multi-page
+   * PDF file and saves it directly. No print dialog, no navigation away.
+   */
+  const handleDownloadPdf = useCallback(async () => {
+    if (!containerRef.current) return;
+    setDownloading(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+
+      const canvas = await html2canvas(containerRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pageW = 210;
+      const pageH = 297;
+      const imgH = (canvas.height * pageW) / canvas.width;
+
+      // Slice the tall canvas into A4-height chunks so nothing is cut off.
+      const pxPerMm = canvas.width / pageW;
+      const sliceHeightPx = Math.floor(pageH * pxPerMm);
+      let rendered = 0;
+      let page = 0;
+
+      while (rendered < canvas.height) {
+        const h = Math.min(sliceHeightPx, canvas.height - rendered);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = h;
+        const sctx = slice.getContext("2d");
+        if (!sctx) break;
+        sctx.fillStyle = "#ffffff";
+        sctx.fillRect(0, 0, slice.width, slice.height);
+        sctx.drawImage(canvas, 0, rendered, canvas.width, h, 0, 0, canvas.width, h);
+
+        if (page > 0) pdf.addPage();
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, (h * pageW) / canvas.width);
+
+        rendered += h;
+        page += 1;
+      }
+
+      const safeTitle = title.replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+      pdf.save(`NEETVerse-${safeTitle}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      void imgH;
+      setShowTimerPrompt(true);
+    } catch (err) {
+      console.error("PDF export failed", err);
+      toast({
+        title: "PDF download failed",
+        description: "Please try again, or use Print as a fallback.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }, [title, toast]);
 
   // ============= OMR SCANNER =============
   const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -465,7 +533,16 @@ export const OfflinePaperPreview = ({
    * report still displays locally; we just can't save it.
    */
   const persistResult = async (report: any) => {
-    if (!attemptId || !user) return;
+    if (!attemptId || !user) {
+      toast({
+        title: "Not saved",
+        description: !user
+          ? "Sign in first — guest scans can't be saved to Test History."
+          : "This paper has no linked attempt, so it can't be saved.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const subjectScores: Record<string, any> = {};
@@ -481,7 +558,7 @@ export const OfflinePaperPreview = ({
         };
       });
 
-      await supabase
+      const { error: attemptErr } = await supabase
         .from('attempts')
         .update({
           score: report.totalScore,
@@ -495,6 +572,7 @@ export const OfflinePaperPreview = ({
           omr_status: 'scored',
         } as any)
         .eq('id', attemptId);
+      if (attemptErr) throw attemptErr;
 
       // Replace any previous answers for this attempt (handles re-scans cleanly)
       await supabase.from('attempt_answers').delete().eq('attempt_id', attemptId);
@@ -502,9 +580,14 @@ export const OfflinePaperPreview = ({
         attempt_id: attemptId,
         question_id: q.id,
         chosen_option_index: detectedAnswers[i] ?? null,
-        is_correct: detectedAnswers[i] === q.correct_option_index,
+        // null = unattempted (never counted as a "wrong" answer downstream)
+        is_correct:
+          detectedAnswers[i] === null || detectedAnswers[i] === undefined
+            ? null
+            : detectedAnswers[i] === q.correct_option_index,
       }));
-      await supabase.from('attempt_answers').insert(answerRecords);
+      const { error: ansErr } = await supabase.from('attempt_answers').insert(answerRecords);
+      if (ansErr) throw ansErr;
 
       // Best-effort: keep the scanned photo on file too
       if (previewImage) {
@@ -522,12 +605,15 @@ export const OfflinePaperPreview = ({
         }
       }
 
+      queryClient.invalidateQueries({ queryKey: ["performance-data"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-omr"] });
+      queryClient.invalidateQueries({ queryKey: ["mock-progress"] });
       toast({ title: "Saved!", description: "This result now appears in your Test History & Mistake Book." });
     } catch (err) {
       console.error("Failed to save OMR result", err);
       toast({
-        title: "Could not sync to your account",
-        description: "Your score is shown below, but please screenshot it just in case.",
+        title: "Could not save to your account",
+        description: (err as any)?.message || "Your score is shown below — please screenshot it.",
         variant: "destructive",
       });
     } finally {
@@ -907,16 +993,20 @@ export const OfflinePaperPreview = ({
               <Camera className="h-4 w-4" />
               Scan OMR
             </Button>
-            <Button onClick={handlePrint} disabled={!ready} className="gap-2">
-              {ready ? (
+            <Button variant="outline" onClick={handlePrint} disabled={!ready} size="sm" className="gap-2 hidden sm:inline-flex">
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button onClick={handleDownloadPdf} disabled={!ready || downloading} className="gap-2">
+              {ready && !downloading ? (
                 <>
                   <Download className="h-4 w-4" />
-                  Download / Print PDF
+                  Download PDF
                 </>
               ) : (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Preparing...
+                  {downloading ? "Generating PDF..." : "Preparing..."}
                 </>
               )}
             </Button>

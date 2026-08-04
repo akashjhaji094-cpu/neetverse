@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useMockLimits } from "@/hooks/useMockLimits";
@@ -131,6 +131,7 @@ function pickWithPriority(pool: Question[], want: number, history: Map<string, Q
 
 const Test = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { limits, refetch: refetchLimits } = useMockLimits();
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const [premiumPopupLimitType, setPremiumPopupLimitType] = useState<"online" | "offline" | undefined>(undefined);
@@ -381,6 +382,7 @@ const submitTestMutation = useMutation({
           // against the weekly ONLINE mock quota.
           config: { type: testType, questionCount: questions.length, mode: 'online' } as any,
           score,
+          question_ids: questions.map((q) => q.id),
           finished_at: new Date().toISOString(),
           details: { subjectScores, correctCount, wrongCount, unattemptedCount } as any,
         }])
@@ -388,14 +390,19 @@ const submitTestMutation = useMutation({
         .single();
 
       if (attempt) {
-        const answerRecords = questions.map((q) => ({
-          attempt_id: attempt.id,
-          question_id: q.id,
-          chosen_option_index: answers[q.id] ?? null,
-          is_correct: answers[q.id] === q.correct_option_index,
-          time_taken_seconds: timeSpent[q.id] ?? null,
-        }));
-        await supabase.from('attempt_answers').insert(answerRecords);
+        const answerRecords = questions.map((q) => {
+          const chosen = answers[q.id] ?? null;
+          return {
+            attempt_id: attempt.id,
+            question_id: q.id,
+            chosen_option_index: chosen,
+            // null = unattempted, so it is never scored as a wrong answer
+            is_correct: chosen === null ? null : chosen === q.correct_option_index,
+            time_taken_seconds: timeSpent[q.id] ?? null,
+          };
+        });
+        const { error: ansErr } = await supabase.from('attempt_answers').insert(answerRecords);
+        if (ansErr) throw ansErr;
       }
 
       return { score, correctCount, wrongCount, unattemptedCount, subjectAnalytics: Object.values(subjectScores), answers, attemptId: attempt?.id ?? null };
@@ -405,10 +412,12 @@ const submitTestMutation = useMutation({
       setTestAnswers(data.answers);
       setTestMode('results');
       toast.success('Test submitted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['performance-data'] });
+      queryClient.invalidateQueries({ queryKey: ['mock-progress'] });
       if (user) tryCompleteReferral(user.id);
       refetchLimits();
     },
-    onError: () => { toast.error('Failed to submit test'); },
+    onError: (e: any) => { toast.error(e?.message || 'Failed to submit test'); },
   });
 
   const handleReset = () => {
