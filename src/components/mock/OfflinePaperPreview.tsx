@@ -533,7 +533,16 @@ export const OfflinePaperPreview = ({
    * report still displays locally; we just can't save it.
    */
   const persistResult = async (report: any) => {
-    if (!attemptId || !user) return;
+    if (!attemptId || !user) {
+      toast({
+        title: "Not saved",
+        description: !user
+          ? "Sign in first — guest scans can't be saved to Test History."
+          : "This paper has no linked attempt, so it can't be saved.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const subjectScores: Record<string, any> = {};
@@ -549,7 +558,7 @@ export const OfflinePaperPreview = ({
         };
       });
 
-      await supabase
+      const { error: attemptErr } = await supabase
         .from('attempts')
         .update({
           score: report.totalScore,
@@ -563,6 +572,7 @@ export const OfflinePaperPreview = ({
           omr_status: 'scored',
         } as any)
         .eq('id', attemptId);
+      if (attemptErr) throw attemptErr;
 
       // Replace any previous answers for this attempt (handles re-scans cleanly)
       await supabase.from('attempt_answers').delete().eq('attempt_id', attemptId);
@@ -570,9 +580,14 @@ export const OfflinePaperPreview = ({
         attempt_id: attemptId,
         question_id: q.id,
         chosen_option_index: detectedAnswers[i] ?? null,
-        is_correct: detectedAnswers[i] === q.correct_option_index,
+        // null = unattempted (never counted as a "wrong" answer downstream)
+        is_correct:
+          detectedAnswers[i] === null || detectedAnswers[i] === undefined
+            ? null
+            : detectedAnswers[i] === q.correct_option_index,
       }));
-      await supabase.from('attempt_answers').insert(answerRecords);
+      const { error: ansErr } = await supabase.from('attempt_answers').insert(answerRecords);
+      if (ansErr) throw ansErr;
 
       // Best-effort: keep the scanned photo on file too
       if (previewImage) {
@@ -590,12 +605,15 @@ export const OfflinePaperPreview = ({
         }
       }
 
+      queryClient.invalidateQueries({ queryKey: ["performance-data"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-omr"] });
+      queryClient.invalidateQueries({ queryKey: ["mock-progress"] });
       toast({ title: "Saved!", description: "This result now appears in your Test History & Mistake Book." });
     } catch (err) {
       console.error("Failed to save OMR result", err);
       toast({
-        title: "Could not sync to your account",
-        description: "Your score is shown below, but please screenshot it just in case.",
+        title: "Could not save to your account",
+        description: (err as any)?.message || "Your score is shown below — please screenshot it.",
         variant: "destructive",
       });
     } finally {
