@@ -59,6 +59,7 @@ export const OfflinePaperPreview = ({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [detectedAnswers, setDetectedAnswers] = useState<(number | null)[]>([]);
   const [showReview, setShowReview] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [confidenceMap, setConfidenceMap] = useState<number[]>([]);
   const [chapterMap, setChapterMap] = useState<Record<string, { name: string; subjectId: string }>>({});
   const [subjectMap, setSubjectMap] = useState<Record<string, string>>({});
