@@ -381,6 +381,7 @@ const submitTestMutation = useMutation({
           // against the weekly ONLINE mock quota.
           config: { type: testType, questionCount: questions.length, mode: 'online' } as any,
           score,
+          question_ids: questions.map((q) => q.id),
           finished_at: new Date().toISOString(),
           details: { subjectScores, correctCount, wrongCount, unattemptedCount } as any,
         }])
@@ -388,14 +389,19 @@ const submitTestMutation = useMutation({
         .single();
 
       if (attempt) {
-        const answerRecords = questions.map((q) => ({
-          attempt_id: attempt.id,
-          question_id: q.id,
-          chosen_option_index: answers[q.id] ?? null,
-          is_correct: answers[q.id] === q.correct_option_index,
-          time_taken_seconds: timeSpent[q.id] ?? null,
-        }));
-        await supabase.from('attempt_answers').insert(answerRecords);
+        const answerRecords = questions.map((q) => {
+          const chosen = answers[q.id] ?? null;
+          return {
+            attempt_id: attempt.id,
+            question_id: q.id,
+            chosen_option_index: chosen,
+            // null = unattempted, so it is never scored as a wrong answer
+            is_correct: chosen === null ? null : chosen === q.correct_option_index,
+            time_taken_seconds: timeSpent[q.id] ?? null,
+          };
+        });
+        const { error: ansErr } = await supabase.from('attempt_answers').insert(answerRecords);
+        if (ansErr) throw ansErr;
       }
 
       return { score, correctCount, wrongCount, unattemptedCount, subjectAnalytics: Object.values(subjectScores), answers, attemptId: attempt?.id ?? null };
