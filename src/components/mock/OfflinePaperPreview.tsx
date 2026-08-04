@@ -221,6 +221,71 @@ export const OfflinePaperPreview = ({
     setShowTimerPrompt(true);
   }, []);
 
+  /**
+   * True "Download PDF" — renders the on-screen paper to an A4 multi-page
+   * PDF file and saves it directly. No print dialog, no navigation away.
+   */
+  const handleDownloadPdf = useCallback(async () => {
+    if (!containerRef.current) return;
+    setDownloading(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+
+      const canvas = await html2canvas(containerRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pageW = 210;
+      const pageH = 297;
+      const imgH = (canvas.height * pageW) / canvas.width;
+
+      // Slice the tall canvas into A4-height chunks so nothing is cut off.
+      const pxPerMm = canvas.width / pageW;
+      const sliceHeightPx = Math.floor(pageH * pxPerMm);
+      let rendered = 0;
+      let page = 0;
+
+      while (rendered < canvas.height) {
+        const h = Math.min(sliceHeightPx, canvas.height - rendered);
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = h;
+        const sctx = slice.getContext("2d");
+        if (!sctx) break;
+        sctx.fillStyle = "#ffffff";
+        sctx.fillRect(0, 0, slice.width, slice.height);
+        sctx.drawImage(canvas, 0, rendered, canvas.width, h, 0, 0, canvas.width, h);
+
+        if (page > 0) pdf.addPage();
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, pageW, (h * pageW) / canvas.width);
+
+        rendered += h;
+        page += 1;
+      }
+
+      const safeTitle = title.replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+      pdf.save(`NEETVerse-${safeTitle}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      void imgH;
+      setShowTimerPrompt(true);
+    } catch (err) {
+      console.error("PDF export failed", err);
+      toast({
+        title: "PDF download failed",
+        description: "Please try again, or use Print as a fallback.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  }, [title, toast]);
+
   // ============= OMR SCANNER =============
   const handleOMRScan = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
