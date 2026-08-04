@@ -411,10 +411,12 @@ const submitTestMutation = useMutation({
       setTestAnswers(data.answers);
       setTestMode('results');
       toast.success('Test submitted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['performance-data'] });
+      queryClient.invalidateQueries({ queryKey: ['mock-progress'] });
       if (user) tryCompleteReferral(user.id);
       refetchLimits();
     },
-    onError: () => { toast.error('Failed to submit test'); },
+    onError: (e: any) => { toast.error(e?.message || 'Failed to submit test'); },
   });
 
   const handleReset = () => {
