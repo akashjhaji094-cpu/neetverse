@@ -7,9 +7,12 @@ import { QuestionCleaner } from "@/components/admin/QuestionCleaner";
 import { BroadcastManager } from "@/components/admin/BroadcastManager";
 import { PyqsUpload } from "@/components/admin/PyqsUpload";
 import { TelegramBotManager } from "@/components/admin/TelegramBotManager";
+import { TestSeriesManager } from "@/components/admin/TestSeriesManager";
+import { ManualQuestionUpload } from "@/components/admin/ManualQuestionUpload";
+import { SubmissionsReview } from "@/components/admin/SubmissionsReview";
 import EmailCampaigns from "@/components/admin/email/EmailCampaigns";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
-import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send, Mail } from "lucide-react";
+import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send, Mail, Layers, PenSquare, Inbox } from "lucide-react";
 
 const Admin = () => {
   const { isAdmin, loading } = useAdminAccess();
@@ -60,6 +63,18 @@ const Admin = () => {
               <TabsTrigger value="resources" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
                 <BookOpen className="h-4 w-4 shrink-0" />
                 <span>Free Resources</span>
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <PenSquare className="h-4 w-4 shrink-0" />
+                <span>Manual Upload</span>
+              </TabsTrigger>
+              <TabsTrigger value="series" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Layers className="h-4 w-4 shrink-0" />
+                <span>Test Series</span>
+              </TabsTrigger>
+              <TabsTrigger value="submissions" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
+                <Inbox className="h-4 w-4 shrink-0" />
+                <span>Submissions</span>
               </TabsTrigger>
               <TabsTrigger value="premium" className="w-full sm:w-auto justify-start sm:justify-center gap-2 py-2.5">
                 <Crown className="h-4 w-4 shrink-0" />
@@ -119,6 +134,18 @@ const Admin = () => {
 
               <TabsContent value="premium" className="m-0">
                 <PremiumUpload />
+              </TabsContent>
+
+              <TabsContent value="manual" className="m-0">
+                <ManualQuestionUpload />
+              </TabsContent>
+
+              <TabsContent value="series" className="m-0">
+                <TestSeriesManager />
+              </TabsContent>
+
+              <TabsContent value="submissions" className="m-0">
+                <SubmissionsReview />
               </TabsContent>
 
               <TabsContent value="cleaner" className="m-0">
