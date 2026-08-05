@@ -39,6 +39,8 @@ import {
   TrendingUp,
   ScanLine,
   FileScan,
+  Layers,
+  PenSquare,
 } from 'lucide-react';
 import { SidebarChatbot } from './SidebarChatbot';
 
@@ -93,9 +95,11 @@ export function AppSidebar() {
         { title: "Dashboard", href: "/dashboard", icon: Home },
         { title: "Practice", href: "/practice", icon: BookOpen },
         { title: "Mock Tests", href: "/test", icon: TestTube },
+        { title: "Test Series", href: "/test-series", icon: Layers, new: true },
         { title: "Pending OMR", href: "/pending-omr", icon: ScanLine },
         { title: "PYQs", href: "/pyqs", icon: FileText },
         { title: "Notes & Books", href: "/notes", icon: FileText },
+        { title: "Contribute Question", href: "/contribute", icon: PenSquare },
         { title: "QP TO CBT", href: "/qp-to-cbt", icon: FileScan, new: true },
       ],
     },
