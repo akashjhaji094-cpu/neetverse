@@ -18,7 +18,10 @@ export interface MistakeEntry {
 export interface HistoryEntry {
   attemptId: string;
   testName: string;
-  testType: "practice" | "mock";
+  // UPDATED: "series" added so Test Series attempts can show up in Test
+  // History Vault alongside practice/mock — they were being fetched from a
+  // completely different table (series_attempts) and never merged in here.
+  testType: "practice" | "mock" | "series";
   date: string;
   score: number | null;
   correct: number;
@@ -60,6 +63,14 @@ function deriveTestName(type: string, config: any): string {
  * three separate times.
  *
  * No new tables needed — this is a read-only view over existing data.
+ *
+ * UPDATED: Test Series attempts live in a separate `series_attempts` table
+ * (their own test-taking flow, not the practice/mock `attempts` table), so
+ * they were invisible here even though they were saving correctly. We fetch
+ * them in parallel and merge them into `history` only — Mistake Book and
+ * Weak Chapters stay scoped to practice/mock for now, since series answers
+ * are stored as a single JSON blob rather than per-question rows and would
+ * need a bit more work to break down the same way.
  */
 export function usePerformanceData() {
   const { user } = useAuth();
@@ -69,19 +80,28 @@ export function usePerformanceData() {
     queryFn: async () => {
       if (!user) return { mistakes: [] as MistakeEntry[], history: [] as HistoryEntry[], weakChapters: [] as WeakChapter[] };
 
-      const { data: rows, error } = await supabase
-        .from("attempt_answers")
-        .select(`
-          id, question_id, is_correct,
-          attempts!inner(id, user_id, type, config, started_at, finished_at, score),
-          questions!inner(id, question_text, chapter_id, subject_id,
-            chapters(name),
-            subjects(name)
-          )
-        `)
-        .eq("attempts.user_id", user.id);
+      const [attemptsResult, seriesResult] = await Promise.all([
+        supabase
+          .from("attempt_answers")
+          .select(`
+            id, question_id, is_correct,
+            attempts!inner(id, user_id, type, config, started_at, finished_at, score),
+            questions!inner(id, question_text, chapter_id, subject_id,
+              chapters(name),
+              subjects(name)
+            )
+          `)
+          .eq("attempts.user_id", user.id),
+        supabase
+          .from("series_attempts")
+          .select("id, score, correct_count, wrong_count, unattempted_count, total_questions, time_taken_seconds, started_at, finished_at, series_tests(title)")
+          .eq("user_id", user.id),
+      ]);
 
-      if (error) throw error;
+      if (attemptsResult.error) throw attemptsResult.error;
+      if (seriesResult.error) throw seriesResult.error;
+
+      const rows = attemptsResult.data;
 
       const mistakes: MistakeEntry[] = [];
       const attemptMap = new Map<string, { rows: any[]; meta: any }>();
@@ -161,9 +181,32 @@ export function usePerformanceData() {
             accuracy: total ? Math.round((correct / total) * 100) : 0,
             timeSpentSec,
           };
-        })
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        });
 
+      // NEW: fold series_attempts into the same history shape.
+      (seriesResult.data || []).forEach((s: any) => {
+        const timeSpentSec = s.time_taken_seconds ?? (
+          s.started_at && s.finished_at
+            ? Math.round((new Date(s.finished_at).getTime() - new Date(s.started_at).getTime()) / 1000)
+            : null
+        );
+        const attempted = (s.correct_count || 0) + (s.wrong_count || 0);
+        history.push({
+          attemptId: s.id,
+          testName: s.series_tests?.title || "Test Series",
+          testType: "series",
+          date: s.started_at,
+          score: s.score,
+          correct: s.correct_count || 0,
+          wrong: s.wrong_count || 0,
+          unattempted: s.unattempted_count || 0,
+          total: s.total_questions || 0,
+          accuracy: attempted ? Math.round(((s.correct_count || 0) / attempted) * 100) : 0,
+          timeSpentSec,
+        });
+      });
+
+      history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       mistakes.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return { mistakes, history, weakChapters };
