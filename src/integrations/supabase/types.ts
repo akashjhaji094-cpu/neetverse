@@ -1105,6 +1105,36 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       pyq_attempts: {
         Row: {
           answers: Json
@@ -1285,6 +1315,110 @@ export type Database = {
         }
         Relationships: []
       }
+      question_submissions: {
+        Row: {
+          approved_question_id: string | null
+          chapter_id: string | null
+          correct_option_index: number | null
+          created_at: string
+          difficulty: string | null
+          explanation: string | null
+          explanation_image_url: string | null
+          id: string
+          option_images: Json | null
+          options: Json
+          question_image: string | null
+          question_text: string
+          question_type: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          structured_data: Json | null
+          subject_id: string | null
+          submitted_by: string
+          submitter_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_question_id?: string | null
+          chapter_id?: string | null
+          correct_option_index?: number | null
+          created_at?: string
+          difficulty?: string | null
+          explanation?: string | null
+          explanation_image_url?: string | null
+          id?: string
+          option_images?: Json | null
+          options?: Json
+          question_image?: string | null
+          question_text: string
+          question_type?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          structured_data?: Json | null
+          subject_id?: string | null
+          submitted_by: string
+          submitter_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_question_id?: string | null
+          chapter_id?: string | null
+          correct_option_index?: number | null
+          created_at?: string
+          difficulty?: string | null
+          explanation?: string | null
+          explanation_image_url?: string | null
+          id?: string
+          option_images?: Json | null
+          options?: Json
+          question_image?: string | null
+          question_text?: string
+          question_type?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          structured_data?: Json | null
+          subject_id?: string | null
+          submitted_by?: string
+          submitter_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_submissions_approved_question_id_fkey"
+            columns: ["approved_question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_submissions_approved_question_id_fkey"
+            columns: ["approved_question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_submissions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "question_submissions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_topics: {
         Row: {
           confidence: number
@@ -1457,6 +1591,173 @@ export type Database = {
           },
         ]
       }
+      series_attempts: {
+        Row: {
+          answers: Json
+          correct_count: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          score: number | null
+          started_at: string
+          test_id: string
+          time_spent: Json
+          time_taken_seconds: number | null
+          total_questions: number
+          unattempted_count: number
+          updated_at: string
+          user_id: string
+          wrong_count: number
+        }
+        Insert: {
+          answers?: Json
+          correct_count?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          score?: number | null
+          started_at?: string
+          test_id: string
+          time_spent?: Json
+          time_taken_seconds?: number | null
+          total_questions?: number
+          unattempted_count?: number
+          updated_at?: string
+          user_id: string
+          wrong_count?: number
+        }
+        Update: {
+          answers?: Json
+          correct_count?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          score?: number | null
+          started_at?: string
+          test_id?: string
+          time_spent?: Json
+          time_taken_seconds?: number | null
+          total_questions?: number
+          unattempted_count?: number
+          updated_at?: string
+          user_id?: string
+          wrong_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "series_attempts_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "series_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      series_test_questions: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          question_id: string
+          test_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          question_id: string
+          test_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          question_id?: string
+          test_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "series_test_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_test_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_test_questions_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "series_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      series_tests: {
+        Row: {
+          created_at: string
+          created_by: string
+          duration_minutes: number
+          id: string
+          instructions: string | null
+          is_published: boolean
+          marks_correct: number
+          marks_wrong: number
+          position: number
+          question_count: number
+          scheduled_at: string | null
+          series_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          duration_minutes?: number
+          id?: string
+          instructions?: string | null
+          is_published?: boolean
+          marks_correct?: number
+          marks_wrong?: number
+          position?: number
+          question_count?: number
+          scheduled_at?: string | null
+          series_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          duration_minutes?: number
+          id?: string
+          instructions?: string | null
+          is_published?: boolean
+          marks_correct?: number
+          marks_wrong?: number
+          position?: number
+          question_count?: number
+          scheduled_at?: string | null
+          series_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "series_tests_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "test_series"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           created_at: string
@@ -1564,6 +1865,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      test_series: {
+        Row: {
+          access_type: string
+          banner_url: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_published: boolean
+          starts_at: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          access_type?: string
+          banner_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          starts_at?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          access_type?: string
+          banner_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          starts_at?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       topics: {
         Row: {
@@ -1984,6 +2324,10 @@ export type Database = {
           topic_id: string
           total: number
         }[]
+      }
+      get_series_test_leaderboard: {
+        Args: { p_test_id: string }
+        Returns: Json
       }
       get_user_mock_progress: { Args: { p_limit?: number }; Returns: Json }
       grade_questions: {
