@@ -44,8 +44,12 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
 
   const [subjects, setSubjects] = useState<any[]>([]);
   const [chapters, setChapters] = useState<any[]>([]);
+  // NEW: topics for the selected chapter (topics are children of a chapter — see `topics` table).
+  const [topics, setTopics] = useState<any[]>([]);
   const [subjectId, setSubjectId] = useState("");
   const [chapterId, setChapterId] = useState("");
+  // NEW: optional topic tag for this question. "" = no topic selected.
+  const [topicId, setTopicId] = useState("");
   const [kind, setKind] = useState<QuestionKind>("mcq");
   const [difficulty, setDifficulty] = useState("auto_medium");
 
@@ -84,6 +88,15 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
     supabase.from("chapters").select("id,name").eq("subject_id", subjectId).order("name")
       .then(({ data }) => setChapters(data || []));
   }, [subjectId]);
+
+  // NEW: whenever the chapter changes, load that chapter's topics and reset
+  // any previously-selected topic (it belonged to the old chapter).
+  useEffect(() => {
+    if (!chapterId) { setTopics([]); setTopicId(""); return; }
+    setTopicId("");
+    supabase.from("topics").select("id,name").eq("chapter_id", chapterId).order("position")
+      .then(({ data }) => setTopics(data || []));
+  }, [chapterId]);
 
   const uploadImage = async (file: File, setter: (s: ImgState) => void) => {
     setter({ url: null, uploading: true });
@@ -135,6 +148,8 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
   const validationError = useMemo(() => {
     if (!subjectId) return "Subject select karo";
     if (!chapterId) return "Chapter select karo";
+    // Topic is intentionally optional — some chapters may not have topics
+    // defined yet, and we don't want that to block saving a question.
     if (kind === "assertion_reason" && (!assertion.trim() || !reason.trim())) return "Assertion aur Reason dono bharo";
     if (kind === "statement" && statements.filter((s) => s.trim()).length < 2) return "Kam se kam 2 statements chahiye";
     if (kind === "match_column" && matchRows.filter((r) => r.left.trim() && r.right.trim()).length < 2)
@@ -156,6 +171,7 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
     setExplanation("");
     setQuestionImage(emptyImg);
     setExplanationImage(emptyImg);
+    setTopicId("");
   };
 
   const handleSave = async () => {
@@ -170,6 +186,12 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
         reason: reason || undefined,
         statements: kind === "statement" ? statements.filter((s) => s.trim()) : undefined,
         matchColumns: kind === "match_column" ? { heads: colHeads, rows: matchRows } : undefined,
+        // NEW: contribute-mode questions go into `question_submissions`,
+        // which has no topic_id column of its own. We stash the chosen
+        // topic here so it isn't lost — SubmissionsReview's approval step
+        // should read this back out and insert into `question_topics`
+        // once the question is approved (not yet wired up on that side).
+        topicId: topicId || undefined,
       };
       const optImgs = optionImages.map((o) => o.url);
 
@@ -190,6 +212,24 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
           source_file: "manual-admin",
         }).select("id").single();
         if (error) throw error;
+
+        // NEW: tag the question with its topic via the question_topics
+        // junction table. confidence: 1 because a human picked it directly
+        // (auto-classified topics from the AI pipeline use a lower score).
+        if (topicId && data?.id) {
+          const { error: topicErr } = await supabase.from("question_topics").insert({
+            question_id: data.id,
+            topic_id: topicId,
+            confidence: 1,
+          });
+          // Don't fail the whole save over this — the question itself is
+          // already saved. Just warn so it doesn't fail silently.
+          if (topicErr) {
+            console.error(topicErr);
+            toast.error("Question saved, but topic tagging failed: " + topicErr.message);
+          }
+        }
+
         toast.success("Question bank me save ho gaya ✅");
         onSaved?.(data?.id ?? null);
       } else {
@@ -225,7 +265,7 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
   return (
     <div className="space-y-5">
       {/* Meta */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-1.5">
           <Label>Subject</Label>
           <Select value={subjectId} onValueChange={setSubjectId}>
@@ -241,6 +281,15 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
             <SelectTrigger><SelectValue placeholder="Select chapter" /></SelectTrigger>
             <SelectContent className="max-h-72">
               {chapters.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Topic {topics.length === 0 && chapterId ? <span className="text-muted-foreground font-normal">(none defined)</span> : null}</Label>
+          <Select value={topicId} onValueChange={setTopicId} disabled={!chapterId || topics.length === 0}>
+            <SelectTrigger><SelectValue placeholder="Select topic (optional)" /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {topics.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -408,52 +457,4 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
           </div>
           <ImageField label="Explanation image" state={explanationImage} onPick={(f) => uploadImage(f, setExplanationImage)} onClear={() => setExplanationImage(emptyImg)} />
         </CardContent>
-      </Card>
-
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button onClick={handleSave} disabled={saving || !!validationError} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          {mode === "admin" ? "Save to question bank" : "Submit for review"}
-        </Button>
-        {validationError && <span className="text-sm text-muted-foreground">{validationError}</span>}
-      </div>
-    </div>
-  );
-}
-
-function ImageField({
-  label, state, onPick, onClear, compact,
-}: {
-  label: string;
-  state: ImgState;
-  onPick: (f: File) => void;
-  onClear: () => void;
-  compact?: boolean;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  return (
-    <div className={compact ? "" : "space-y-1.5"}>
-      {!compact && <Label className="text-xs text-muted-foreground">{label}</Label>}
-      <input
-        ref={ref}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }}
-      />
-      {state.url ? (
-        <div className="relative inline-block">
-          <img src={state.url} alt={label} loading="lazy" className="max-h-32 rounded-lg border" />
-          <Button variant="secondary" size="icon" className="absolute -top-2 -right-2 h-6 w-6" onClick={onClear}>
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      ) : (
-        <Button variant="outline" size="sm" className="gap-1.5" disabled={state.uploading} onClick={() => ref.current?.click()}>
-          {state.uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-          {state.uploading ? "Uploading..." : compact ? "Add option image" : `Add ${label.toLowerCase()}`}
-        </Button>
-      )}
-    </div>
-  );
-}
+ 
