@@ -457,4 +457,53 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
           </div>
           <ImageField label="Explanation image" state={explanationImage} onPick={(f) => uploadImage(f, setExplanationImage)} onClear={() => setExplanationImage(emptyImg)} />
         </CardContent>
+        </Card>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button onClick={handleSave} disabled={saving || !!validationError} className="gap-2">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          {mode === "admin" ? "Save to question bank" : "Submit for review"}
+        </Button>
+        {validationError && <span className="text-sm text-muted-foreground">{validationError}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ImageField({
+  label, state, onPick, onClear, compact,
+}: {
+  label: string;
+  state: ImgState;
+  onPick: (f: File) => void;
+  onClear: () => void;
+  compact?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className={compact ? "" : "space-y-1.5"}>
+      {!compact && <Label className="text-xs text-muted-foreground">{label}</Label>}
+      <input
+        ref={ref}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }}
+      />
+      {state.url ? (
+        <div className="relative inline-block">
+          <img src={state.url} alt={label} loading="lazy" className="max-h-32 rounded-lg border" />
+          <Button variant="secondary" size="icon" className="absolute -top-2 -right-2 h-6 w-6" onClick={onClear}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" className="gap-1.5" disabled={state.uploading} onClick={() => ref.current?.click()}>
+          {state.uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+          {state.uploading ? "Uploading..." : compact ? "Add option image" : `Add ${label.toLowerCase()}`}
+        </Button>
+      )}
+    </div>
+  );
+}
  
