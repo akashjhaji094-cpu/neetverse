@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,12 @@ const SeriesTest = () => {
   const { testId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  // NEW: SeriesResult's "Reattempt" button links here with ?reattempt=true.
+  // That's the ONLY way to skip the "already attempted" redirect below —
+  // otherwise reopening a test you've already done would just show the old
+  // result again in a loop, which is what we want by default.
+  const forceNew = searchParams.get("reattempt") === "true";
 
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [marked, setMarked] = useState<Record<string, boolean>>({});
@@ -25,6 +31,38 @@ const SeriesTest = () => {
   const [submitting, setSubmitting] = useState(false);
   const startedAt = useRef(Date.now());
   const submittedRef = useRef(false);
+
+  // NEW: before showing the test, check whether this user already has an
+  // attempt on record for it. This is the fix for "reattempt button doesn't
+  // show, force start shows instead" — previously this check didn't exist
+  // at all, so the test always force-started from scratch.
+  const {
+    data: existingAttempt,
+    isLoading: checkingExisting,
+  } = useQuery({
+    queryKey: ["series-existing-attempt", testId, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("series_attempts")
+        .select("id")
+        .eq("test_id", testId)
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!testId && !!user && !forceNew,
+  });
+
+  useEffect(() => {
+    if (existingAttempt && !forceNew) {
+      // Already attempted — send them straight to their result instead of
+      // silently starting a brand-new attempt.
+      navigate(`/test-series/result/${existingAttempt.id}`, { replace: true });
+    }
+  }, [existingAttempt, forceNew, navigate]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["series-test-play", testId],
@@ -39,7 +77,9 @@ const SeriesTest = () => {
       const questions = (rows || []).map((r: any) => r.questions).filter(Boolean);
       return { test, questions };
     },
-    enabled: !!testId,
+    // Don't bother fetching the full question set if we're about to
+    // redirect away to an existing result anyway.
+    enabled: !!testId && (forceNew || (!checkingExisting && !existingAttempt)),
   });
 
   useEffect(() => {
@@ -119,6 +159,17 @@ const SeriesTest = () => {
       setSubmitting(false);
     }
   };
+
+  // NEW: while we're checking for a prior attempt (or about to redirect to
+  // it), show a spinner instead of the test — this is what replaces the old
+  // "always force start" behaviour.
+  if (!forceNew && (checkingExisting || existingAttempt)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
