@@ -154,7 +154,7 @@ const TestSeriesPage = () => {
             </div>
           )}
         </div>
-        <PremiumPopup open={showPremium} onOpenChange={setShowPremium} />
+        <PremiumPopup open={showPremium} onClose={() => setShowPremium(false)} />
       </DashboardLayout>
     );
   }
@@ -206,7 +206,7 @@ const TestSeriesPage = () => {
           </div>
         )}
       </div>
-      <PremiumPopup open={showPremium} onOpenChange={setShowPremium} />
+      <PremiumPopup open={showPremium} onClose={() => setShowPremium(false)} />
     </DashboardLayout>
   );
 };
