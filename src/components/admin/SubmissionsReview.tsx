@@ -54,6 +54,27 @@ export function SubmissionsReview() {
         }).select("id").single();
         if (error) throw error;
         approvedId = data.id;
+
+        // NEW: ManualQuestionForm (contribute mode) stashes the submitter's
+        // chosen topic at row.structured_data.topicId, because
+        // question_submissions has no topic column of its own. Read it back
+        // out here and tag the now-approved question with it — this is the
+        // missing link that meant contributed questions never got a topic
+        // even when the submitter picked one.
+        const topicId = (row.structured_data as any)?.topicId;
+        if (topicId) {
+          const { error: topicErr } = await supabase.from("question_topics").insert({
+            question_id: approvedId,
+            topic_id: topicId,
+            confidence: 1,
+          });
+          if (topicErr) {
+            // Don't fail the whole approval over this — the question is
+            // already live, just untagged. Surface it so it's not silent.
+            console.error(topicErr);
+            toast.error("Approved, but topic tagging failed: " + topicErr.message);
+          }
+        }
       }
       const { error: upErr } = await supabase.from("question_submissions").update({
         status: approve ? "approved" : "rejected",
