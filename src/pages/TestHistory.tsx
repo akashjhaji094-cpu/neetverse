@@ -18,7 +18,8 @@ const TestHistory = () => {
   const { data, isLoading } = usePerformanceData();
   const access = useFeatureAccess();
   const [showLockPopup, setShowLockPopup] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"all" | "practice" | "mock">("all");
+  // UPDATED: "series" added as a filterable type.
+  const [typeFilter, setTypeFilter] = useState<"all" | "practice" | "mock" | "series">("all");
 
   const history = data?.history || [];
 
@@ -100,6 +101,7 @@ const TestHistory = () => {
           <SelectContent>
             <SelectItem value="all">All Tests</SelectItem>
             <SelectItem value="mock">Mock Tests Only</SelectItem>
+            <SelectItem value="series">Test Series Only</SelectItem>
             <SelectItem value="practice">Practice Sessions Only</SelectItem>
           </SelectContent>
         </Select>
@@ -114,18 +116,23 @@ const TestHistory = () => {
           <div className="space-y-2">
             {filtered.map((h) => {
               const isMock = h.testType === "mock";
+              const isSeries = h.testType === "series";
+              // UPDATED: mock -> mock analysis page, series -> series result
+              // page. Practice sessions still have no detail page, same as before.
+              const canDrillIn = isMock || isSeries;
+              const detailHref = isSeries ? `/test-series/result/${h.attemptId}` : `/mock-analysis/${h.attemptId}`;
               return (
               <Card
                 key={h.attemptId}
-                onClick={() => isMock && navigate(`/mock-analysis/${h.attemptId}`)}
-                className={isMock ? "hover:border-primary hover:shadow-sm transition cursor-pointer" : ""}
+                onClick={() => canDrillIn && navigate(detailHref)}
+                className={canDrillIn ? "hover:border-primary hover:shadow-sm transition cursor-pointer" : ""}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge variant={h.testType === "mock" ? "default" : "secondary"} className="text-[10px]">
-                          {h.testType === "mock" ? "Mock" : "Practice"}
+                        <Badge variant={isMock ? "default" : isSeries ? "outline" : "secondary"} className="text-[10px]">
+                          {isMock ? "Mock" : isSeries ? "Series" : "Practice"}
                         </Badge>
                         <span className="font-semibold text-sm">{h.testName}</span>
                       </div>
@@ -151,7 +158,7 @@ const TestHistory = () => {
                      <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />{formatTime(h.timeSpentSec)}
                       </div>
-                      {isMock && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                      {canDrillIn && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
                     </div>
                   </div>
                 </CardContent>
