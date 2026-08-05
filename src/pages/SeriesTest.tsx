@@ -57,7 +57,7 @@ const SeriesTest = () => {
 
   const questions = data?.questions || [];
   const current: any = questions[index];
-  const { containerRef } = useMathJax<HTMLDivElement>([current?.id]);
+  const { ref: containerRef } = useMathJax<HTMLDivElement>([current?.id]);
 
   const answeredCount = Object.keys(answers).length;
 
