@@ -35,6 +35,10 @@ const Premium = lazy(() => import("./pages/Premium"));
 const AdaptiveLearning = lazy(() => import("./pages/AdaptiveLearning"));
 const BattleArena = lazy(() => import("./pages/BattleArena"));
 const MockAnalysis = lazy(() => import("./pages/MockAnalysis"));
+const TestSeries = lazy(() => import("./pages/TestSeries"));
+const SeriesTest = lazy(() => import("./pages/SeriesTest"));
+const SeriesResult = lazy(() => import("./pages/SeriesResult"));
+const Contribute = lazy(() => import("./pages/Contribute"));
 const Neet2027 = lazy(() => import("./pages/seo/Neet2027"));
 const NeetMockTest = lazy(() => import("./pages/seo/NeetMockTest"));
 const NeetPyq = lazy(() => import("./pages/seo/NeetPyq"));
@@ -120,6 +124,10 @@ const App = () => (
                 <Route path="/adaptive-learning" element={<AdaptiveLearning />} />
                 <Route path="/battle-arena" element={<BattleArena />} />
                 <Route path="/mock-analysis/:attemptId" element={<MockAnalysis />} />
+                <Route path="/test-series" element={<TestSeries />} />
+                <Route path="/test-series/result/:attemptId" element={<SeriesResult />} />
+                <Route path="/test-series/:testId" element={<SeriesTest />} />
+                <Route path="/contribute" element={<Contribute />} />
 
                 {/* Public SEO pages */}
                 <Route path="/neet-2027" element={<Neet2027 />} />
