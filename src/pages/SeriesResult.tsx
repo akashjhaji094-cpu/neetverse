@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -13,7 +13,7 @@ import { useMathJax } from "@/hooks/useMathJax";
 import { formatQuestionHtml, formatOptionHtml } from "@/lib/questionFormatter";
 import { ExplanationBlock } from "@/components/ExplanationBlock";
 import {
-  ArrowLeft, CheckCircle2, Loader2, MinusCircle, Trophy, XCircle, RotateCcw,
+  ArrowLeft, CheckCircle2, Loader2, MinusCircle, Trophy, XCircle, RotateCcw, Layers,
 } from "lucide-react";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
@@ -31,9 +31,16 @@ const SeriesResult = () => {
         .from("series_attempts").select("*, series_tests(*)").eq("id", attemptId).single();
       if (error) throw error;
 
+      // UPDATED: also pull each question's tagged topics (question_topics ->
+      // topics) alongside chapter/subject, so we can build a topic-wise
+      // breakdown the same way Mock Analysis does — not just chapter-wise.
       const { data: rows } = await supabase
         .from("series_test_questions")
-        .select("position, questions(id, question_text, options, images, option_images, explanation, chapter_id, chapters(name), subjects(name))")
+        .select(`position, questions(
+          id, question_text, options, images, option_images, explanation, chapter_id,
+          chapters(name), subjects(name),
+          question_topics(confidence, topics(id, name))
+        )`)
         .eq("test_id", attempt.test_id).order("position");
       const questions = (rows || []).map((r: any) => r.questions).filter(Boolean);
 
@@ -79,6 +86,39 @@ const SeriesResult = () => {
       (b.correct / Math.max(1, b.total)) - (a.correct / Math.max(1, a.total)));
   }, [data, gradedById]);
 
+  // NEW: topic-wise breakdown, same idea as chapterStats but grouped by each
+  // question's highest-confidence tagged topic (falls back to "Untagged" if
+  // a question has no topic in question_topics yet). Split into weak/strong
+  // the same way Mock Analysis presents weakTopics / strongTopics.
+  const topicStats = useMemo(() => {
+    if (!data) return [];
+    const answers = (data.attempt.answers || {}) as Record<string, number>;
+    const map = new Map<string, { topicId: string; name: string; chapter: string; subject: string; total: number; correct: number; wrong: number }>();
+    data.questions.forEach((q: any) => {
+      const tags = (q.question_topics || []) as { confidence: number; topics: { id: string; name: string } | null }[];
+      const primary = tags.filter((t) => t.topics).sort((a, b) => b.confidence - a.confidence)[0];
+      const key = primary?.topics?.id || "untagged";
+      const name = primary?.topics?.name || "Untagged";
+      const e = map.get(key) || {
+        topicId: key, name, chapter: q.chapters?.name || "", subject: q.subjects?.name || "",
+        total: 0, correct: 0, wrong: 0,
+      };
+      e.total++;
+      const chosen = answers[q.id];
+      if (chosen !== undefined) {
+        if (gradedById.get(q.id)?.is_correct) e.correct++; else e.wrong++;
+      }
+      map.set(key, e);
+    });
+    return [...map.values()]
+      .filter((t) => t.correct + t.wrong > 0) // only attempted topics — matches Mock Analysis's approach
+      .map((t) => ({ ...t, accuracy: Math.round((t.correct / Math.max(1, t.correct + t.wrong)) * 100) }))
+      .sort((a, b) => a.accuracy - b.accuracy);
+  }, [data, gradedById]);
+
+  const weakTopics = topicStats.filter((t) => t.accuracy < 60).slice(0, 6);
+  const strongTopics = [...topicStats].filter((t) => t.accuracy >= 60).sort((a, b) => b.accuracy - a.accuracy).slice(0, 6);
+
   if (isLoading || !data) {
     return (
       <DashboardLayout title="Result">
@@ -121,7 +161,9 @@ const SeriesResult = () => {
               <div className="flex justify-between text-xs"><span>Accuracy</span><span>{accuracy}%</span></div>
               <Progress value={accuracy} />
             </div>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/test-series/${a.test_id}`)}>
+            {/* UPDATED: ?reattempt=true tells SeriesTest to skip the
+                "already attempted" redirect and actually start fresh. */}
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/test-series/${a.test_id}?reattempt=true`)}>
               <RotateCcw className="h-3.5 w-3.5" /> Reattempt
             </Button>
           </CardContent>
@@ -134,19 +176,65 @@ const SeriesResult = () => {
             <TabsTrigger value="rank">Leaderboard</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="summary" className="mt-4 space-y-2">
-            {chapterStats.map((c) => {
-              const pct = Math.round((c.correct / Math.max(1, c.total)) * 100);
-              return (
-                <Card key={c.name}><CardContent className="p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">{c.name}</span>
-                    <span className="text-muted-foreground">{c.correct}/{c.total}</span>
-                  </div>
-                  <Progress value={pct} />
-                </CardContent></Card>
-              );
-            })}
+          <TabsContent value="summary" className="mt-4 space-y-5">
+            {/* NEW: topic-wise weak/strong breakdown — this is the piece that
+                was missing compared to the online mock analysis page. */}
+            {(weakTopics.length > 0 || strongTopics.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="border-red-200 dark:border-red-900">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-red-600 text-base"><Layers className="h-4 w-4" />Weak Topics</CardTitle>
+                    <CardDescription>Revise these first</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {weakTopics.length === 0 && <p className="text-sm text-muted-foreground">Koi weak topic nahi mila.</p>}
+                    {weakTopics.map((t) => (
+                      <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-red-50 dark:bg-red-950/20">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{t.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
+                        </div>
+                        <Badge variant="outline" className="text-red-600 border-red-300 shrink-0">{t.accuracy}%</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card className="border-emerald-200 dark:border-emerald-900">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-emerald-600 text-base"><Layers className="h-4 w-4" />Strong Topics</CardTitle>
+                    <CardDescription>Concepts you've got</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {strongTopics.length === 0 && <p className="text-sm text-muted-foreground">Abhi koi strong topic nahi.</p>}
+                    {strongTopics.map((t) => (
+                      <div key={t.topicId} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{t.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{t.subject} • {t.chapter}</p>
+                        </div>
+                        <Badge variant="outline" className="text-emerald-600 border-emerald-300 shrink-0">{t.accuracy}%</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-muted-foreground px-1">Chapter-wise</p>
+              {chapterStats.map((c) => {
+                const pct = Math.round((c.correct / Math.max(1, c.total)) * 100);
+                return (
+                  <Card key={c.name}><CardContent className="p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-muted-foreground">{c.correct}/{c.total}</span>
+                    </div>
+                    <Progress value={pct} />
+                  </CardContent></Card>
+                );
+              })}
+            </div>
           </TabsContent>
 
           <TabsContent value="review" className="mt-4 space-y-3">
