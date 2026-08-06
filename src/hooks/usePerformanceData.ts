@@ -18,9 +18,6 @@ export interface MistakeEntry {
 export interface HistoryEntry {
   attemptId: string;
   testName: string;
-  // UPDATED: "series" added so Test Series attempts can show up in Test
-  // History Vault alongside practice/mock — they were being fetched from a
-  // completely different table (series_attempts) and never merged in here.
   testType: "practice" | "mock" | "series";
   date: string;
   score: number | null;
@@ -62,15 +59,16 @@ function deriveTestName(type: string, config: any): string {
  * all derived client-side from this ONE dataset so we don't hit the DB
  * three separate times.
  *
- * No new tables needed — this is a read-only view over existing data.
- *
- * UPDATED: Test Series attempts live in a separate `series_attempts` table
- * (their own test-taking flow, not the practice/mock `attempts` table), so
- * they were invisible here even though they were saving correctly. We fetch
- * them in parallel and merge them into `history` only — Mistake Book and
- * Weak Chapters stay scoped to practice/mock for now, since series answers
- * are stored as a single JSON blob rather than per-question rows and would
- * need a bit more work to break down the same way.
+ * FIX (this version): Test Series attempts live in a separate
+ * `series_attempts` table and are fetched SEPARATELY, in its own try/catch.
+ * Earlier this was a `Promise.all([...]).then(...)` where EITHER query
+ * failing (`if (x.error) throw x.error`) aborted the whole function — so if
+ * the series_attempts call ever errored for any reason, practice/mock
+ * history (which was working fine on its own) went down with it too,
+ * and the page fell back to "No tests attempted yet." That's almost
+ * certainly why online mock briefly stopped showing after series support
+ * was added. Now a series failure only means series entries are missing
+ * from the list — practice/mock/OMR history always renders regardless.
  */
 export function usePerformanceData() {
   const { user } = useAuth();
@@ -80,28 +78,39 @@ export function usePerformanceData() {
     queryFn: async () => {
       if (!user) return { mistakes: [] as MistakeEntry[], history: [] as HistoryEntry[], weakChapters: [] as WeakChapter[] };
 
-      const [attemptsResult, seriesResult] = await Promise.all([
-        supabase
-          .from("attempt_answers")
-          .select(`
-            id, question_id, is_correct,
-            attempts!inner(id, user_id, type, config, started_at, finished_at, score),
-            questions!inner(id, question_text, chapter_id, subject_id,
-              chapters(name),
-              subjects(name)
-            )
-          `)
-          .eq("attempts.user_id", user.id),
-        supabase
+      // Core dataset — practice + mock + OMR/offline (they all live in
+      // attempts/attempt_answers). This is the exact query that was already
+      // working before Test Series support was added; if THIS throws, we
+      // genuinely have nothing to show, so it's fine to let it throw here.
+      const { data: rows, error } = await supabase
+        .from("attempt_answers")
+        .select(`
+          id, question_id, is_correct,
+          attempts!inner(id, user_id, type, config, started_at, finished_at, score),
+          questions!inner(id, question_text, chapter_id, subject_id,
+            chapters(name),
+            subjects(name)
+          )
+        `)
+        .eq("attempts.user_id", user.id);
+      if (error) throw error;
+
+      // Test Series dataset — fetched independently. A failure here is
+      // logged and swallowed, NEVER thrown, so it can't take down the rest
+      // of the page. Worst case: series rows are just missing from history
+      // until the underlying issue (RLS, network, whatever) is fixed.
+      let seriesRows: any[] = [];
+      try {
+        const { data, error: seriesErr } = await supabase
           .from("series_attempts")
           .select("id, score, correct_count, wrong_count, unattempted_count, total_questions, time_taken_seconds, started_at, finished_at, series_tests(title)")
-          .eq("user_id", user.id),
-      ]);
-
-      if (attemptsResult.error) throw attemptsResult.error;
-      if (seriesResult.error) throw seriesResult.error;
-
-      const rows = attemptsResult.data;
+          .eq("user_id", user.id);
+        if (seriesErr) throw seriesErr;
+        seriesRows = data || [];
+      } catch (seriesErr) {
+        console.error("Test Series history unavailable (practice/mock history still loaded fine):", seriesErr);
+        seriesRows = [];
+      }
 
       const mistakes: MistakeEntry[] = [];
       const attemptMap = new Map<string, { rows: any[]; meta: any }>();
@@ -150,15 +159,11 @@ export function usePerformanceData() {
       const weakChapters = Array.from(chapterAgg.values())
         .map((c) => ({
           ...c,
-          // Accuracy = correct / ATTEMPTED (correct+wrong) — the standard
-          // definition, excludes skipped questions from the denominator.
-          // (Previously this used correct/total, which made chapters with
-          // a lot of skips look artificially weaker than they really were.)
           accuracyPct: (c.correct + c.wrong) ? Math.round((c.correct / (c.correct + c.wrong)) * 100) : 0,
           wrongPct: c.total ? Math.round((c.wrong / c.total) * 100) : 0,
           skipPct: c.total ? Math.round((c.skipped / c.total) * 100) : 0,
         }))
-        .filter((c) => c.total >= 3) // ignore chapters with too few attempts to be meaningful
+        .filter((c) => c.total >= 3)
         .sort((a, b) => a.accuracyPct - b.accuracyPct);
 
       const history: HistoryEntry[] = Array.from(attemptMap.values())
@@ -183,8 +188,7 @@ export function usePerformanceData() {
           };
         });
 
-      // NEW: fold series_attempts into the same history shape.
-      (seriesResult.data || []).forEach((s: any) => {
+      seriesRows.forEach((s: any) => {
         const timeSpentSec = s.time_taken_seconds ?? (
           s.started_at && s.finished_at
             ? Math.round((new Date(s.finished_at).getTime() - new Date(s.started_at).getTime()) / 1000)
