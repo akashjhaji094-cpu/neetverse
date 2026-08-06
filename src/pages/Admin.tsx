@@ -10,6 +10,7 @@ import { TelegramBotManager } from "@/components/admin/TelegramBotManager";
 import { TestSeriesManager } from "@/components/admin/TestSeriesManager";
 import { ManualQuestionUpload } from "@/components/admin/ManualQuestionUpload";
 import { SubmissionsReview } from "@/components/admin/SubmissionsReview";
+import { ExplanationSubmissionsReview } from "@/components/admin/ExplanationSubmissionsReview";
 import EmailCampaigns from "@/components/admin/email/EmailCampaigns";
 import { useAdminAccess } from "@/hooks/useAdminAccess";
 import { Upload, BookOpen, Crown, Loader2, Sparkles, Brain, Megaphone, FileText, Send, Mail, Layers, PenSquare, Inbox } from "lucide-react";
@@ -145,7 +146,10 @@ const Admin = () => {
               </TabsContent>
 
               <TabsContent value="submissions" className="m-0">
-                <SubmissionsReview />
+                <div className="space-y-6">
+                  <SubmissionsReview />
+                  <ExplanationSubmissionsReview />
+                </div>
               </TabsContent>
 
               <TabsContent value="cleaner" className="m-0">
