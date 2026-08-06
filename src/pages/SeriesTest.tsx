@@ -18,10 +18,6 @@ const SeriesTest = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  // NEW: SeriesResult's "Reattempt" button links here with ?reattempt=true.
-  // That's the ONLY way to skip the "already attempted" redirect below —
-  // otherwise reopening a test you've already done would just show the old
-  // result again in a loop, which is what we want by default.
   const forceNew = searchParams.get("reattempt") === "true";
 
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -32,10 +28,13 @@ const SeriesTest = () => {
   const startedAt = useRef(Date.now());
   const submittedRef = useRef(false);
 
-  // NEW: before showing the test, check whether this user already has an
-  // attempt on record for it. This is the fix for "reattempt button doesn't
-  // show, force start shows instead" — previously this check didn't exist
-  // at all, so the test always force-started from scratch.
+  // NEW: this attempt row is created the moment the student JOINS the test
+  // (not at submit time anymore). That join insert is what the DB-side
+  // trigger checks against start_at/end_at/assignment for restricted tests.
+  const attemptIdRef = useRef<string | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   const {
     data: existingAttempt,
     isLoading: checkingExisting,
@@ -44,7 +43,7 @@ const SeriesTest = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("series_attempts")
-        .select("id")
+        .select("id, finished_at")
         .eq("test_id", testId)
         .eq("user_id", user!.id)
         .order("created_at", { ascending: false })
@@ -57,10 +56,13 @@ const SeriesTest = () => {
   });
 
   useEffect(() => {
-    if (existingAttempt && !forceNew) {
-      // Already attempted — send them straight to their result instead of
-      // silently starting a brand-new attempt.
+    // Only redirect away if that prior attempt was actually finished.
+    // An unfinished attempt means they joined but the tab closed etc —
+    // let them continue instead of losing their join.
+    if (existingAttempt && existingAttempt.finished_at && !forceNew) {
       navigate(`/test-series/result/${existingAttempt.id}`, { replace: true });
+    } else if (existingAttempt && !existingAttempt.finished_at && !forceNew) {
+      attemptIdRef.current = existingAttempt.id;
     }
   }, [existingAttempt, forceNew, navigate]);
 
@@ -77,10 +79,30 @@ const SeriesTest = () => {
       const questions = (rows || []).map((r: any) => r.questions).filter(Boolean);
       return { test, questions };
     },
-    // Don't bother fetching the full question set if we're about to
-    // redirect away to an existing result anyway.
-    enabled: !!testId && (forceNew || (!checkingExisting && !existingAttempt)),
+    enabled: !!testId && (forceNew || (!checkingExisting && !(existingAttempt && existingAttempt.finished_at))),
   });
+
+  // Join the test (create the attempt row) once questions are loaded and we
+  // don't already have an attempt id from a resumed session.
+  useEffect(() => {
+    const join = async () => {
+      if (!data?.test || !user || attemptIdRef.current) return;
+      setJoining(true);
+      const { data: row, error } = await supabase.from("series_attempts").insert({
+        test_id: data.test.id,
+        user_id: user.id,
+        total_questions: data.questions.length,
+      }).select("id").single();
+      setJoining(false);
+      if (error) {
+        setJoinError(error.message);
+        return;
+      }
+      attemptIdRef.current = row.id;
+    };
+    if (data?.test && data.questions.length) join();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.test, data?.questions?.length, user]);
 
   useEffect(() => {
     if (!data?.test) return;
@@ -111,6 +133,7 @@ const SeriesTest = () => {
 
   const handleSubmit = async (auto = false) => {
     if (submittedRef.current || !data?.test || !user) return;
+    if (!attemptIdRef.current) { toast.error("Test join nahi hua tha, dobara try karo"); return; }
     if (!auto && !confirm("Test submit kar dein?")) return;
     submittedRef.current = true;
     setSubmitting(true);
@@ -136,9 +159,7 @@ const SeriesTest = () => {
       const score = correct * marksC - wrong * marksW;
       const timeTaken = Math.round((Date.now() - startedAt.current) / 1000);
 
-      const { data: attempt, error: insErr } = await supabase.from("series_attempts").insert({
-        test_id: data.test.id,
-        user_id: user.id,
+      const { error: updErr } = await supabase.from("series_attempts").update({
         answers: answers as any,
         score,
         correct_count: correct,
@@ -147,10 +168,10 @@ const SeriesTest = () => {
         total_questions: questions.length,
         time_taken_seconds: timeTaken,
         finished_at: new Date().toISOString(),
-      }).select("id").single();
-      if (insErr) throw insErr;
+      }).eq("id", attemptIdRef.current);
+      if (updErr) throw updErr;
 
-      navigate(`/test-series/result/${attempt.id}`, { replace: true });
+      navigate(`/test-series/result/${attemptIdRef.current}`, { replace: true });
     } catch (e: any) {
       console.error(e);
       submittedRef.current = false;
@@ -160,10 +181,7 @@ const SeriesTest = () => {
     }
   };
 
-  // NEW: while we're checking for a prior attempt (or about to redirect to
-  // it), show a spinner instead of the test — this is what replaces the old
-  // "always force start" behaviour.
-  if (!forceNew && (checkingExisting || existingAttempt)) {
+  if (!forceNew && (checkingExisting || (existingAttempt && existingAttempt.finished_at))) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -171,13 +189,23 @@ const SeriesTest = () => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || joining) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  if (joinError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-muted-foreground">{joinError}</p>
+        <Button onClick={() => navigate("/test-series")}>Back to Test Series</Button>
+      </div>
+    );
+  }
+
   if (!questions.length) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
@@ -189,7 +217,6 @@ const SeriesTest = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* header */}
       <header className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur">
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -263,7 +290,6 @@ const SeriesTest = () => {
           </Card>
         </div>
 
-        {/* palette */}
         <aside className="space-y-3">
           <Card>
             <CardContent className="p-4 space-y-3">
