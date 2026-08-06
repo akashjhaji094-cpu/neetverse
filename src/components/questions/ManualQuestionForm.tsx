@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { compressImage, formatBytes } from "@/lib/imageCompress";
-import { ImagePlus, Loader2, Plus, Trash2, X, CheckCircle2 } from "lucide-react";
+import { cleanLatex } from "@/lib/latexSanitize";
+import { SubmitPreviewDialog } from "@/components/questions/SubmitPreviewDialog";
+import { ImagePlus, Loader2, Plus, Trash2, X, CheckCircle2, Eye } from "lucide-react";
 
 export type QuestionKind = "mcq" | "assertion_reason" | "statement" | "match_column";
 
@@ -78,6 +80,7 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
   const [explanationImage, setExplanationImage] = useState<ImgState>(emptyImg);
 
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     supabase.from("subjects").select("id,name").order("name").then(({ data }) => setSubjects(data || []));
@@ -179,7 +182,9 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
     if (!user) { toast.error("Pehle login karo"); return; }
     setSaving(true);
     try {
-      const questionHtml = buildQuestionHtml();
+      const questionHtml = cleanLatex(buildQuestionHtml());
+      const cleanOptions = options.map((o) => cleanLatex(o));
+      const cleanExplanation = cleanLatex(explanation);
       const structured = {
         kind,
         assertion: assertion || undefined,
@@ -201,10 +206,10 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
           chapter_id: chapterId,
           question_text: questionHtml,
           question_type: kind,
-          options: options.map((o) => o.trim()) as any,
+          options: cleanOptions as any,
           option_images: (optImgs.some(Boolean) ? optImgs : null) as any,
           correct_option_index: correctIndex,
-          explanation: explanation.trim() || null,
+          explanation: cleanExplanation || null,
           explanation_image_url: explanationImage.url,
           images: (questionImage.url ? [questionImage.url] : []) as any,
           difficulty: difficulty as any,
@@ -242,10 +247,10 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
           difficulty,
           question_text: questionHtml,
           question_image: questionImage.url,
-          options: options.map((o) => o.trim()) as any,
+          options: cleanOptions as any,
           option_images: (optImgs.some(Boolean) ? optImgs : null) as any,
           correct_option_index: correctIndex,
-          explanation: explanation.trim() || null,
+          explanation: cleanExplanation || null,
           explanation_image_url: explanationImage.url,
           structured_data: structured as any,
         });
@@ -254,6 +259,7 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
         onSaved?.(null);
       }
       reset();
+      setPreview(false);
     } catch (e: any) {
       console.error(e);
       toast.error(e?.message || "Save failed");
@@ -460,12 +466,29 @@ export function ManualQuestionForm({ mode, onSaved }: Props) {
         </Card>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <Button onClick={handleSave} disabled={saving || !!validationError} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-          {mode === "admin" ? "Save to question bank" : "Submit for review"}
+        <Button onClick={() => setPreview(true)} disabled={saving || !!validationError} className="gap-2">
+          <Eye className="h-4 w-4" />
+          Preview &amp; {mode === "admin" ? "save" : "submit"}
         </Button>
         {validationError && <span className="text-sm text-muted-foreground">{validationError}</span>}
       </div>
+
+      <SubmitPreviewDialog
+        open={preview}
+        onOpenChange={setPreview}
+        submitting={saving}
+        confirmLabel={mode === "admin" ? "Confirm & save" : "Confirm & submit"}
+        payload={{
+          questionHtml: buildQuestionHtml(),
+          questionImage: questionImage.url,
+          options,
+          optionImages: optionImages.map((o) => o.url),
+          correctIndex,
+          explanationHtml: explanation,
+          explanationImage: explanationImage.url,
+        }}
+        onConfirm={handleSave}
+      />
     </div>
   );
 }
