@@ -206,6 +206,53 @@ function formatBareLabeledList(html: string): string {
   return out;
 }
 
+const HEADING_BASE =
+  "display:block;margin:14px 0 6px;font-weight:700;font-size:1.05em;";
+const PARA_BASE =
+  "display:block;margin:0 0 10px;line-height:1.6;";
+
+/**
+ * Some sources (e.g. copy-pasting Google's AI Overview on mobile) strip
+ * every line break on copy, so "...frame of reference.The correct option
+ * is C." arrives as one dense run-on block — no <br>, no \n, nothing to
+ * split on. This inserts paragraph/heading breaks using text patterns
+ * instead of relying on whitespace:
+ *  - "wordEndingInLowercaseOrPunct.NextSentenceStartingUpper" -> new para
+ *  - "1. Heading Words" glued to the previous sentence -> new heading
+ * Only runs when the input has no block-level HTML already (real \n and
+ * <br>/<p> content is left completely alone) — so it's safe to apply on
+ * every read, old rows and new ones alike, without touching the database.
+ */
+function paragraphizeJammedText(html: string): string {
+  const hasBlockTags = /<\/?(p|div|br|table|ul|ol|li)[ >]/i.test(html);
+  const hasRealNewlines = /\n/.test(html);
+  if (hasBlockTags || hasRealNewlines) return html;
+  // Only worth doing for reasonably long, prose-like explanations.
+  if (html.length < 120) return html;
+
+  let t = html.trim();
+
+  // Break "...word.Next" -> "...word.\n\nNext" (no space between sentences)
+  t = t.replace(/([a-z0-9%\)])\.(?=[A-Z])/g, "$1.\n\n");
+  // Break "...word:Next" the same way (e.g. "is C.\n\nStep-by-Step Derivation1.")
+  t = t.replace(/([a-z0-9])\:(?=[A-Z])/g, "$1:\n\n");
+  // Numbered headings glued onto prior text, e.g. "Derivation1. Geometry"
+  t = t.replace(/([a-zA-Z])(\d+\.\s+[A-Z])/g, "$1\n\n$2");
+  t = t.replace(/\n{3,}/g, "\n\n");
+
+  const blocks = t.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  if (blocks.length < 2) return html;
+
+  return blocks
+    .map((b) => {
+      // Short glued line ending without a period, title-case-ish -> heading
+      const looksLikeHeading = b.length < 60 && !/[.?!]$/.test(b);
+      const style = looksLikeHeading ? HEADING_BASE : PARA_BASE;
+      return `<span style="${style}">${b}</span>`;
+    })
+    .join("");
+}
+
 /**
  * Public formatter for the QUESTION STEM / EXPLANATION only. Safe to run on
  * every question — returns input unchanged if no special pattern is found.
@@ -224,7 +271,7 @@ export function formatQuestionHtml(html: string | null | undefined): string {
   const bareListFormatted = formatBareLabeledList(norm);
   if (bareListFormatted !== norm) return bareListFormatted;
 
-  return norm;
+  return paragraphizeJammedText(norm);
 }
 
 /**
