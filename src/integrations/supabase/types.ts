@@ -839,6 +839,93 @@ export type Database = {
           },
         ]
       }
+      explanation_submissions: {
+        Row: {
+          chapter_id: string | null
+          content: string
+          created_at: string
+          id: string
+          question_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          subject_id: string | null
+          submitted_by: string
+          submitter_name: string | null
+          topic_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          question_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subject_id?: string | null
+          submitted_by: string
+          submitter_name?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          chapter_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          question_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subject_id?: string | null
+          submitted_by?: string
+          submitter_name?: string | null
+          topic_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "explanation_submissions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "explanation_submissions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "explanation_submissions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "explanation_submissions_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "explanation_submissions_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       in_progress_tests: {
         Row: {
           answers: Json
