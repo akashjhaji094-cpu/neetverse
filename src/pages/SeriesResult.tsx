@@ -31,9 +31,6 @@ const SeriesResult = () => {
         .from("series_attempts").select("*, series_tests(*)").eq("id", attemptId).single();
       if (error) throw error;
 
-      // UPDATED: also pull each question's tagged topics (question_topics ->
-      // topics) alongside chapter/subject, so we can build a topic-wise
-      // breakdown the same way Mock Analysis does — not just chapter-wise.
       const { data: rows } = await supabase
         .from("series_test_questions")
         .select(`position, questions(
@@ -86,10 +83,6 @@ const SeriesResult = () => {
       (b.correct / Math.max(1, b.total)) - (a.correct / Math.max(1, a.total)));
   }, [data, gradedById]);
 
-  // NEW: topic-wise breakdown, same idea as chapterStats but grouped by each
-  // question's highest-confidence tagged topic (falls back to "Untagged" if
-  // a question has no topic in question_topics yet). Split into weak/strong
-  // the same way Mock Analysis presents weakTopics / strongTopics.
   const topicStats = useMemo(() => {
     if (!data) return [];
     const answers = (data.attempt.answers || {}) as Record<string, number>;
@@ -111,7 +104,7 @@ const SeriesResult = () => {
       map.set(key, e);
     });
     return [...map.values()]
-      .filter((t) => t.correct + t.wrong > 0) // only attempted topics — matches Mock Analysis's approach
+      .filter((t) => t.correct + t.wrong > 0)
       .map((t) => ({ ...t, accuracy: Math.round((t.correct / Math.max(1, t.correct + t.wrong)) * 100) }))
       .sort((a, b) => a.accuracy - b.accuracy);
   }, [data, gradedById]);
@@ -134,6 +127,12 @@ const SeriesResult = () => {
     ? Math.round((a.correct_count / (a.correct_count + a.wrong_count)) * 100) : 0;
   const myRank = data.leaderboard.findIndex((r: any) => r.userId === user?.id) + 1;
   const answers = (a.answers || {}) as Record<string, number>;
+
+  // The leaderboard reveal message: RPC already returns [] before reveal
+  // time (unless caller is admin), so we just check whether the test has a
+  // future reveal time to decide which empty-state message to show.
+  const leaderboardNotYetRevealed =
+    !data.leaderboard.length && test?.leaderboard_reveal_at && new Date(test.leaderboard_reveal_at) > new Date();
 
   return (
     <DashboardLayout title="Test Result">
@@ -161,8 +160,6 @@ const SeriesResult = () => {
               <div className="flex justify-between text-xs"><span>Accuracy</span><span>{accuracy}%</span></div>
               <Progress value={accuracy} />
             </div>
-            {/* UPDATED: ?reattempt=true tells SeriesTest to skip the
-                "already attempted" redirect and actually start fresh. */}
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/test-series/${a.test_id}?reattempt=true`)}>
               <RotateCcw className="h-3.5 w-3.5" /> Reattempt
             </Button>
@@ -177,8 +174,6 @@ const SeriesResult = () => {
           </TabsList>
 
           <TabsContent value="summary" className="mt-4 space-y-5">
-            {/* NEW: topic-wise weak/strong breakdown — this is the piece that
-                was missing compared to the online mock analysis page. */}
             {(weakTopics.length > 0 || strongTopics.length > 0) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="border-red-200 dark:border-red-900">
@@ -275,13 +270,19 @@ const SeriesResult = () => {
           <TabsContent value="rank" className="mt-4 space-y-2">
             {!data.leaderboard.length ? (
               <Card><CardContent className="p-8 text-center text-muted-foreground">
-                Abhi koi aur result nahi aaya.
+                {leaderboardNotYetRevealed
+                  ? `Leaderboard ${new Date(test.leaderboard_reveal_at).toLocaleString()} pe reveal hoga.`
+                  : "Abhi koi aur result nahi aaya."}
               </CardContent></Card>
             ) : data.leaderboard.map((r: any, i: number) => (
               <Card key={`${r.userId}-${i}`} className={r.userId === user?.id ? "border-primary" : ""}>
                 <CardContent className="p-3 flex items-center gap-3">
                   <span className="w-8 text-center font-bold">{i + 1}</span>
-                  <span className="flex-1 font-medium">{r.name}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{r.name}</p>
+                    {/* r.email is only ever non-null when the RPC decided the caller is admin */}
+                    {r.email && <p className="text-xs text-muted-foreground truncate">{r.email}</p>}
+                  </div>
                   <span className="text-sm text-muted-foreground">{r.correct}✓ {r.wrong}✗</span>
                   <Badge variant="secondary">{r.score}</Badge>
                 </CardContent>
