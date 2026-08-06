@@ -8,7 +8,8 @@ import {
   Home,
   BookOpen,
   TestTube,
-  BarChart3,
+  Layers,
+  PenSquare,
   LayoutGrid,
   FileText,
   FileScan,
@@ -30,7 +31,7 @@ const TABS = [
   { title: "Home", href: "/dashboard", icon: Home },
   { title: "Practice", href: "/practice", icon: BookOpen },
   { title: "Test", href: "/test", icon: TestTube },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "Test Series", href: "/test-series", icon: Layers },
 ];
 
 const MORE_GROUPS: { title: string; items: { title: string; href: string; icon: React.ElementType }[] }[] = [
@@ -60,6 +61,7 @@ const MORE_GROUPS: { title: string; items: { title: string; href: string; icon: 
     title: "Account",
     items: [
       { title: "Premium", href: "/premium", icon: Crown },
+      { title: "Contribute Question", href: "/contribute", icon: PenSquare },
       { title: "My Account", href: "/account", icon: User },
       { title: "Settings", href: "/settings", icon: SettingsIcon },
     ],
