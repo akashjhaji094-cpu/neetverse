@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,8 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ManualQuestionForm } from "@/components/questions/ManualQuestionForm";
+import { getChapterWeight, allocateWeighted, SubjectKey } from "@/data/neet2026Weights";
+import { compressImage, formatBytes } from "@/lib/imageCompress";
 import {
   ArrowLeft, Plus, Loader2, Trash2, Layers, ListChecks, Shuffle, Search, FileText,
+  ImagePlus, X, Users,
 } from "lucide-react";
 
 type View =
@@ -41,10 +44,37 @@ export function TestSeriesManager() {
 
   const [nsTitle, setNsTitle] = useState("");
   const [nsDesc, setNsDesc] = useState("");
-  const [nsBanner, setNsBanner] = useState("");
+  const [nsBanner, setNsBanner] = useState(""); // stores final uploaded storage URL
+  const [nsBannerUploading, setNsBannerUploading] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [nsAccess, setNsAccess] = useState("free");
   const [nsStart, setNsStart] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const handleBannerUpload = async (file: File) => {
+    setNsBannerUploading(true);
+    try {
+      const original = file.size;
+      // Aggressive but quality-preserving compression — typically ~10x smaller
+      const blob = await compressImage(file, {
+        maxWidth: 1200, maxHeight: 630, quality: 0.55, skipUnder: 15 * 1024,
+      });
+      const path = `series/${user?.id || "admin"}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      const { error } = await supabase.storage.from("test-banners").upload(path, blob, {
+        contentType: blob.type || "image/jpeg",
+        upsert: false,
+      });
+      if (error) throw error;
+      const { data } = supabase.storage.from("test-banners").getPublicUrl(path);
+      setNsBanner(data.publicUrl);
+      toast.success(`Banner uploaded (${formatBytes(original)} → ${formatBytes(blob.size)})`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Banner upload failed");
+    } finally {
+      setNsBannerUploading(false);
+    }
+  };
 
   const createSeries = async () => {
     if (!nsTitle.trim()) { toast.error("Title daalo"); return; }
@@ -101,10 +131,34 @@ export function TestSeriesManager() {
               <Label>Title</Label>
               <Input value={nsTitle} onChange={(e) => setNsTitle(e.target.value)} placeholder="NEET 2027 Target Series" />
             </div>
+
             <div className="space-y-1.5">
-              <Label>Banner image URL (optional)</Label>
-              <Input value={nsBanner} onChange={(e) => setNsBanner(e.target.value)} placeholder="https://..." />
+              <Label>Banner image</Label>
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerUpload(f); e.target.value = ""; }}
+              />
+              {nsBanner ? (
+                <div className="relative inline-block">
+                  <img src={nsBanner} alt="Banner" className="h-24 rounded-lg border object-cover" />
+                  <Button variant="secondary" size="icon" className="absolute -top-2 -right-2 h-6 w-6" onClick={() => setNsBanner("")}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button" variant="outline" size="sm" className="gap-1.5"
+                  disabled={nsBannerUploading} onClick={() => bannerInputRef.current?.click()}
+                >
+                  {nsBannerUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                  {nsBannerUploading ? "Uploading..." : "Upload banner"}
+                </Button>
+              )}
             </div>
+
             <div className="space-y-1.5">
               <Label>Access</Label>
               <Select value={nsAccess} onValueChange={setNsAccess}>
@@ -182,6 +236,14 @@ function TestsPanel({ seriesId, onBack, onOpenQuestions }: {
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // restricted / scheduled-assigned test fields
+  const [isRestricted, setIsRestricted] = useState(false);
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [leaderboardAt, setLeaderboardAt] = useState("");
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+
   const { data: tests, isLoading } = useQuery({
     queryKey: ["admin-series-tests", seriesId],
     queryFn: async () => {
@@ -192,21 +254,61 @@ function TestsPanel({ seriesId, onBack, onOpenQuestions }: {
     },
   });
 
+  const { data: allUsers } = useQuery({
+    queryKey: ["admin-users-for-assign"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_admin_user_overview" as any);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    enabled: isRestricted,
+  });
+
+  const filteredUsers = (allUsers || []).filter((u: any) =>
+    !assigneeSearch ||
+    u.name?.toLowerCase().includes(assigneeSearch.toLowerCase()) ||
+    u.email?.toLowerCase().includes(assigneeSearch.toLowerCase())
+  );
+
   const createTest = async () => {
     if (!title.trim()) { toast.error("Test ka title daalo"); return; }
+    if (isRestricted && (!startAt || !endAt)) { toast.error("Start aur End time dono daalo"); return; }
+    if (isRestricted && !selectedAssignees.length) { toast.error("Kam se kam ek user select karo"); return; }
+
     setBusy(true);
-    const { error } = await supabase.from("series_tests").insert({
+    const computedLeaderboardAt = isRestricted
+      ? (leaderboardAt
+        ? new Date(leaderboardAt).toISOString()
+        : new Date(new Date(endAt).getTime() + 4 * 60 * 60 * 1000).toISOString())
+      : null;
+
+    const { data: created, error } = await supabase.from("series_tests").insert({
       series_id: seriesId,
       title: title.trim(),
       instructions: instructions.trim() || null,
       duration_minutes: duration,
       position: tests?.length || 0,
       scheduled_at: scheduled ? new Date(scheduled).toISOString() : null,
+      is_restricted: isRestricted,
+      start_at: isRestricted && startAt ? new Date(startAt).toISOString() : null,
+      end_at: isRestricted && endAt ? new Date(endAt).toISOString() : null,
+      leaderboard_reveal_at: computedLeaderboardAt,
       created_by: user!.id,
-    });
+    }).select("id").single();
+
+    if (error) { setBusy(false); return toast.error(error.message); }
+
+    if (isRestricted && selectedAssignees.length && created?.id) {
+      const { error: aErr } = await supabase.from("series_test_assignees").insert(
+        selectedAssignees.map((uid) => ({ test_id: created.id, user_id: uid })),
+      );
+      if (aErr) toast.error("Test bana, par assignees add karne me error: " + aErr.message);
+    }
+
     setBusy(false);
-    if (error) return toast.error(error.message);
     setTitle(""); setInstructions(""); setScheduled("");
+    setIsRestricted(false); setStartAt(""); setEndAt(""); setLeaderboardAt("");
+    setSelectedAssignees([]); setAssigneeSearch("");
     qc.invalidateQueries({ queryKey: ["admin-series-tests", seriesId] });
     toast.success("Test add ho gaya");
   };
@@ -250,6 +352,53 @@ function TestsPanel({ seriesId, onBack, onOpenQuestions }: {
               <Label>Instructions</Label>
               <Input value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="+4 / -1, no negative for unattempted" />
             </div>
+
+            <div className="sm:col-span-3 space-y-3 rounded-xl border p-4">
+              <div className="flex items-center gap-2">
+                <Switch checked={isRestricted} onCheckedChange={setIsRestricted} />
+                <Label className="cursor-pointer">Restricted test — sirf selected users hi de payenge</Label>
+              </div>
+
+              {isRestricted && (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label>Start time</Label>
+                      <Input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>End time</Label>
+                      <Input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Leaderboard reveal (default: end +4h)</Label>
+                      <Input type="datetime-local" value={leaderboardAt} onChange={(e) => setLeaderboardAt(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" /> Select users ({selectedAssignees.length} selected)
+                    </Label>
+                    <Input placeholder="Search name or email..." value={assigneeSearch} onChange={(e) => setAssigneeSearch(e.target.value)} />
+                    <div className="max-h-52 overflow-y-auto rounded-xl border divide-y">
+                      {filteredUsers.map((u: any) => (
+                        <label key={u.id} className="flex items-center gap-2 p-2.5 text-sm">
+                          <Checkbox
+                            checked={selectedAssignees.includes(u.id)}
+                            onCheckedChange={(v) =>
+                              setSelectedAssignees(v ? [...selectedAssignees, u.id] : selectedAssignees.filter((x) => x !== u.id))
+                            }
+                          />
+                          <span className="truncate">{u.name || "—"} <span className="text-muted-foreground">({u.email})</span></span>
+                        </label>
+                      ))}
+                      {!filteredUsers.length && <p className="p-3 text-sm text-muted-foreground">Koi user nahi mila</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <Button onClick={createTest} disabled={busy} className="gap-2">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add test
@@ -269,9 +418,15 @@ function TestsPanel({ seriesId, onBack, onOpenQuestions }: {
                     <span className="font-medium">{t.title}</span>
                     <Badge variant="secondary">{t.question_count} Q</Badge>
                     <Badge variant="outline">{t.duration_minutes} min</Badge>
+                    {t.is_restricted && <Badge className="gap-1"><Users className="h-3 w-3" /> Restricted</Badge>}
                     {t.scheduled_at && (
                       <span className="text-xs text-muted-foreground">
                         {format(new Date(t.scheduled_at), "d MMM yyyy, HH:mm")}
+                      </span>
+                    )}
+                    {t.start_at && t.end_at && (
+                      <span className="text-xs text-muted-foreground">
+                        Join: {format(new Date(t.start_at), "d MMM HH:mm")} → {format(new Date(t.end_at), "d MMM HH:mm")}
                       </span>
                     )}
                   </div>
@@ -359,17 +514,59 @@ function QuestionsPanel({ testId, onBack }: { testId: string; onBack: () => void
     qc.invalidateQueries({ queryKey: ["admin-series-tests"] });
   };
 
+  // FIXED: previously did a flat shuffle across the combined pool of all
+  // selected chapters, so chapters with more questions in the DB dominated
+  // and some chapters got 0. Now: minimum 1 question per chapter (when
+  // available) + remaining questions distributed by NEET 2026 weightage.
   const pullRandom = async () => {
     if (!pickedChapters.length) { toast.error("Chapters select karo"); return; }
     setBusy(true);
-    const { data, error } = await supabase
-      .from("questions").select("id").in("chapter_id", pickedChapters).limit(2000);
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    const pool = (data || []).map((q) => q.id).filter((id) => !attachedIds.has(id));
-    const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, randomCount);
-    if (!shuffled.length) return toast.error("Is selection me questions nahi mile");
-    attach(shuffled);
+    try {
+      const { data, error } = await supabase
+        .from("questions").select("id, chapter_id").in("chapter_id", pickedChapters).limit(5000);
+      if (error) throw error;
+
+      const subjName = (subjects.find((s) => s.id === subjectId)?.name || "").toLowerCase();
+      const subjectKey: SubjectKey = subjName.startsWith("chem") ? "chemistry"
+        : subjName.startsWith("bio") ? "biology" : "physics";
+
+      const byChapter = new Map<string, string[]>();
+      (data || []).forEach((q: any) => {
+        if (attachedIds.has(q.id)) return;
+        const arr = byChapter.get(q.chapter_id) || [];
+        arr.push(q.id);
+        byChapter.set(q.chapter_id, arr);
+      });
+
+      const chapterMeta = pickedChapters
+        .map((id) => {
+          const ch = chapters.find((c) => c.id === id);
+          const available = (byChapter.get(id) || []).length;
+          return { id, weight: getChapterWeight(subjectKey, ch?.name || ""), available };
+        })
+        .filter((c) => c.available > 0);
+
+      if (!chapterMeta.length) { toast.error("Is selection me questions nahi mile"); return; }
+
+      const totalAvailable = chapterMeta.reduce((s, c) => s + c.available, 0);
+      const target = Math.min(randomCount, totalAvailable);
+
+      const allocation = allocateWeighted(chapterMeta, target, { minPerChapter: 1 });
+
+      const picked: string[] = [];
+      Object.entries(allocation).forEach(([chapterId, count]) => {
+        const pool = [...(byChapter.get(chapterId) || [])].sort(() => Math.random() - 0.5);
+        picked.push(...pool.slice(0, count));
+      });
+
+      if (!picked.length) { toast.error("Is selection me questions nahi mile"); return; }
+      await attach(picked);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || "Kuch gadbad ho gayi");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const runSearch = async () => {
@@ -441,6 +638,9 @@ function QuestionsPanel({ testId, onBack }: { testId: string; onBack: () => void
                   <Button onClick={pullRandom} disabled={busy} className="gap-2">
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />} Pull random
                   </Button>
+                  <p className="text-xs text-muted-foreground w-full">
+                    Minimum 1 question har selected chapter se, baaki NEET 2026 weightage ke hisaab se.
+                  </p>
                 </div>
               </TabsContent>
 
@@ -509,4 +709,4 @@ function QuestionsPanel({ testId, onBack }: { testId: string; onBack: () => void
       </Card>
     </div>
   );
-}
+        }
